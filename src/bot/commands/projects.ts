@@ -15,9 +15,9 @@ import { createMainKeyboard } from "../utils/keyboard.js";
 import { ensureActiveInlineMenu, replyWithInlineMenu } from "../handlers/inline-menu.js";
 import { logger } from "../../utils/logger.js";
 import { t } from "../../i18n/index.js";
+import { config } from "../../config.js";
 
 const MAX_INLINE_BUTTON_LABEL_LENGTH = 64;
-const MAX_PROJECTS_TO_SHOW = 10;
 
 function formatProjectButtonLabel(label: string, isActive: boolean): string {
   const prefix = isActive ? "✅ " : "";
@@ -34,7 +34,7 @@ export async function projectsCommand(ctx: CommandContext<Context>) {
   try {
     await syncSessionDirectoryCache();
     const projects = await getProjects();
-    const projectsToShow = projects.slice(0, MAX_PROJECTS_TO_SHOW);
+    const projectsToShow = projects.slice(0, config.bot.projectsListLimit);
 
     if (projectsToShow.length === 0) {
       await ctx.reply(t("projects.empty"));

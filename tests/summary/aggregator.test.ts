@@ -26,6 +26,7 @@ describe("summary/aggregator", () => {
     summaryAggregator.setOnTool(() => {});
     summaryAggregator.setOnToolFile(() => {});
     summaryAggregator.setOnThinking(() => {});
+    summaryAggregator.setOnSessionError(() => {});
   });
 
   it("invokes onCleared callback when aggregator is cleared", () => {
@@ -137,7 +138,7 @@ describe("summary/aggregator", () => {
     expect(onToolFile).not.toHaveBeenCalled();
   });
 
-  it("passes sessionId to thinking callback", async () => {
+  it("passes sessionId to thinking callback when reasoning part arrives", async () => {
     const onThinking = vi.fn();
     summaryAggregator.setOnThinking(onThinking);
     summaryAggregator.setSession("session-1");
@@ -154,12 +155,63 @@ describe("summary/aggregator", () => {
       },
     } as unknown as Event);
 
+    summaryAggregator.processEvent({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "part-reasoning-1",
+          sessionID: "session-1",
+          messageID: "message-1",
+          type: "reasoning",
+          text: "Let me think about this...",
+          time: { start: Date.now() },
+        },
+      },
+    } as unknown as Event);
+
     await new Promise<void>((resolve) => setImmediate(resolve));
 
     expect(onThinking).toHaveBeenCalledWith("session-1");
   });
 
-  it("does not send thinking callback for summary assistant messages", async () => {
+  it("does not send thinking callback when no reasoning part arrives", async () => {
+    const onThinking = vi.fn();
+    summaryAggregator.setOnThinking(onThinking);
+    summaryAggregator.setSession("session-1");
+
+    // Only a message.updated event without any reasoning part — should NOT trigger thinking
+    summaryAggregator.processEvent({
+      type: "message.updated",
+      properties: {
+        info: {
+          id: "message-no-reasoning",
+          sessionID: "session-1",
+          role: "assistant",
+          time: { created: Date.now() },
+        },
+      },
+    } as unknown as Event);
+
+    summaryAggregator.processEvent({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "part-text-1",
+          sessionID: "session-1",
+          messageID: "message-no-reasoning",
+          type: "text",
+          text: "Here is my answer.",
+          time: { start: Date.now() },
+        },
+      },
+    } as unknown as Event);
+
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(onThinking).not.toHaveBeenCalled();
+  });
+
+  it("fires thinking callback only once per message even with multiple reasoning parts", async () => {
     const onThinking = vi.fn();
     summaryAggregator.setOnThinking(onThinking);
     summaryAggregator.setSession("session-1");
@@ -168,18 +220,57 @@ describe("summary/aggregator", () => {
       type: "message.updated",
       properties: {
         info: {
-          id: "message-summary",
+          id: "message-multi-reasoning",
           sessionID: "session-1",
           role: "assistant",
-          summary: true,
           time: { created: Date.now() },
+        },
+      },
+    } as unknown as Event);
+
+    for (let i = 0; i < 3; i++) {
+      summaryAggregator.processEvent({
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: `part-reasoning-${i}`,
+            sessionID: "session-1",
+            messageID: "message-multi-reasoning",
+            type: "reasoning",
+            text: `Thinking step ${i}`,
+            time: { start: Date.now() },
+          },
+        },
+      } as unknown as Event);
+    }
+
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(onThinking).toHaveBeenCalledTimes(1);
+    expect(onThinking).toHaveBeenCalledWith("session-1");
+  });
+
+  it("reports session.error message through callback", async () => {
+    const onSessionError = vi.fn();
+    summaryAggregator.setOnSessionError(onSessionError);
+    summaryAggregator.setSession("session-1");
+
+    summaryAggregator.processEvent({
+      type: "session.error",
+      properties: {
+        sessionID: "session-1",
+        error: {
+          name: "UnknownError",
+          data: {
+            message: "Model not found: opencode/foo.",
+          },
         },
       },
     } as unknown as Event);
 
     await new Promise<void>((resolve) => setImmediate(resolve));
 
-    expect(onThinking).not.toHaveBeenCalled();
+    expect(onSessionError).toHaveBeenCalledWith("session-1", "Model not found: opencode/foo.");
   });
 
   it("sends apply_patch payload as tool file", () => {

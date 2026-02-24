@@ -56,6 +56,8 @@ type TokensCallback = (tokens: TokensInfo) => void;
 
 type SessionCompactedCallback = (sessionId: string, directory: string) => void;
 
+type SessionErrorCallback = (sessionId: string, message: string) => void;
+
 type PermissionCallback = (request: PermissionRequest) => void;
 
 type SessionDiffCallback = (sessionId: string, diffs: FileChange[]) => void;
@@ -112,11 +114,13 @@ class SummaryAggregator {
   private onThinkingCallback: ThinkingCallback | null = null;
   private onTokensCallback: TokensCallback | null = null;
   private onSessionCompactedCallback: SessionCompactedCallback | null = null;
+  private onSessionErrorCallback: SessionErrorCallback | null = null;
   private onPermissionCallback: PermissionCallback | null = null;
   private onSessionDiffCallback: SessionDiffCallback | null = null;
   private onFileChangeCallback: FileChangeCallback | null = null;
   private onClearedCallback: ClearedCallback | null = null;
   private processedToolStates: Set<string> = new Set();
+  private thinkingFiredForMessages: Set<string> = new Set();
   private bot: Bot | null = null;
   private chatId: number | null = null;
   private typingTimer: ReturnType<typeof setInterval> | null = null;
@@ -157,6 +161,10 @@ class SummaryAggregator {
 
   setOnSessionCompacted(callback: SessionCompactedCallback): void {
     this.onSessionCompactedCallback = callback;
+  }
+
+  setOnSessionError(callback: SessionErrorCallback): void {
+    this.onSessionErrorCallback = callback;
   }
 
   setOnPermission(callback: PermissionCallback): void {
@@ -232,6 +240,9 @@ class SummaryAggregator {
       case "session.compacted":
         this.handleSessionCompacted(event);
         break;
+      case "session.error":
+        this.handleSessionError(event);
+        break;
       case "question.asked":
         this.handleQuestionAsked(event);
         break;
@@ -271,6 +282,7 @@ class SummaryAggregator {
     this.messages.clear();
     this.partHashes.clear();
     this.processedToolStates.clear();
+    this.thinkingFiredForMessages.clear();
     this.messageCount = 0;
     this.lastUpdated = 0;
 
@@ -303,18 +315,6 @@ class SummaryAggregator {
         this.currentMessageParts.set(messageID, []);
         this.messageCount++;
         this.startTypingIndicator();
-
-        const isSummaryMessage = (info as { summary?: boolean }).summary === true;
-
-        // Notify that agent started thinking
-        if (!isSummaryMessage && this.onThinkingCallback) {
-          const callback = this.onThinkingCallback;
-          setImmediate(() => {
-            if (typeof callback === "function") {
-              callback(info.sessionID);
-            }
-          });
-        }
       }
 
       const pending = this.pendingParts.get(messageID) || [];
@@ -394,7 +394,20 @@ class SummaryAggregator {
     const messageID = part.messageID;
     const messageInfo = this.messages.get(messageID);
 
-    if (part.type === "text" && "text" in part && part.text) {
+    if (part.type === "reasoning") {
+      // Fire the thinking callback once per message on the first reasoning part.
+      // This is the signal that the model is actually doing extended thinking.
+      if (!this.thinkingFiredForMessages.has(messageID) && this.onThinkingCallback) {
+        this.thinkingFiredForMessages.add(messageID);
+        const callback = this.onThinkingCallback;
+        const sessionID = part.sessionID;
+        setImmediate(() => {
+          if (typeof callback === "function") {
+            callback(sessionID);
+          }
+        });
+      }
+    } else if (part.type === "text" && "text" in part && part.text) {
       const partHash = this.hashString(part.text);
 
       if (!this.partHashes.has(messageID)) {
@@ -681,6 +694,38 @@ class SummaryAggregator {
         if (project) {
           this.onSessionCompactedCallback!(sessionID, project.worktree);
         }
+      });
+    }
+  }
+
+  private handleSessionError(
+    event: Event & {
+      type: "session.error";
+    },
+  ): void {
+    const { sessionID, error } = event.properties as {
+      sessionID: string;
+      error?: {
+        name?: string;
+        message?: string;
+        data?: { message?: string };
+      };
+    };
+
+    if (sessionID !== this.currentSessionId) {
+      return;
+    }
+
+    const message =
+      error?.data?.message || error?.message || error?.name || "Unknown session error";
+
+    logger.warn(`[Aggregator] Session error: ${sessionID}: ${message}`);
+    this.stopTypingIndicator();
+
+    if (this.onSessionErrorCallback) {
+      const callback = this.onSessionErrorCallback;
+      setImmediate(() => {
+        callback(sessionID, message);
       });
     }
   }

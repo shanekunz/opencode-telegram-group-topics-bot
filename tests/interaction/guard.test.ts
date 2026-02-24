@@ -3,9 +3,33 @@ import type { Context } from "grammy";
 import { resolveInteractionGuardDecision } from "../../src/interaction/guard.js";
 import { interactionManager } from "../../src/interaction/manager.js";
 
-function createContext({ text, callbackData }: { text?: string; callbackData?: string }): Context {
+function createContext({
+  text,
+  callbackData,
+  voice,
+  audio,
+}: {
+  text?: string;
+  callbackData?: string;
+  voice?: boolean;
+  audio?: boolean;
+}): Context {
+  const message: Record<string, unknown> = {};
+
+  if (text !== undefined) {
+    message.text = text;
+  }
+
+  if (voice) {
+    message.voice = { file_id: "voice-file-id" };
+  }
+
+  if (audio) {
+    message.audio = { file_id: "audio-file-id" };
+  }
+
   return {
-    message: text !== undefined ? ({ text } as Context["message"]) : undefined,
+    message: Object.keys(message).length > 0 ? (message as Context["message"]) : undefined,
     callbackQuery:
       callbackData !== undefined ? ({ data: callbackData } as Context["callbackQuery"]) : undefined,
   } as Context;
@@ -109,6 +133,40 @@ describe("interaction guard", () => {
 
     expect(decisionText.allow).toBe(true);
     expect(decisionCallback.allow).toBe(true);
+  });
+
+  it("allows voice input when there is no active interaction", () => {
+    const decision = resolveInteractionGuardDecision(createContext({ voice: true }));
+
+    expect(decision.allow).toBe(true);
+    expect(decision.state).toBeNull();
+    expect(decision.inputType).toBe("other");
+  });
+
+  it("blocks voice input when text input is expected", () => {
+    interactionManager.start({
+      kind: "rename",
+      expectedInput: "text",
+    });
+
+    const decision = resolveInteractionGuardDecision(createContext({ voice: true }));
+
+    expect(decision.allow).toBe(false);
+    expect(decision.reason).toBe("expected_text");
+    expect(decision.inputType).toBe("other");
+  });
+
+  it("blocks audio input when mixed input is expected", () => {
+    interactionManager.start({
+      kind: "question",
+      expectedInput: "mixed",
+    });
+
+    const decision = resolveInteractionGuardDecision(createContext({ audio: true }));
+
+    expect(decision.allow).toBe(false);
+    expect(decision.reason).toBe("expected_text");
+    expect(decision.inputType).toBe("other");
   });
 
   it("blocks text while permission interaction is active", () => {
