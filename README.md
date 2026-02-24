@@ -27,6 +27,7 @@ Quick start: `npx @grinev/opencode-telegram-bot`
 - **Interactive Q&A** — answer agent questions and approve permissions via inline buttons
 - **Voice prompts** — send voice/audio messages, transcribe them via a Whisper-compatible API, then forward recognized text to OpenCode
 - **Context control** — compact context when it gets too large, right from the chat
+- **Input flow control** — when an interactive flow is active, the bot accepts only relevant input to keep context consistent and avoid accidental actions
 - **Security** — strict user ID whitelist; no one else can access your bot, even if they find it
 - **Localization** — English and Russian UI (`BOT_LOCALE=en|ru`)
 
@@ -104,14 +105,6 @@ opencode-telegram config
 | `/help`           | Show available commands                                 |
 
 Any regular text message is sent as a prompt to the coding agent only when no blocking interaction is active. Voice/audio messages are transcribed and then sent as prompts when STT is configured.
-
-### Interaction Rules
-
-- Only one interactive flow can be active at a time (inline menus, permission request, question flow, rename)
-- While an interaction is active, the bot accepts only relevant input for that flow and blocks unrelated actions
-- Allowed utility commands remain available during active interactions: `/help`, `/status`, `/stop`
-- Unknown slash commands return an explicit fallback message instead of being silently ignored
-- Interaction flows do not expire automatically and wait until explicit completion (`answer`, `cancel`, `/stop`, or reset/cleanup)
 
 > `/opencode_start` and `/opencode_stop` are intended as emergency commands — for example, if you need to restart a stuck server while away from your computer. Under normal usage, start `opencode serve` yourself before launching the bot.
 
