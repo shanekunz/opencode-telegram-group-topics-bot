@@ -117,4 +117,10 @@ export const config = {
   files: {
     maxFileSizeKb: parseInt(getEnvVar("CODE_FILE_MAX_SIZE_KB", false) || "100", 10),
   },
+  stt: {
+    apiUrl: getEnvVar("STT_API_URL", false),
+    apiKey: getEnvVar("STT_API_KEY", false),
+    model: getEnvVar("STT_MODEL", false) || "whisper-large-v3-turbo",
+    language: getEnvVar("STT_LANGUAGE", false),
+  },
 };

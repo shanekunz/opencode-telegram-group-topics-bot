@@ -46,6 +46,7 @@ No public inbound ports are required for normal usage.
 ### Task handling
 
 - Send text prompts to OpenCode
+- Accept voice/audio messages, transcribe via Whisper-compatible STT API, and forward recognized text as prompts
 - Interrupt current task (ESC equivalent)
 - Handle OpenCode questions with inline options and custom text answers
 - Send selected/custom answers back to OpenCode (`question.reply`)
@@ -80,6 +81,7 @@ No public inbound ports are required for normal usage.
 - Configurable bot locale
 - Configurable visibility for service messages (thinking/tool calls)
 - Configurable max code file size in KB (default: 100)
+- Optional STT settings for voice transcription (`STT_API_URL`, `STT_API_KEY`, `STT_MODEL`, `STT_LANGUAGE`)
 
 ## Current Product Scope
 
@@ -99,7 +101,7 @@ Current command set:
 - [x] `/opencode_stop` - stop local OpenCode server
 - [x] `/help` - show command help
 
-Text messages (non-commands) are treated as prompts for OpenCode only when no blocking interaction is active.
+Text messages (non-commands) are treated as prompts for OpenCode only when no blocking interaction is active. Voice/audio messages are transcribed and then sent as prompts when STT is configured.
 
 Interaction routing rules:
 
@@ -123,6 +125,7 @@ Interaction routing rules:
 - [x] Sending code blocks as files when needed
 - [x] Configurable batching of service messages (thinking + tool updates): recommended `>=2` sec for Telegram rate limits; `0` = immediate
 - [x] Configurable service message visibility via env flags (`HIDE_THINKING_MESSAGES`, `HIDE_TOOL_CALL_MESSAGES`)
+- [x] Voice/audio transcription via Whisper-compatible APIs (OpenAI/Groq/Together and compatible providers)
 - [x] Single-user security model (allowed Telegram user ID)
 - [x] Persistent bot settings (`settings.json`) between restarts
 - [x] EN/RU localization structure via dedicated i18n files
@@ -138,7 +141,7 @@ Open tasks for upcoming iterations:
 - [ ] Improve Telegram-compatible message formatting for richer outputs
 - [ ] Support sending files from Telegram to OpenCode (screenshots, documents)
 - [ ] Provide a Docker image and basic container deployment guide
-- [ ] Add voice transcription
+- [x] Add voice transcription
 
 ## Possible Improvements
 

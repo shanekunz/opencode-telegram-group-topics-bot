@@ -37,23 +37,18 @@ import { questionManager } from "../question/manager.js";
 import { interactionManager } from "../interaction/manager.js";
 import { clearAllInteractionState } from "../interaction/cleanup.js";
 import { keyboardManager } from "../keyboard/manager.js";
-import { stopEventListening, subscribeToEvents } from "../opencode/events.js";
+import { subscribeToEvents } from "../opencode/events.js";
 import { summaryAggregator } from "../summary/aggregator.js";
 import { formatSummary, formatToolInfo } from "../summary/formatter.js";
 import { ToolMessageBatcher } from "../summary/tool-message-batcher.js";
-import { opencodeClient } from "../opencode/client.js";
-import { clearSession, getCurrentSession, setCurrentSession } from "../session/manager.js";
+import { getCurrentSession } from "../session/manager.js";
 import { ingestSessionInfoForCache } from "../session/cache-manager.js";
-import { getCurrentProject } from "../settings/manager.js";
-import { getStoredAgent } from "../agent/manager.js";
-import { getStoredModel } from "../model/manager.js";
-import { formatVariantForButton } from "../variant/manager.js";
-import { createMainKeyboard } from "./utils/keyboard.js";
 import { logger } from "../utils/logger.js";
 import { safeBackgroundTask } from "../utils/safe-background-task.js";
-import { formatErrorDetails } from "../utils/error-format.js";
 import { pinnedMessageManager } from "../pinned/manager.js";
 import { t } from "../i18n/index.js";
+import { processUserPrompt } from "./handlers/prompt.js";
+import { handleVoiceMessage } from "./handlers/voice.js";
 
 let botInstance: Bot<Context> | null = null;
 let chatIdInstance: number | null = null;
@@ -370,6 +365,31 @@ async function ensureEventSubscription(directory: string): Promise<void> {
     }
   });
 
+  summaryAggregator.setOnSessionError(async (sessionId, message) => {
+    if (!botInstance || !chatIdInstance) {
+      return;
+    }
+
+    const currentSession = getCurrentSession();
+    if (!currentSession || currentSession.id !== sessionId) {
+      return;
+    }
+
+    await toolMessageBatcher.flushSession(sessionId, "session_error");
+
+    const normalizedMessage = message.trim() || t("common.unknown_error");
+    const truncatedMessage =
+      normalizedMessage.length > 3500
+        ? `${normalizedMessage.slice(0, 3497)}...`
+        : normalizedMessage;
+
+    await botInstance.api
+      .sendMessage(chatIdInstance, t("bot.session_error", { message: truncatedMessage }))
+      .catch((err) => {
+        logger.error("[Bot] Failed to send session.error message:", err);
+      });
+  });
+
   summaryAggregator.setOnSessionDiff(async (_sessionId, diffs) => {
     if (!pinnedMessageManager.isInitialized()) {
       return;
@@ -418,46 +438,6 @@ async function ensureEventSubscription(directory: string): Promise<void> {
   }).catch((err) => {
     logger.error("Failed to subscribe to events:", err);
   });
-}
-
-async function isSessionBusy(sessionId: string, directory: string): Promise<boolean> {
-  try {
-    const { data, error } = await opencodeClient.session.status({ directory });
-
-    if (error || !data) {
-      logger.warn("[Bot] Failed to check session status before prompt:", error);
-      return false;
-    }
-
-    const sessionStatus = (data as Record<string, { type?: string }>)[sessionId];
-    if (!sessionStatus) {
-      return false;
-    }
-
-    logger.debug(`[Bot] Current session status before prompt: ${sessionStatus.type || "unknown"}`);
-    return sessionStatus.type === "busy";
-  } catch (err) {
-    logger.warn("[Bot] Error checking session status before prompt:", err);
-    return false;
-  }
-}
-
-async function resetMismatchedSessionContext(): Promise<void> {
-  stopEventListening();
-  summaryAggregator.clear();
-  clearAllInteractionState("session_mismatch_reset");
-  clearSession();
-  keyboardManager.clearContext();
-
-  if (!pinnedMessageManager.isInitialized()) {
-    return;
-  }
-
-  try {
-    await pinnedMessageManager.clear();
-  } catch (err) {
-    logger.error("[Bot] Failed to clear pinned message during session reset:", err);
-  }
 }
 
 export function createBot(): Bot<Context> {
@@ -698,6 +678,23 @@ export function createBot(): Bot<Context> {
     },
   });
 
+  // Voice and audio message handlers (STT transcription -> prompt)
+  const voicePromptDeps = { bot, ensureEventSubscription };
+
+  bot.on("message:voice", async (ctx) => {
+    logger.debug(`[Bot] Received voice message, chatId=${ctx.chat.id}`);
+    botInstance = bot;
+    chatIdInstance = ctx.chat.id;
+    await handleVoiceMessage(ctx, voicePromptDeps);
+  });
+
+  bot.on("message:audio", async (ctx) => {
+    logger.debug(`[Bot] Received audio message, chatId=${ctx.chat.id}`);
+    botInstance = bot;
+    chatIdInstance = ctx.chat.id;
+    await handleVoiceMessage(ctx, voicePromptDeps);
+  });
+
   bot.on("message:text", async (ctx) => {
     const text = ctx.message?.text;
     if (!text) {
@@ -718,189 +715,11 @@ export function createBot(): Bot<Context> {
       return;
     }
 
-    const currentProject = getCurrentProject();
-    if (!currentProject) {
-      await ctx.reply(t("bot.project_not_selected"));
-      return;
-    }
-
     botInstance = bot;
     chatIdInstance = ctx.chat.id;
 
-    // Initialize pinned message manager if not already
-    if (!pinnedMessageManager.isInitialized()) {
-      pinnedMessageManager.initialize(bot.api, ctx.chat.id);
-    }
-
-    // Initialize keyboard manager if not already
-    keyboardManager.initialize(bot.api, ctx.chat.id);
-
-    let currentSession = getCurrentSession();
-
-    if (currentSession && currentSession.directory !== currentProject.worktree) {
-      logger.warn(
-        `[Bot] Session/project mismatch detected. sessionDirectory=${currentSession.directory}, projectDirectory=${currentProject.worktree}. Resetting session context.`,
-      );
-      await resetMismatchedSessionContext();
-      await ctx.reply(t("bot.session_reset_project_mismatch"));
-      return;
-    }
-
-    if (!currentSession) {
-      await ctx.reply(t("bot.creating_session"));
-
-      const { data: session, error } = await opencodeClient.session.create({
-        directory: currentProject.worktree,
-      });
-
-      if (error || !session) {
-        await ctx.reply(t("bot.create_session_error"));
-        return;
-      }
-
-      logger.info(
-        `[Bot] Created new session: id=${session.id}, title="${session.title}", project=${currentProject.worktree}`,
-      );
-
-      currentSession = {
-        id: session.id,
-        title: session.title,
-        directory: currentProject.worktree,
-      };
-
-      setCurrentSession(currentSession);
-      await ingestSessionInfoForCache(session);
-
-      // Create pinned message for new session
-      try {
-        await pinnedMessageManager.onSessionChange(session.id, session.title);
-      } catch (err) {
-        logger.error("[Bot] Error creating pinned message for new session:", err);
-      }
-
-      const currentAgent = getStoredAgent();
-      const currentModel = getStoredModel();
-      const contextInfo = pinnedMessageManager.getContextInfo();
-      const variantName = formatVariantForButton(currentModel.variant || "default");
-      const keyboard = createMainKeyboard(
-        currentAgent,
-        currentModel,
-        contextInfo ?? undefined,
-        variantName,
-      );
-
-      await ctx.reply(t("bot.session_created", { title: session.title }), {
-        reply_markup: keyboard,
-      });
-    } else {
-      logger.info(
-        `[Bot] Using existing session: id=${currentSession.id}, title="${currentSession.title}"`,
-      );
-
-      // Ensure pinned message exists for existing session
-      if (!pinnedMessageManager.getState().messageId) {
-        try {
-          await pinnedMessageManager.onSessionChange(currentSession.id, currentSession.title);
-        } catch (err) {
-          logger.error("[Bot] Error creating pinned message for existing session:", err);
-        }
-      }
-    }
-
-    await ensureEventSubscription(currentSession.directory);
-
-    summaryAggregator.setSession(currentSession.id);
-    summaryAggregator.setBotAndChatId(bot, ctx.chat.id);
-
-    const sessionIsBusy = await isSessionBusy(currentSession.id, currentSession.directory);
-    if (sessionIsBusy) {
-      logger.info(`[Bot] Ignoring new prompt: session ${currentSession.id} is busy`);
-      await ctx.reply(t("bot.session_busy"));
-      return;
-    }
-
-    try {
-      const currentAgent = getStoredAgent();
-      const storedModel = getStoredModel();
-
-      const promptOptions: {
-        sessionID: string;
-        directory: string;
-        parts: Array<{ type: "text"; text: string }>;
-        model?: { providerID: string; modelID: string };
-        agent?: string;
-        variant?: string;
-      } = {
-        sessionID: currentSession.id,
-        directory: currentSession.directory,
-        parts: [{ type: "text", text }],
-        agent: currentAgent,
-      };
-
-      // Use stored model (from settings or config)
-      if (storedModel.providerID && storedModel.modelID) {
-        promptOptions.model = {
-          providerID: storedModel.providerID,
-          modelID: storedModel.modelID,
-        };
-
-        // Add variant if specified
-        if (storedModel.variant) {
-          promptOptions.variant = storedModel.variant;
-        }
-      }
-
-      const promptErrorLogContext = {
-        sessionId: currentSession.id,
-        directory: currentSession.directory,
-        agent: currentAgent || "default",
-        modelProvider: storedModel.providerID || "default",
-        modelId: storedModel.modelID || "default",
-        variant: storedModel.variant || "default",
-        promptLength: text.length,
-      };
-
-      logger.info(`[Bot] Calling session.prompt (fire-and-forget) with agent=${currentAgent}...`);
-
-      // CRITICAL: DO NOT wait for session.prompt to complete.
-      // If we wait, the handler will not finish and grammY will not call getUpdates,
-      // which blocks receiving button callback_query updates.
-      // The processing result will arrive via SSE events.
-      safeBackgroundTask({
-        taskName: "session.prompt",
-        task: () => opencodeClient.session.prompt(promptOptions),
-        onSuccess: ({ error }) => {
-          if (error) {
-            const details = formatErrorDetails(error, 6000);
-            logger.error(
-              "[Bot] OpenCode API returned an error for session.prompt",
-              promptErrorLogContext,
-            );
-            logger.error("[Bot] session.prompt error details:", details);
-            logger.error("[Bot] session.prompt raw API error object:", error);
-
-            // Send user-friendly error via API directly because ctx is no longer available
-            void bot.api.sendMessage(ctx.chat.id, t("bot.prompt_send_error")).catch(() => {});
-            return;
-          }
-
-          logger.info("[Bot] session.prompt completed");
-        },
-        onError: (error) => {
-          const details = formatErrorDetails(error, 6000);
-          logger.error("[Bot] session.prompt background task failed", promptErrorLogContext);
-          logger.error("[Bot] session.prompt background failure details:", details);
-          logger.error("[Bot] session.prompt raw background error object:", error);
-          void bot.api.sendMessage(ctx.chat.id, t("bot.prompt_send_error")).catch(() => {});
-        },
-      });
-    } catch (err) {
-      logger.error("Error in prompt handler:", err);
-      if (interactionManager.getSnapshot()) {
-        clearAllInteractionState("message_handler_error");
-      }
-      await ctx.reply(t("error.generic"));
-    }
+    const promptDeps = { bot, ensureEventSubscription };
+    await processUserPrompt(ctx, text, promptDeps);
 
     logger.debug("[Bot] message:text handler completed (prompt sent in background)");
   });

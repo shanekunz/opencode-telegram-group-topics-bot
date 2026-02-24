@@ -61,6 +61,7 @@ export const ru: I18nDictionary = {
   "bot.session_reset_project_mismatch":
     "⚠️ Активная сессия не соответствует выбранному проекту, поэтому была сброшена. Используйте /sessions для выбора или /new для создания новой сессии.",
   "bot.prompt_send_error": "Не удалось отправить запрос в OpenCode.",
+  "bot.session_error": "🔴 OpenCode вернул ошибку: {message}",
   "bot.unknown_command": "⚠️ Неизвестная команда: {command}. Используйте /help для списка команд.",
 
   "status.header_running": "🟢 **OpenCode Server запущен**",
@@ -307,4 +308,11 @@ export const ru: I18nDictionary = {
   "legacy.models.no_provider_models": "  ⚠️ Нет доступных моделей\n",
   "legacy.models.env_hint": "💡 Для использования модели в .env:\n",
   "legacy.models.error": "🔴 Произошла ошибка при получении списка моделей.",
+
+  "stt.recognizing": "🎤 Распознаю аудио...",
+  "stt.recognized": "🎤 Распознано:\n{text}",
+  "stt.not_configured":
+    "🎤 Распознавание голоса не настроено.\n\nУстановите STT_API_URL и STT_API_KEY в .env для включения.",
+  "stt.error": "🔴 Не удалось распознать аудио: {error}",
+  "stt.empty_result": "🎤 В аудиосообщении не обнаружена речь.",
 };

@@ -21,6 +21,15 @@ function createCallbackContext(data: string): Context {
   } as unknown as Context;
 }
 
+function createVoiceContext(): Context {
+  return {
+    chat: { id: 1 },
+    message: { voice: { file_id: "voice-file-id" } } as Context["message"],
+    reply: vi.fn().mockResolvedValue(undefined),
+    answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+  } as unknown as Context;
+}
+
 describe("interactionGuardMiddleware", () => {
   beforeEach(() => {
     interactionManager.clear("test_setup");
@@ -146,6 +155,21 @@ describe("interactionGuardMiddleware", () => {
 
     expect(next).not.toHaveBeenCalled();
     expect(ctx.reply).toHaveBeenCalledWith(t("rename.blocked.command_not_allowed"));
+  });
+
+  it("blocks voice input while rename interaction expects text", async () => {
+    interactionManager.start({
+      kind: "rename",
+      expectedInput: "text",
+    });
+
+    const ctx = createVoiceContext();
+    const next: NextFunction = vi.fn().mockResolvedValue(undefined);
+
+    await interactionGuardMiddleware(ctx, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledWith(t("rename.blocked.expected_name"));
   });
 
   it("shows question-specific message for blocked text", async () => {

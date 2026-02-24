@@ -62,6 +62,7 @@ export const en = {
   "bot.session_reset_project_mismatch":
     "⚠️ Active session does not match the selected project, so it was reset. Use /sessions to pick one or /new to create a new session.",
   "bot.prompt_send_error": "Failed to send request to OpenCode.",
+  "bot.session_error": "🔴 OpenCode returned an error: {message}",
   "bot.unknown_command": "⚠️ Unknown command: {command}. Use /help to see available commands.",
 
   "status.header_running": "🟢 **OpenCode Server is running**",
@@ -307,6 +308,13 @@ export const en = {
   "legacy.models.no_provider_models": "  ⚠️ No available models\n",
   "legacy.models.env_hint": "💡 To use model in .env:\n",
   "legacy.models.error": "🔴 An error occurred while loading models list.",
+
+  "stt.recognizing": "🎤 Recognizing audio...",
+  "stt.recognized": "🎤 Recognized:\n{text}",
+  "stt.not_configured":
+    "🎤 Voice recognition is not configured.\n\nSet STT_API_URL and STT_API_KEY in .env to enable it.",
+  "stt.error": "🔴 Failed to recognize audio: {error}",
+  "stt.empty_result": "🎤 No speech detected in the audio message.",
 } as const;
 
 export type I18nKey = keyof typeof en;

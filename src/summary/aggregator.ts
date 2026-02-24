@@ -56,6 +56,8 @@ type TokensCallback = (tokens: TokensInfo) => void;
 
 type SessionCompactedCallback = (sessionId: string, directory: string) => void;
 
+type SessionErrorCallback = (sessionId: string, message: string) => void;
+
 type PermissionCallback = (request: PermissionRequest) => void;
 
 type SessionDiffCallback = (sessionId: string, diffs: FileChange[]) => void;
@@ -112,6 +114,7 @@ class SummaryAggregator {
   private onThinkingCallback: ThinkingCallback | null = null;
   private onTokensCallback: TokensCallback | null = null;
   private onSessionCompactedCallback: SessionCompactedCallback | null = null;
+  private onSessionErrorCallback: SessionErrorCallback | null = null;
   private onPermissionCallback: PermissionCallback | null = null;
   private onSessionDiffCallback: SessionDiffCallback | null = null;
   private onFileChangeCallback: FileChangeCallback | null = null;
@@ -158,6 +161,10 @@ class SummaryAggregator {
 
   setOnSessionCompacted(callback: SessionCompactedCallback): void {
     this.onSessionCompactedCallback = callback;
+  }
+
+  setOnSessionError(callback: SessionErrorCallback): void {
+    this.onSessionErrorCallback = callback;
   }
 
   setOnPermission(callback: PermissionCallback): void {
@@ -232,6 +239,9 @@ class SummaryAggregator {
         break;
       case "session.compacted":
         this.handleSessionCompacted(event);
+        break;
+      case "session.error":
+        this.handleSessionError(event);
         break;
       case "question.asked":
         this.handleQuestionAsked(event);
@@ -684,6 +694,38 @@ class SummaryAggregator {
         if (project) {
           this.onSessionCompactedCallback!(sessionID, project.worktree);
         }
+      });
+    }
+  }
+
+  private handleSessionError(
+    event: Event & {
+      type: "session.error";
+    },
+  ): void {
+    const { sessionID, error } = event.properties as {
+      sessionID: string;
+      error?: {
+        name?: string;
+        message?: string;
+        data?: { message?: string };
+      };
+    };
+
+    if (sessionID !== this.currentSessionId) {
+      return;
+    }
+
+    const message =
+      error?.data?.message || error?.message || error?.name || "Unknown session error";
+
+    logger.warn(`[Aggregator] Session error: ${sessionID}: ${message}`);
+    this.stopTypingIndicator();
+
+    if (this.onSessionErrorCallback) {
+      const callback = this.onSessionErrorCallback;
+      setImmediate(() => {
+        callback(sessionID, message);
       });
     }
   }

@@ -115,7 +115,11 @@ export function resolveInteractionGuardDecision(ctx: Context): GuardDecision {
   }
 
   if (state.expectedInput === "mixed") {
-    return createAllowDecision(inputType, state, command);
+    if (inputType === "callback" || inputType === "text") {
+      return createAllowDecision(inputType, state, command);
+    }
+
+    return createBlockDecision(inputType, state, "expected_text", command);
   }
 
   if (inputType === "callback" && isAllowedRenameCancelCallback(ctx, state)) {

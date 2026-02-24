@@ -26,6 +26,7 @@ describe("summary/aggregator", () => {
     summaryAggregator.setOnTool(() => {});
     summaryAggregator.setOnToolFile(() => {});
     summaryAggregator.setOnThinking(() => {});
+    summaryAggregator.setOnSessionError(() => {});
   });
 
   it("invokes onCleared callback when aggregator is cleared", () => {
@@ -247,6 +248,29 @@ describe("summary/aggregator", () => {
 
     expect(onThinking).toHaveBeenCalledTimes(1);
     expect(onThinking).toHaveBeenCalledWith("session-1");
+  });
+
+  it("reports session.error message through callback", async () => {
+    const onSessionError = vi.fn();
+    summaryAggregator.setOnSessionError(onSessionError);
+    summaryAggregator.setSession("session-1");
+
+    summaryAggregator.processEvent({
+      type: "session.error",
+      properties: {
+        sessionID: "session-1",
+        error: {
+          name: "UnknownError",
+          data: {
+            message: "Model not found: opencode/foo.",
+          },
+        },
+      },
+    } as unknown as Event);
+
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(onSessionError).toHaveBeenCalledWith("session-1", "Model not found: opencode/foo.");
   });
 
   it("sends apply_patch payload as tool file", () => {
