@@ -3,7 +3,7 @@ import { interactionManager } from "../../interaction/manager.js";
 import type { InteractionState } from "../../interaction/types.js";
 import { logger } from "../../utils/logger.js";
 import { t } from "../../i18n/index.js";
-import { getScopeKeyFromContext } from "../scope.js";
+import { getScopeFromContext, getScopeKeyFromContext, getThreadSendOptions } from "../scope.js";
 
 const INLINE_MENU_CANCEL_PREFIX = "inline:cancel:";
 const LEGACY_CONTEXT_CANCEL_CALLBACK = "compact:cancel";
@@ -89,13 +89,16 @@ export async function replyWithInlineMenu(
   ctx: Context,
   options: InlineMenuReplyOptions,
 ): Promise<number> {
-  const scopeKey = getScopeKeyFromContext(ctx);
+  const scope = getScopeFromContext(ctx);
+  const scopeKey = scope?.key ?? getScopeKeyFromContext(ctx);
   const keyboard = appendInlineMenuCancelButton(options.keyboard, options.menuKind);
   const replyOptions: {
     reply_markup: InlineKeyboard;
     parse_mode?: "Markdown" | "HTML";
+    message_thread_id?: number;
   } = {
     reply_markup: keyboard,
+    ...getThreadSendOptions(scope?.threadId ?? null),
   };
 
   if (options.parseMode) {

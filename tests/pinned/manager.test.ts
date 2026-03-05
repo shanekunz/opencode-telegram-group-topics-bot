@@ -82,4 +82,20 @@ describe("pinned manager scoped state", () => {
     expect(stateB.messageId).not.toBeNull();
     expect(stateA.messageId).not.toBe(stateB.messageId);
   });
+
+  it("uses thread id from scope key when explicit thread id is missing", async () => {
+    const api = createApi();
+
+    setCurrentProject({ id: "p1", worktree: "/repo/a" }, "-1:77");
+    setCurrentModel({ providerID: "openai", modelID: "gpt-5", variant: "default" }, "-1:77");
+
+    pinnedMessageManager.initialize(api as never, -1, "-1:77", null);
+    await pinnedMessageManager.onSessionChange("s1", "thread 77", "-1:77");
+
+    expect(api.sendMessage).toHaveBeenCalledWith(
+      -1,
+      expect.any(String),
+      expect.objectContaining({ message_thread_id: 77 }),
+    );
+  });
 });

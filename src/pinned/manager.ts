@@ -43,6 +43,20 @@ class PinnedMessageManager {
     };
   }
 
+  private getThreadIdFromScopeKey(scopeKey: string): number | null {
+    const directScopeMatch = /^-?\d+:(\d+)$/.exec(scopeKey);
+    if (directScopeMatch) {
+      return Number.parseInt(directScopeMatch[1], 10);
+    }
+
+    const legacyScopeMatch = /^chat:-?\d+:(\d+)$/.exec(scopeKey);
+    if (legacyScopeMatch) {
+      return Number.parseInt(legacyScopeMatch[1], 10);
+    }
+
+    return null;
+  }
+
   private getContext(scopeKey: string): ScopeContext {
     const existing = this.contexts.get(scopeKey);
     if (existing) {
@@ -71,10 +85,12 @@ class PinnedMessageManager {
     threadId: number | null = null,
   ): void {
     const context = this.getContext(scopeKey);
+    const scopeThreadId = this.getThreadIdFromScopeKey(scopeKey);
+    const resolvedThreadId = threadId ?? scopeThreadId ?? context.state.threadId;
     context.api = api;
     context.chatId = chatId;
     context.state.chatId = chatId;
-    context.state.threadId = threadId;
+    context.state.threadId = resolvedThreadId;
   }
 
   private persistPinnedId(scopeKey: string, messageId: number): void {
@@ -427,10 +443,10 @@ class PinnedMessageManager {
       return;
     }
 
+    const threadId = context.state.threadId ?? this.getThreadIdFromScopeKey(scopeKey);
+
     const sent = await context.api.sendMessage(context.chatId, this.formatMessage(scopeKey), {
-      ...(typeof context.state.threadId === "number"
-        ? { message_thread_id: context.state.threadId }
-        : {}),
+      ...(typeof threadId === "number" ? { message_thread_id: threadId } : {}),
     });
 
     context.state.messageId = sent.message_id;

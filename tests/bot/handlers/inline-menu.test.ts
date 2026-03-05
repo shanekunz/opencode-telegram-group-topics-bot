@@ -9,9 +9,13 @@ import {
 } from "../../../src/bot/handlers/inline-menu.js";
 import { t } from "../../../src/i18n/index.js";
 
-function createReplyContext(messageId: number = 1): Context {
+function createReplyContext(messageId: number = 1, threadId?: number): Context {
   return {
-    chat: { id: 100 },
+    chat: { id: 100, type: "supergroup" },
+    message:
+      typeof threadId === "number"
+        ? ({ message_thread_id: threadId } as Context["message"])
+        : undefined,
     reply: vi.fn().mockResolvedValue({ message_id: messageId }),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
     deleteMessage: vi.fn().mockResolvedValue(undefined),
@@ -68,7 +72,7 @@ describe("bot/handlers/inline-menu", () => {
   });
 
   it("replies with inline menu and registers active interaction state", async () => {
-    const ctx = createReplyContext(42);
+    const ctx = createReplyContext(42, 99);
     const keyboard = new InlineKeyboard().text("Model A", "model:openai:gpt-4o");
 
     await replyWithInlineMenu(ctx, {
@@ -80,12 +84,13 @@ describe("bot/handlers/inline-menu", () => {
     expect(ctx.reply).toHaveBeenCalledTimes(1);
 
     const [, options] = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(options.message_thread_id).toBe(99);
     const replyMarkup = options.reply_markup as InlineKeyboard;
     const lastRow = replyMarkup.inline_keyboard[replyMarkup.inline_keyboard.length - 1];
 
     expect(getCallbackData(lastRow[0])).toBe("inline:cancel:model");
 
-    const state = interactionManager.getSnapshot();
+    const state = interactionManager.getSnapshot("100:99");
     expect(state?.kind).toBe("inline");
     expect(state?.expectedInput).toBe("callback");
     expect(state?.metadata.menuKind).toBe("model");
