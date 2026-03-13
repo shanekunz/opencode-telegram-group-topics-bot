@@ -53,8 +53,8 @@ async function runStartCommand(mode?: RuntimeMode): Promise<number> {
   return EXIT_SUCCESS;
 }
 
-async function runConfigCommand(): Promise<number> {
-  setRuntimeMode("installed");
+async function runConfigCommand(mode?: RuntimeMode): Promise<number> {
+  setRuntimeMode(mode ?? "installed");
 
   const { runConfigWizardCommand } = await import("./runtime/bootstrap.js");
   await runConfigWizardCommand();
@@ -85,7 +85,7 @@ async function runCli(argv: string[]): Promise<number> {
   }
 
   if (parsedArgs.command === "config") {
-    return runConfigCommand();
+    return runConfigCommand(parsedArgs.mode);
   }
 
   return runPlaceholderCommand(parsedArgs.command);

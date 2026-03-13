@@ -12,13 +12,54 @@ import { pinnedMessageManager } from "../../pinned/manager.js";
 import { logger } from "../../utils/logger.js";
 import { t } from "../../i18n/index.js";
 import { sendMessageWithMarkdownFallback } from "../utils/send-with-markdown-fallback.js";
+import { createDmKeyboard } from "../utils/keyboard.js";
+import { getScopeFromContext, getScopeKeyFromContext, getThreadSendOptions } from "../scope.js";
 
 export async function statusCommand(ctx: CommandContext<Context>) {
   try {
+    const scopeKey = getScopeKeyFromContext(ctx);
+    const scope = getScopeFromContext(ctx);
+    const usePinned = ctx.chat?.type !== "private";
+    const isPrivateChat = ctx.chat?.type === "private";
     const { data, error } = await opencodeClient.global.health();
 
     if (error || !data) {
       throw error || new Error("No data received from server");
+    }
+
+    if (isPrivateChat) {
+      const [projectsResult, sessionsResult] = await Promise.all([
+        opencodeClient.project.list(),
+        opencodeClient.session.list({ limit: 200 }),
+      ]);
+
+      const projectCount = projectsResult.data?.length ?? 0;
+      const sessionCount = sessionsResult.data?.length ?? 0;
+
+      const healthLabel = data.healthy ? t("status.health.healthy") : t("status.health.unhealthy");
+      let dmMessage = `📊 ${t("status.dm.title")}\n\n`;
+      dmMessage += `${t("status.line.health", { health: healthLabel })}\n`;
+      if (data.version) {
+        dmMessage += `${t("status.line.version", { version: data.version })}\n`;
+      }
+
+      if (processManager.isRunning()) {
+        const uptime = processManager.getUptime();
+        const uptimeStr = uptime ? Math.floor(uptime / 1000) : 0;
+        dmMessage += `${t("status.line.managed_yes")}\n`;
+        dmMessage += `${t("status.line.pid", { pid: processManager.getPID() ?? "-" })}\n`;
+        dmMessage += `${t("status.line.uptime_sec", { seconds: uptimeStr })}\n`;
+      } else {
+        dmMessage += `${t("status.line.managed_no")}\n`;
+      }
+
+      dmMessage += `\n${t("status.global_overview")}\n`;
+      dmMessage += `${t("status.global_projects", { count: projectCount })}\n`;
+      dmMessage += `${t("status.global_sessions", { count: sessionCount })}\n\n`;
+      dmMessage += t("status.dm.hint");
+
+      await ctx.reply(dmMessage, { reply_markup: createDmKeyboard() });
+      return;
     }
 
     let message = `${t("status.header_running")}\n\n`;
@@ -40,18 +81,18 @@ export async function statusCommand(ctx: CommandContext<Context>) {
     }
 
     // Add agent mode information
-    const currentAgent = await fetchCurrentAgent();
+    const currentAgent = await fetchCurrentAgent(scopeKey);
     const agentDisplay = currentAgent
       ? getAgentDisplayName(currentAgent)
       : t("status.agent_not_set");
     message += `${t("status.line.mode", { mode: agentDisplay })}\n`;
 
     // Add model information
-    const currentModel = fetchCurrentModel();
+    const currentModel = fetchCurrentModel(scopeKey);
     const modelDisplay = formatModelForDisplay(currentModel.providerID, currentModel.modelID);
     message += `${t("status.line.model", { model: modelDisplay })}\n`;
 
-    const currentProject = getCurrentProject();
+    const currentProject = getCurrentProject(scopeKey);
     if (currentProject) {
       const projectName = currentProject.name || currentProject.worktree;
       message += `\n${t("status.project_selected", { project: projectName })}\n`;
@@ -60,7 +101,7 @@ export async function statusCommand(ctx: CommandContext<Context>) {
       message += t("status.project_hint");
     }
 
-    const currentSession = getCurrentSession();
+    const currentSession = getCurrentSession(scopeKey);
     if (currentSession) {
       message += `\n${t("status.session_selected", { title: currentSession.title })}\n`;
     } else {
@@ -69,27 +110,32 @@ export async function statusCommand(ctx: CommandContext<Context>) {
     }
 
     if (ctx.chat) {
-      if (!pinnedMessageManager.isInitialized()) {
-        pinnedMessageManager.initialize(ctx.api, ctx.chat.id);
+      if (usePinned && !pinnedMessageManager.isInitialized(scopeKey)) {
+        pinnedMessageManager.initialize(ctx.api, ctx.chat.id, scopeKey, scope?.threadId ?? null);
       }
-      // Fetch context limit if not yet loaded (e.g. fresh bot start)
-      if (pinnedMessageManager.getContextLimit() === 0) {
-        await pinnedMessageManager.refreshContextLimit();
+      if (usePinned && pinnedMessageManager.getContextLimit(scopeKey) === 0) {
+        await pinnedMessageManager.refreshContextLimit(scopeKey);
       }
-      keyboardManager.initialize(ctx.api, ctx.chat.id);
+      keyboardManager.initialize(ctx.api, ctx.chat.id, scopeKey);
     }
-    // Sync current context (tokens used + limit) into keyboard state
-    const contextInfo = pinnedMessageManager.getContextInfo();
+    const contextInfo =
+      (usePinned ? pinnedMessageManager.getContextInfo(scopeKey) : null) ??
+      keyboardManager.getContextInfo(scopeKey);
     if (contextInfo) {
-      keyboardManager.updateContext(contextInfo.tokensUsed, contextInfo.tokensLimit);
+      keyboardManager.updateContext(contextInfo.tokensUsed, contextInfo.tokensLimit, scopeKey);
+    } else if (usePinned && pinnedMessageManager.getContextLimit(scopeKey) > 0) {
+      keyboardManager.updateContext(0, pinnedMessageManager.getContextLimit(scopeKey), scopeKey);
     }
-    const keyboard = keyboardManager.getKeyboard();
+    const keyboard = keyboardManager.getKeyboard(scopeKey);
     if (ctx.chat) {
       await sendMessageWithMarkdownFallback({
         api: ctx.api,
         chatId: ctx.chat.id,
         text: message,
-        options: { reply_markup: keyboard },
+        options: {
+          reply_markup: keyboard,
+          ...getThreadSendOptions(scope?.threadId ?? null),
+        },
         parseMode: "Markdown",
       });
     } else {

@@ -15,6 +15,7 @@ import {
 } from "../i18n/index.js";
 
 const DEFAULT_API_URL = "http://localhost:4096";
+const DEFAULT_SERVER_USERNAME = "opencode";
 const FALLBACK_MODEL_PROVIDER = "opencode";
 const FALLBACK_MODEL_ID = "big-pickle";
 
@@ -33,6 +34,8 @@ interface WizardCollectedValues {
   token: string;
   allowedUserId: string;
   apiUrl?: string;
+  serverUsername: string;
+  serverPassword?: string;
 }
 
 export interface WizardEnvValues {
@@ -40,6 +43,8 @@ export interface WizardEnvValues {
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_ALLOWED_USER_ID: string;
   OPENCODE_API_URL?: string;
+  OPENCODE_SERVER_USERNAME: string;
+  OPENCODE_SERVER_PASSWORD?: string;
   OPENCODE_MODEL_PROVIDER: string;
   OPENCODE_MODEL_ID: string;
 }
@@ -113,6 +118,8 @@ export function buildEnvFileContent(existingContent: string, values: WizardEnvVa
     ["TELEGRAM_BOT_TOKEN", values.TELEGRAM_BOT_TOKEN],
     ["TELEGRAM_ALLOWED_USER_ID", values.TELEGRAM_ALLOWED_USER_ID],
     ["OPENCODE_API_URL", values.OPENCODE_API_URL],
+    ["OPENCODE_SERVER_USERNAME", values.OPENCODE_SERVER_USERNAME],
+    ["OPENCODE_SERVER_PASSWORD", values.OPENCODE_SERVER_PASSWORD],
     ["OPENCODE_MODEL_PROVIDER", values.OPENCODE_MODEL_PROVIDER],
     ["OPENCODE_MODEL_ID", values.OPENCODE_MODEL_ID],
   ];
@@ -336,6 +343,28 @@ async function askApiUrl(): Promise<string | undefined> {
   }
 }
 
+async function askServerUsername(): Promise<string> {
+  const prompt = t("runtime.wizard.ask_server_username", {
+    defaultUsername: DEFAULT_SERVER_USERNAME,
+  });
+
+  const username = await askVisible(prompt);
+  if (!username) {
+    return DEFAULT_SERVER_USERNAME;
+  }
+
+  return username;
+}
+
+async function askServerPassword(): Promise<string | undefined> {
+  const password = await askHidden(t("runtime.wizard.ask_server_password"));
+  if (!password) {
+    return undefined;
+  }
+
+  return password;
+}
+
 async function collectWizardValues(): Promise<WizardCollectedValues> {
   const locale = await askLocale();
   setRuntimeLocale(locale);
@@ -358,6 +387,8 @@ async function collectWizardValues(): Promise<WizardCollectedValues> {
   const token = await askToken();
   const allowedUserId = await askAllowedUserId();
   const apiUrl = await askApiUrl();
+  const serverUsername = await askServerUsername();
+  const serverPassword = await askServerPassword();
 
   process.stdout.write("\n");
 
@@ -366,6 +397,8 @@ async function collectWizardValues(): Promise<WizardCollectedValues> {
     token,
     allowedUserId,
     apiUrl,
+    serverUsername,
+    serverPassword,
   };
 }
 
@@ -404,6 +437,8 @@ async function runWizardAndPersist(runtimePaths: RuntimePaths): Promise<void> {
     TELEGRAM_BOT_TOKEN: wizardValues.token,
     TELEGRAM_ALLOWED_USER_ID: wizardValues.allowedUserId,
     OPENCODE_API_URL: wizardValues.apiUrl,
+    OPENCODE_SERVER_USERNAME: wizardValues.serverUsername,
+    OPENCODE_SERVER_PASSWORD: wizardValues.serverPassword,
     OPENCODE_MODEL_PROVIDER: provider,
     OPENCODE_MODEL_ID: modelId,
   };

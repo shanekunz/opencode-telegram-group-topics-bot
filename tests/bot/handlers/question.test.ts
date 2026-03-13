@@ -89,7 +89,7 @@ describe("bot/handlers/question", () => {
     const api = createApi([100]);
 
     questionManager.startQuestions([QUESTION_ONE], "req-1");
-    await showCurrentQuestion(api, 123);
+    await showCurrentQuestion(api, 123, "global", null);
 
     expect(questionManager.getActiveMessageId()).toBe(100);
 
@@ -105,7 +105,7 @@ describe("bot/handlers/question", () => {
     const api = createApi([101, 102]);
 
     questionManager.startQuestions([QUESTION_ONE, QUESTION_TWO], "req-2");
-    await showCurrentQuestion(api, 123);
+    await showCurrentQuestion(api, 123, "global", null);
 
     const customCtx = createCallbackContext("question:custom:0", 101, api);
     await handleQuestionCallback(customCtx);
@@ -128,7 +128,7 @@ describe("bot/handlers/question", () => {
     const api = createApi([200]);
 
     questionManager.startQuestions([QUESTION_ONE], "req-3");
-    await showCurrentQuestion(api, 123);
+    await showCurrentQuestion(api, 123, "global", null);
 
     const staleCtx = createCallbackContext("question:select:0:0", 199, api);
     const handled = await handleQuestionCallback(staleCtx);
@@ -145,7 +145,7 @@ describe("bot/handlers/question", () => {
     const api = createApi([300]);
 
     questionManager.startQuestions([QUESTION_ONE], "req-4");
-    await showCurrentQuestion(api, 123);
+    await showCurrentQuestion(api, 123, "global", null);
 
     const cancelCtx = createCallbackContext("question:cancel:0", 300, api);
     const handled = await handleQuestionCallback(cancelCtx);
@@ -161,7 +161,7 @@ describe("bot/handlers/question", () => {
     const api = createApi([400]);
 
     questionManager.startQuestions([MULTIPLE_QUESTION], "req-5");
-    await showCurrentQuestion(api, 123);
+    await showCurrentQuestion(api, 123, "global", null);
 
     const submitCtx = createCallbackContext("question:submit:0", 400, api);
     const handled = await handleQuestionCallback(submitCtx);

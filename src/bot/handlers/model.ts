@@ -14,6 +14,7 @@ import {
   replyWithInlineMenu,
 } from "./inline-menu.js";
 import { t } from "../../i18n/index.js";
+import { SCOPE_CONTEXT, getScopeFromKey, getScopeKeyFromContext } from "../scope.js";
 
 function buildModelSelectionMenuText(modelLists: ModelSelectionLists): string {
   const lines = [t("model.menu.select"), t("model.menu.favorites_title")];
@@ -51,15 +52,16 @@ export async function handleModelSelect(ctx: Context): Promise<boolean> {
   logger.debug(`[ModelHandler] Received callback: ${callbackQuery.data}`);
 
   try {
+    const scopeKey = getScopeKeyFromContext(ctx);
     if (ctx.chat) {
-      keyboardManager.initialize(ctx.api, ctx.chat.id);
+      keyboardManager.initialize(ctx.api, ctx.chat.id, scopeKey);
     }
 
     // Parse callback data: "model:providerID:modelID"
     const parts = callbackQuery.data.split(":");
     if (parts.length < 3) {
       logger.error(`[ModelHandler] Invalid callback data format: ${callbackQuery.data}`);
-      clearActiveInlineMenu("model_select_invalid_callback");
+      clearActiveInlineMenu("model_select_invalid_callback", scopeKey);
       await ctx.answerCallbackQuery({ text: t("model.change_error_callback") }).catch(() => {});
       return true;
     }
@@ -74,36 +76,43 @@ export async function handleModelSelect(ctx: Context): Promise<boolean> {
     };
 
     // Select model and persist
-    selectModel(modelInfo);
+    selectModel(modelInfo, scopeKey);
 
     // Update keyboard manager state (may not be initialized if no session selected)
-    keyboardManager.updateModel(modelInfo);
+    keyboardManager.updateModel(modelInfo, scopeKey);
 
     // Refresh context limit for new model
-    await pinnedMessageManager.refreshContextLimit();
+    await pinnedMessageManager.refreshContextLimit(scopeKey);
 
     // Update Reply Keyboard with new model and context
-    const currentAgent = getStoredAgent();
+    const currentAgent = getStoredAgent(scopeKey);
     const contextInfo =
-      pinnedMessageManager.getContextInfo() ??
-      (pinnedMessageManager.getContextLimit() > 0
-        ? { tokensUsed: 0, tokensLimit: pinnedMessageManager.getContextLimit() }
-        : null);
+      pinnedMessageManager.getContextInfo(scopeKey) ??
+      (pinnedMessageManager.getContextLimit(scopeKey) > 0
+        ? { tokensUsed: 0, tokensLimit: pinnedMessageManager.getContextLimit(scopeKey) }
+        : keyboardManager.getContextInfo(scopeKey));
 
     if (contextInfo) {
-      keyboardManager.updateContext(contextInfo.tokensUsed, contextInfo.tokensLimit);
+      keyboardManager.updateContext(contextInfo.tokensUsed, contextInfo.tokensLimit, scopeKey);
     }
 
     const variantName = formatVariantForButton(modelInfo.variant || "default");
+    const scope = getScopeFromKey(scopeKey);
     const keyboard = createMainKeyboard(
       currentAgent,
       modelInfo,
       contextInfo ?? undefined,
       variantName,
+      scope?.context === SCOPE_CONTEXT.GROUP_GENERAL
+        ? {
+            contextFirst: true,
+            contextLabel: t("keyboard.general_defaults"),
+          }
+        : undefined,
     );
     const displayName = formatModelForDisplay(modelInfo.providerID, modelInfo.modelID);
 
-    clearActiveInlineMenu("model_selected");
+    clearActiveInlineMenu("model_selected", scopeKey);
 
     // Send confirmation message with updated keyboard
     await ctx.answerCallbackQuery({ text: t("model.changed_callback", { name: displayName }) });
@@ -116,7 +125,7 @@ export async function handleModelSelect(ctx: Context): Promise<boolean> {
 
     return true;
   } catch (err) {
-    clearActiveInlineMenu("model_select_error");
+    clearActiveInlineMenu("model_select_error", getScopeKeyFromContext(ctx));
     logger.error("[ModelHandler] Error handling model select:", err);
     await ctx.answerCallbackQuery({ text: t("model.change_error_callback") }).catch(() => {});
     return false;
@@ -167,7 +176,8 @@ export async function buildModelSelectionMenu(
  */
 export async function showModelSelectionMenu(ctx: Context): Promise<void> {
   try {
-    const currentModel = fetchCurrentModel();
+    const scopeKey = getScopeKeyFromContext(ctx);
+    const currentModel = fetchCurrentModel(scopeKey);
     const modelLists = await getModelSelectionLists();
     const keyboard = await buildModelSelectionMenu(currentModel, modelLists);
 

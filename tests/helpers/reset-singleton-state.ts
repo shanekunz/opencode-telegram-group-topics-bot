@@ -16,29 +16,15 @@ interface SummaryAggregatorPrivateState {
 }
 
 interface KeyboardManagerPrivateState {
-  state: null;
+  stateByScope: Map<string, unknown>;
   api: null;
   chatId: null;
   lastUpdateTime: number;
 }
 
 interface PinnedMessageManagerPrivateState {
-  api: null;
-  chatId: null;
-  contextLimit: null;
-  updateDebounceTimer: ReturnType<typeof setTimeout> | null;
-  onKeyboardUpdateCallback: undefined;
-  state: {
-    messageId: null;
-    chatId: null;
-    sessionId: null;
-    sessionTitle: string;
-    projectName: string;
-    tokensUsed: number;
-    tokensLimit: number;
-    lastUpdated: number;
-    changedFiles: Array<{ file: string; additions: number; deletions: number }>;
-  };
+  contexts?: Map<string, { debounceTimer: ReturnType<typeof setTimeout> | null }>;
+  onKeyboardUpdateCallback?: undefined;
 }
 
 interface ProcessManagerPrivateState {
@@ -99,31 +85,22 @@ export async function resetSingletonState(): Promise<void> {
   aggregator.chatId = null;
 
   const keyboard = keyboardManager as unknown as KeyboardManagerPrivateState;
-  keyboard.state = null;
+  keyboard.stateByScope = new Map();
   keyboard.api = null;
   keyboard.chatId = null;
   keyboard.lastUpdateTime = 0;
 
   const pinned = pinnedMessageManager as unknown as PinnedMessageManagerPrivateState;
-  if (pinned.updateDebounceTimer) {
-    clearTimeout(pinned.updateDebounceTimer);
+  if (pinned.contexts) {
+    for (const context of pinned.contexts.values()) {
+      if (context.debounceTimer) {
+        clearTimeout(context.debounceTimer);
+      }
+    }
+    pinned.contexts = new Map();
   }
-  pinned.updateDebounceTimer = null;
-  pinned.api = null;
-  pinned.chatId = null;
-  pinned.contextLimit = null;
+
   pinned.onKeyboardUpdateCallback = undefined;
-  pinned.state = {
-    messageId: null,
-    chatId: null,
-    sessionId: null,
-    sessionTitle: "new session",
-    projectName: "",
-    tokensUsed: 0,
-    tokensLimit: 0,
-    lastUpdated: 0,
-    changedFiles: [],
-  };
 
   const process = processManager as unknown as ProcessManagerPrivateState;
   process.state = {

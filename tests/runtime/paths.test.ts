@@ -57,7 +57,7 @@ describe("runtime/paths", () => {
 
       expect(runtimePaths.mode).toBe("installed");
       expect(runtimePaths.appHome).toBe(
-        path.join("C:\\Users\\test\\AppData\\Roaming", "opencode-telegram-bot"),
+        path.join("C:\\Users\\test\\AppData\\Roaming", "opencode-telegram-group-topics-bot"),
       );
       expect(runtimePaths.logsDirPath).toBe(path.join(runtimePaths.appHome, "logs"));
     } finally {

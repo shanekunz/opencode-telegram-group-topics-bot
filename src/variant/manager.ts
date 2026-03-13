@@ -69,8 +69,8 @@ export async function getAvailableVariants(
  * Get current variant from settings
  * @returns Current variant ID (defaults to "default")
  */
-export function getCurrentVariant(): string {
-  const currentModel = getCurrentModel();
+export function getCurrentVariant(scopeKey: string = "global"): string {
+  const currentModel = getCurrentModel(scopeKey);
   return currentModel?.variant || "default";
 }
 
@@ -78,8 +78,8 @@ export function getCurrentVariant(): string {
  * Set current variant in settings
  * @param variantId Variant ID to set
  */
-export function setCurrentVariant(variantId: string): void {
-  const currentModel = getCurrentModel();
+export function setCurrentVariant(variantId: string, scopeKey: string = "global"): void {
+  const currentModel = getCurrentModel(scopeKey);
 
   if (!currentModel) {
     logger.warn("[VariantManager] Cannot set variant: no current model");
@@ -87,7 +87,7 @@ export function setCurrentVariant(variantId: string): void {
   }
 
   currentModel.variant = variantId;
-  setCurrentModel(currentModel);
+  setCurrentModel(currentModel, scopeKey);
   logger.info(`[VariantManager] Variant set to: ${variantId}`);
 }
 

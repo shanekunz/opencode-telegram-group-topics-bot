@@ -3,10 +3,14 @@ import type { I18nDictionary } from "./en.js";
 export const de: I18nDictionary = {
   "cmd.description.status": "Server- und Sitzungsstatus",
   "cmd.description.new": "Neue Sitzung erstellen",
+  "cmd.description.abort": "Aktuelle Aktion abbrechen",
   "cmd.description.stop": "Aktuelle Aktion stoppen",
   "cmd.description.sessions": "Sitzungen auflisten",
   "cmd.description.projects": "Projekte auflisten",
   "cmd.description.commands": "Benutzerdefinierte Befehle",
+  "cmd.description.model": "Modell auswählen",
+  "cmd.description.agent": "Agent-Modus auswählen",
+  "cmd.description.cleanup": "Veraltete Themen schließen",
   "cmd.description.opencode_start": "OpenCode-Server starten",
   "cmd.description.opencode_stop": "OpenCode-Server stoppen",
   "cmd.description.help": "Hilfe",
@@ -48,7 +52,7 @@ export const de: I18nDictionary = {
   "common.unknown_error": "unbekannter Fehler",
 
   "start.welcome":
-    "👋 Willkommen beim OpenCode Telegram Bot!\n\nNutze Befehle:\n/projects — Projekt auswählen\n/sessions — Sitzungsliste\n/new — neue Sitzung\n/status — Status\n/help — Hilfe\n\nNutze die unteren Buttons, um Modus, Modell und Variante zu wählen.",
+    "👋 Willkommen beim OpenCode Telegram Group Topics Bot!\n\nNutze Befehle:\n/projects — Projekt auswählen\n/sessions — Sitzungsliste\n/new — neue Sitzung\n/status — Status\n/help — Hilfe\n\nNutze die unteren Buttons, um Modus, Modell und Variante zu wählen.",
   "help.keyboard_hint":
     "💡 Nutze die unteren Buttons für Modus, Modell, Variante und Kontextaktionen.",
   "help.text":
@@ -62,13 +66,16 @@ export const de: I18nDictionary = {
     "🔴 Sitzung konnte nicht erstellt werden. Versuche /new oder prüfe den Serverstatus mit /status.",
   "bot.session_created": "✅ Sitzung erstellt: {title}",
   "bot.session_busy":
-    "⏳ Agent führt bereits eine Aufgabe aus. Warte auf Abschluss oder nutze /stop, um den aktuellen Lauf zu unterbrechen.",
+    "⏳ Deine letzte Anfrage wird noch verarbeitet, deshalb wurde diese neue nicht gestartet.\n\nWarum das passiert ist: OpenCode erlaubt pro Sitzung nur einen aktiven Lauf gleichzeitig.\nWas du tun kannst: warte auf die aktuelle Antwort oder nutze /abort, wenn es festhängt, und sende die Nachricht dann erneut.",
   "bot.session_reset_project_mismatch":
     "⚠️ Die aktive Sitzung passt nicht zum ausgewählten Projekt und wurde daher zurückgesetzt. Nutze /sessions zur Auswahl oder /new, um eine neue Sitzung zu erstellen.",
-  "bot.prompt_send_error": "Anfrage konnte nicht an OpenCode gesendet werden.",
+  "bot.prompt_send_error":
+    "⚠️ Ich konnte diese Nachricht nicht an OpenCode senden.\n\nWahrscheinliche Ursache: eine vorübergehende Verbindungsstörung zwischen Bot und OpenCode-Server.\nWas du tun kannst: sende die Nachricht erneut. Wenn es weiter passiert, nutze /status und prüfe, ob OpenCode erreichbar ist.",
+  "bot.prompt_send_error_session_not_found":
+    "⚠️ Ich konnte diese Nachricht nicht senden, weil die aktive Sitzung nicht mehr verfügbar ist.\n\nWarum das passiert ist: die Sitzung wurde möglicherweise zurückgesetzt, gewechselt oder gelöscht.\nWas du tun kannst: wähl eine Sitzung mit /sessions oder erstelle eine neue mit /new und sende die Nachricht dann erneut.",
   "bot.session_error": "🔴 OpenCode meldete einen Fehler: {message}",
   "bot.session_retry":
-    "🔁 {message}\n\nDer Provider liefert bei wiederholten Versuchen immer wieder denselben Fehler. Mit /stop abbrechen.",
+    "🔁 {message}\n\nDer Provider liefert bei wiederholten Versuchen immer wieder denselben Fehler. Mit /abort abbrechen.",
   "bot.unknown_command":
     "⚠️ Unbekannter Befehl: {command}. Nutze /help, um verfügbare Befehle zu sehen.",
   "bot.photo_downloading": "⏳ Lade Foto herunter...",
@@ -118,6 +125,11 @@ export const de: I18nDictionary = {
   "projects.selected":
     "✅ Projekt ausgewählt: {project}\n\n📋 Sitzung wurde zurückgesetzt. Nutze /sessions oder /new für dieses Projekt.",
   "projects.select_error": "🔴 Projekt konnte nicht ausgewählt werden.",
+  "projects.locked.topic_scope":
+    "⚠️ Dieses Thema ist an seinen eigenen Projekt-/Sitzungsbereich gebunden. Wechsle Projekte nur im General-Thema, bevor du Themen erstellst.",
+  "projects.locked.group_project":
+    "⚠️ Diese Gruppe ist bereits für folgendes Projekt konfiguriert: {project}. Erstelle eine neue Gruppe, wenn du in einem anderen Repository arbeiten willst.",
+  "projects.locked.callback": "Projektwechsel ist für diese Gruppe gesperrt.",
 
   "sessions.project_not_selected":
     "🏗 Projekt ist nicht ausgewählt.\n\nWähle zuerst ein Projekt mit /projects.",
@@ -132,6 +144,13 @@ export const de: I18nDictionary = {
     "Diese Seite kann nicht geladen werden. Bitte versuche es erneut.",
   "sessions.button.prev_page": "⬅️ Zurück",
   "sessions.button.next_page": "Weiter ➡️",
+  "sessions.topic_locked":
+    "⚠️ Dieses Thema ist an seine aktuelle Sitzung gebunden. Verwende /new im General-Thema, um ein weiteres Thema zu erstellen.",
+  "sessions.general_overview": "Übersicht der Themen-Sitzungen:",
+  "sessions.general_item": "• {topic} (Thread #{thread}) - {status}",
+  "sessions.general_empty": "Noch keine Sitzungs-Themen. Verwende /new, um eins zu erstellen.",
+  "sessions.bound_topic_link": "🔗 Thema für diese Sitzung: {url}",
+  "sessions.created_topic_link": "✅ Thema für diese Sitzung erstellt: {url}",
   "sessions.loading_context": "⏳ Lade Kontext und letzte Nachrichten...",
   "sessions.selected": "✅ Sitzung ausgewählt: {title}",
   "sessions.select_error": "🔴 Sitzung konnte nicht ausgewählt werden.",
@@ -143,15 +162,33 @@ export const de: I18nDictionary = {
   "new.project_not_selected":
     "🏗 Projekt ist nicht ausgewählt.\n\nWähle zuerst ein Projekt mit /projects.",
   "new.created": "✅ Neue Sitzung erstellt: {title}",
+  "new.topic_only_in_general":
+    "⚠️ Führe /new im General-Thema aus, um ein eigenes Sitzungs-Thema zu erstellen.",
+  "new.requires_forum_general":
+    "⚠️ /new benötigt das General-Thema in einer forum-fähigen Supergruppe.",
+  "new.topic_created": "✅ Sitzungs-Thema ist bereit: {title}",
+  "new.general_created": "✅ Neue OpenCode-Sitzung und Gruppenthema erstellt.",
+  "new.topic_create_error":
+    "🔴 Sitzungs-Thema konnte nicht erstellt werden. Prüfe Forum-Berechtigungen und versuche es erneut.",
+  "new.topic_create_no_rights":
+    '🔴 Ich kann in dieser Gruppe keine Foren-Themen erstellen. Bitte gib dem Bot die Berechtigung "Themen verwalten" und versuche dann /new erneut.',
+  "new.general_open_link": "🔗 Thema öffnen: {url}",
   "new.create_error":
     "🔴 OpenCode-Server ist nicht verfügbar oder beim Erstellen der Sitzung ist ein Fehler aufgetreten.",
+
+  "cleanup.topic_use_general": "⚠️ Führe /cleanup im General-Thema aus.",
+  "cleanup.requires_forum_general":
+    "⚠️ /cleanup ist nur im General-Thema einer forum-fähigen Supergruppe verfügbar.",
+  "cleanup.no_topics": "✅ Keine Themen-Sitzungen zum Aufräumen.",
+  "cleanup.result":
+    "🧹 Aufräumen abgeschlossen. Geprüft: {inspected}, geschlossen: {closed}, übersprungen: {skipped}, fehlgeschlagen: {failed}.",
 
   "stop.no_active_session":
     "🛑 Agent wurde nicht gestartet\n\nErstelle eine Sitzung mit /new oder wähle eine über /sessions aus.",
   "stop.in_progress":
     "🛑 Event-Stream gestoppt, sende Abbruchsignal...\n\nWarte darauf, dass der Agent stoppt.",
   "stop.warn_unconfirmed":
-    "⚠️ Event-Stream gestoppt, aber der Server hat den Abbruch nicht bestätigt.\n\nPrüfe /status und versuche /stop in ein paar Sekunden erneut.",
+    "⚠️ Event-Stream gestoppt, aber der Server hat den Abbruch nicht bestätigt.\n\nPrüfe /status und versuche /abort in ein paar Sekunden erneut.",
   "stop.warn_maybe_finished":
     "⚠️ Event-Stream gestoppt, aber der Agent konnte bereits fertig sein.",
   "stop.success":
@@ -159,11 +196,11 @@ export const de: I18nDictionary = {
   "stop.warn_still_busy":
     "⚠️ Signal gesendet, aber der Agent ist noch beschäftigt.\n\nDer Event-Stream ist bereits deaktiviert, daher werden keine Zwischenmeldungen gesendet.",
   "stop.warn_timeout":
-    "⚠️ Timeout beim Abbruch.\n\nDer Event-Stream ist bereits deaktiviert, versuche /stop in ein paar Sekunden erneut.",
+    "⚠️ Timeout beim Abbruch.\n\nDer Event-Stream ist bereits deaktiviert, versuche /abort in ein paar Sekunden erneut.",
   "stop.warn_local_only":
     "⚠️ Event-Stream lokal gestoppt, aber serverseitiger Abbruch ist fehlgeschlagen.",
   "stop.error":
-    "🔴 Aktion konnte nicht gestoppt werden.\n\nEvent-Stream ist gestoppt, versuche /stop erneut.",
+    "🔴 Aktion konnte nicht gestoppt werden.\n\nEvent-Stream ist gestoppt, versuche /abort erneut.",
 
   "opencode_start.already_running_managed":
     "⚠️ OpenCode-Server läuft bereits\n\nPID: {pid}\nBetriebszeit: {seconds} Sekunden",
@@ -223,6 +260,9 @@ export const de: I18nDictionary = {
   "context.no_active_session": "⚠️ Keine aktive Sitzung. Erstelle eine Sitzung mit /new",
   "context.confirm_text":
     '📊 Kontext-Komprimierung für Sitzung "{title}"\n\nDadurch wird die Kontextnutzung reduziert, indem alte Nachrichten aus dem Verlauf entfernt werden. Die aktuelle Aufgabe wird nicht unterbrochen.\n\nFortfahren?',
+  "context.general_not_available":
+    "⚠️ Kontext-Kompaktierung ist nur innerhalb eines Sitzungs-Themas verfügbar, nicht im General-Thema.",
+  "context.general_not_available_callback": "Öffne zuerst ein Sitzungs-Thema.",
   "context.callback_session_not_found": "Sitzung nicht gefunden",
   "context.callback_compacting": "Komprimiere Kontext...",
   "context.progress": "⏳ Komprimiere Kontext...",
@@ -278,10 +318,17 @@ export const de: I18nDictionary = {
 
   "keyboard.agent_mode": "{emoji} {name} Modus",
   "keyboard.context": "📊 {used} / {limit} ({percent}%)",
-  "keyboard.context_empty": "📊 0",
+  "keyboard.context_empty": "📊 Steuerung",
+  "keyboard.general_defaults": "Neue Sitzungs-Standards:",
+  "keyboard.general_defaults_info":
+    "Diese Standardwerte gelten für neu erstellte Sitzungen in dieser Gruppe:\n• Agent\n• Modell\n• Variante",
   "keyboard.variant": "💭 {name}",
   "keyboard.variant_default": "💡 Standard",
   "keyboard.updated": "⌨️ Tastatur aktualisiert",
+  "keyboard.dm.status": "/status",
+  "keyboard.dm.help": "/help",
+  "keyboard.dm.opencode_start": "/opencode_start",
+  "keyboard.dm.opencode_stop": "/opencode_stop",
 
   "pinned.default_session_title": "neue Sitzung",
   "pinned.unknown": "Unbekannt",
@@ -312,14 +359,18 @@ export const de: I18nDictionary = {
   "runtime.wizard.user_id_invalid": "Gib eine positive ganze Zahl ein (> 0).\n",
   "runtime.wizard.ask_api_url":
     "OpenCode API URL eingeben (optional).\nEnter drücken für Standard: {defaultUrl}\n> ",
+  "runtime.wizard.ask_server_username":
+    "Benutzernamen des OpenCode-Servers eingeben (optional).\nEnter drücken für Standard: {defaultUsername}\n> ",
+  "runtime.wizard.ask_server_password":
+    "Passwort des OpenCode-Servers eingeben (optional, Eingabe verborgen).\nEnter drücken zum Überspringen.\n> ",
   "runtime.wizard.api_url_invalid":
     "Gib eine gültige URL (http/https) ein oder drücke Enter für Standard.\n",
-  "runtime.wizard.start": "OpenCode Telegram Bot Einrichtung.\n",
+  "runtime.wizard.start": "OpenCode Telegram Group Topics Bot Einrichtung.\n",
   "runtime.wizard.saved": "Konfiguration gespeichert:\n- {envPath}\n- {settingsPath}\n",
   "runtime.wizard.not_configured_starting":
     "Anwendung ist noch nicht konfiguriert. Starte Assistent...\n",
   "runtime.wizard.tty_required":
-    "Der interaktive Assistent erfordert ein TTY-Terminal. Führe `opencode-telegram config` in einer interaktiven Shell aus.",
+    "Der interaktive Assistent erfordert ein TTY-Terminal. Führe `opencode-telegram-group-topics-bot config` in einer interaktiven Shell aus.",
 
   "rename.no_session": "⚠️ Keine aktive Sitzung. Erstelle oder wähle zuerst eine Sitzung.",
   "rename.prompt": "📝 Neuen Titel für die Sitzung eingeben:\n\nAktuell: {title}",
@@ -354,7 +405,7 @@ export const de: I18nDictionary = {
   "cmd.description.rename": "Aktuelle Sitzung umbenennen",
 
   "cli.usage":
-    "Verwendung:\n  opencode-telegram [start] [--mode sources|installed]\n  opencode-telegram status\n  opencode-telegram stop\n  opencode-telegram config\n\nHinweise:\n  - Ohne Befehl wird standardmäßig `start` verwendet\n  - `--mode` wird derzeit nur für `start` unterstützt",
+    "Verwendung:\n  opencode-telegram-group-topics-bot [start] [--mode sources|installed]\n  opencode-telegram-group-topics-bot status\n  opencode-telegram-group-topics-bot stop\n  opencode-telegram-group-topics-bot config [--mode sources|installed]\n\nHinweise:\n  - Ohne Befehl wird standardmäßig `start` verwendet\n  - `config` nutzt standardmäßig den Modus `installed`, außer `--mode sources` wird gesetzt",
   "cli.placeholder.status":
     "Befehl `status` ist derzeit ein Platzhalter. Echte Statusprüfungen werden in der Service-Schicht hinzugefügt (Phase 5).",
   "cli.placeholder.stop":
@@ -365,7 +416,7 @@ export const de: I18nDictionary = {
   "cli.args.mode_requires_value": "Option --mode erfordert einen Wert: sources|installed",
   "cli.args.invalid_mode": "Ungültiger Wert für --mode: {value}. Erwartet sources|installed",
   "cli.args.unknown_option": "Unbekannte Option: {value}",
-  "cli.args.mode_only_start": "Option --mode wird nur für den start-Befehl unterstützt",
+  "cli.args.mode_only_start": "Option --mode wird nur für die Befehle start und config unterstützt",
 
   "legacy.models.fetch_error":
     "🔴 Modellliste konnte nicht geladen werden. Prüfe den Serverstatus mit /status.",
@@ -381,4 +432,23 @@ export const de: I18nDictionary = {
     "🎤 Spracherkennung ist nicht konfiguriert.\n\nSetze STT_API_URL und STT_API_KEY in .env, um sie zu aktivieren.",
   "stt.error": "🔴 Audio konnte nicht erkannt werden: {error}",
   "stt.empty_result": "🎤 Keine Sprache in der Audionachricht erkannt.",
+
+  "start.welcome_dm":
+    "👋 Der DM-Modus ist auf Bot-/Serverstatus und Steuerbefehle beschränkt.\n\nNutze einen Gruppen-Topic-Thread für Projekt-/Sitzungsarbeit.",
+  "status.global_overview": "📈 Globaler Überblick",
+  "status.global_projects": "Projekte: {count}",
+  "status.global_sessions": "Sitzungen: {count}",
+  "dm.restricted.command":
+    "⚠️ Sitzungs-Steuerbefehle sind im DM deaktiviert. Nutze einen Gruppen-Topic-Thread für Projekt-/Sitzungsarbeit.",
+  "dm.restricted.prompt":
+    "⚠️ Prompts sind im DM deaktiviert. Nutze einen Gruppen-Topic-Thread, um OpenCode-Aufgaben auszuführen.",
+  "help.dm.title": "DM-Steuerbefehle",
+  "help.dm.command_start": "DM-Modus-Hinweise anzeigen",
+  "help.dm.hint": "Nutze Gruppen-Topic-Threads für Projekt-/Sitzungsarbeit.",
+  "status.dm.title": "DM-Statusübersicht",
+  "status.dm.hint": "Nutze Gruppen-Topic-Threads, um OpenCode-Sitzungen auszuführen.",
+  "group.general.prompts_disabled":
+    "⚠️ Prompts sind im General-Thema deaktiviert. Verwende /new, um ein eigenes Sitzungs-Thema zu erstellen.",
+  "topic.unbound":
+    "⚠️ Dieses Thema ist keiner Sitzung zugeordnet. Gehe zum General-Thema und führe /new aus.",
 };

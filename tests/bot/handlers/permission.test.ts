@@ -32,6 +32,7 @@ vi.mock("../../../src/settings/manager.js", () => ({
 
 vi.mock("../../../src/session/manager.js", () => ({
   getCurrentSession: vi.fn(() => mocked.currentSession),
+  getSessionById: vi.fn(() => null),
 }));
 
 vi.mock("../../../src/utils/safe-background-task.js", () => ({
@@ -94,6 +95,21 @@ function createPermissionCallbackContext(data: string, messageId: number): Conte
   } as unknown as Context;
 }
 
+function createPermissionCallbackWithoutMessage(data: string): Context {
+  return {
+    chat: { id: 777 },
+    callbackQuery: {
+      data,
+    } as Context["callbackQuery"],
+    answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+    deleteMessage: vi.fn().mockResolvedValue(undefined),
+    reply: vi.fn().mockResolvedValue(undefined),
+    api: {
+      sendMessage: vi.fn().mockResolvedValue(undefined),
+    },
+  } as unknown as Context;
+}
+
 function getCallbackData(button: unknown): string | undefined {
   if (!button || typeof button !== "object") {
     return undefined;
@@ -127,7 +143,7 @@ describe("bot/handlers/permission", () => {
     const botApi = createBotApi(500);
     const request = createPermissionRequest("perm-1");
 
-    await showPermissionRequest(botApi, 777, request);
+    await showPermissionRequest(botApi, 777, request, "global", null);
 
     const sendMessageMock = botApi.sendMessage as unknown as ReturnType<typeof vi.fn>;
     const [, , options] = sendMessageMock.mock.calls[0];
@@ -135,11 +151,11 @@ describe("bot/handlers/permission", () => {
 
     expect(replyMarkup.inline_keyboard).toHaveLength(3);
     expect(replyMarkup.inline_keyboard[0]?.[0]?.text).toBe(t("permission.button.allow"));
-    expect(getCallbackData(replyMarkup.inline_keyboard[0]?.[0])).toBe("permission:once");
+    expect(getCallbackData(replyMarkup.inline_keyboard[0]?.[0])).toBe("permission:once:perm-1");
     expect(replyMarkup.inline_keyboard[1]?.[0]?.text).toBe(t("permission.button.always"));
-    expect(getCallbackData(replyMarkup.inline_keyboard[1]?.[0])).toBe("permission:always");
+    expect(getCallbackData(replyMarkup.inline_keyboard[1]?.[0])).toBe("permission:always:perm-1");
     expect(replyMarkup.inline_keyboard[2]?.[0]?.text).toBe(t("permission.button.reject"));
-    expect(getCallbackData(replyMarkup.inline_keyboard[2]?.[0])).toBe("permission:reject");
+    expect(getCallbackData(replyMarkup.inline_keyboard[2]?.[0])).toBe("permission:reject:perm-1");
 
     expect(permissionManager.isActive()).toBe(true);
     expect(permissionManager.getRequestID(500)).toBe("perm-1");
@@ -156,12 +172,12 @@ describe("bot/handlers/permission", () => {
   it("keeps multiple active permission requests without deleting previous messages", async () => {
     const botApi = createBotApi(500);
 
-    await showPermissionRequest(botApi, 777, createPermissionRequest("perm-1"));
+    await showPermissionRequest(botApi, 777, createPermissionRequest("perm-1"), "global", null);
 
     const sendMessageMock = botApi.sendMessage as unknown as ReturnType<typeof vi.fn>;
     sendMessageMock.mockResolvedValueOnce({ message_id: 501 });
 
-    await showPermissionRequest(botApi, 777, createPermissionRequest("perm-2"));
+    await showPermissionRequest(botApi, 777, createPermissionRequest("perm-2"), "global", null);
 
     const deleteMessageMock = botApi.deleteMessage as unknown as ReturnType<typeof vi.fn>;
     expect(deleteMessageMock).not.toHaveBeenCalled();
@@ -182,11 +198,11 @@ describe("bot/handlers/permission", () => {
   it("rejects callback from unknown permission message", async () => {
     const botApi = createBotApi(500);
 
-    await showPermissionRequest(botApi, 777, createPermissionRequest("perm-1"));
+    await showPermissionRequest(botApi, 777, createPermissionRequest("perm-1"), "global", null);
 
     const sendMessageMock = botApi.sendMessage as unknown as ReturnType<typeof vi.fn>;
     sendMessageMock.mockResolvedValueOnce({ message_id: 501 });
-    await showPermissionRequest(botApi, 777, createPermissionRequest("perm-2"));
+    await showPermissionRequest(botApi, 777, createPermissionRequest("perm-2"), "global", null);
 
     const staleCtx = createPermissionCallbackContext("permission:once", 499);
     const handled = await handlePermissionCallback(staleCtx);
@@ -205,7 +221,7 @@ describe("bot/handlers/permission", () => {
 
   it("handles valid permission reply and clears active states", async () => {
     const botApi = createBotApi(600);
-    await showPermissionRequest(botApi, 777, createPermissionRequest("perm-valid"));
+    await showPermissionRequest(botApi, 777, createPermissionRequest("perm-valid"), "global", null);
 
     const ctx = createPermissionCallbackContext("permission:always", 600);
     const handled = await handlePermissionCallback(ctx);
@@ -226,14 +242,42 @@ describe("bot/handlers/permission", () => {
     expect(interactionManager.getSnapshot()).toBeNull();
   });
 
+  it("keeps permission request active when reply submission fails", async () => {
+    const botApi = createBotApi(610);
+    await showPermissionRequest(
+      botApi,
+      777,
+      createPermissionRequest("perm-failed-reply"),
+      "global",
+      null,
+    );
+
+    mocked.permissionReplyMock.mockResolvedValueOnce({ error: new Error("reply failed") });
+
+    const ctx = createPermissionCallbackContext("permission:always:perm-failed-reply", 610);
+    const handled = await handlePermissionCallback(ctx);
+
+    expect(handled).toBe(true);
+    expect(mocked.permissionReplyMock).toHaveBeenCalledWith({
+      requestID: "perm-failed-reply",
+      directory: "D:/repo",
+      reply: "always",
+    });
+
+    expect(ctx.deleteMessage).not.toHaveBeenCalled();
+    expect(permissionManager.isActive()).toBe(true);
+    expect(permissionManager.getRequestID(610)).toBe("perm-failed-reply");
+    expect(interactionManager.getSnapshot()?.kind).toBe("permission");
+  });
+
   it("keeps permission interaction active until all requests are replied", async () => {
     const botApi = createBotApi(700);
 
-    await showPermissionRequest(botApi, 777, createPermissionRequest("perm-1"));
+    await showPermissionRequest(botApi, 777, createPermissionRequest("perm-1"), "global", null);
 
     const sendMessageMock = botApi.sendMessage as unknown as ReturnType<typeof vi.fn>;
     sendMessageMock.mockResolvedValueOnce({ message_id: 701 });
-    await showPermissionRequest(botApi, 777, createPermissionRequest("perm-2"));
+    await showPermissionRequest(botApi, 777, createPermissionRequest("perm-2"), "global", null);
 
     const firstCtx = createPermissionCallbackContext("permission:once", 700);
     const firstHandled = await handlePermissionCallback(firstCtx);
@@ -278,6 +322,30 @@ describe("bot/handlers/permission", () => {
     expect(interactionManager.getSnapshot()).toBeNull();
   });
 
+  it("handles callback using request id fallback when message id is unavailable", async () => {
+    const botApi = createBotApi(710);
+    await showPermissionRequest(
+      botApi,
+      777,
+      createPermissionRequest("perm-fallback-id"),
+      "global",
+      null,
+    );
+
+    const ctx = createPermissionCallbackWithoutMessage("permission:once:perm-fallback-id");
+    const handled = await handlePermissionCallback(ctx);
+
+    expect(handled).toBe(true);
+    await flushMicrotasks();
+
+    expect(mocked.permissionReplyMock).toHaveBeenCalledWith({
+      requestID: "perm-fallback-id",
+      directory: "D:/repo",
+      reply: "once",
+    });
+    expect(permissionManager.isActive()).toBe(false);
+  });
+
   it("clears states when permission message cannot be sent", async () => {
     const botApi = {
       sendMessage: vi.fn().mockRejectedValue(new Error("send failed")),
@@ -285,10 +353,36 @@ describe("bot/handlers/permission", () => {
     } as unknown as Context["api"];
 
     await expect(
-      showPermissionRequest(botApi, 777, createPermissionRequest("perm-fail")),
+      showPermissionRequest(botApi, 777, createPermissionRequest("perm-fail"), "global", null),
     ).rejects.toThrow("send failed");
 
     expect(permissionManager.isActive()).toBe(false);
     expect(interactionManager.getSnapshot()).toBeNull();
+  });
+
+  it("retries permission message without markdown when Telegram rejects entities", async () => {
+    const botApi = createBotApi(800);
+    const sendMessageMock = botApi.sendMessage as unknown as ReturnType<typeof vi.fn>;
+
+    sendMessageMock
+      .mockRejectedValueOnce(
+        new Error(
+          "400: Bad Request: can't parse entities: Can't find end of the entity starting at byte offset 35",
+        ),
+      )
+      .mockResolvedValueOnce({ message_id: 801 });
+
+    const request = createPermissionRequest("perm-markdown-fallback");
+    request.patterns = ["npm run lint\nnpm test"];
+
+    await showPermissionRequest(botApi, 777, request, "global", null);
+
+    expect(sendMessageMock).toHaveBeenCalledTimes(2);
+    expect(sendMessageMock.mock.calls[0]?.[2]).toMatchObject({ parse_mode: "Markdown" });
+    expect(sendMessageMock.mock.calls[1]?.[2]).not.toHaveProperty("parse_mode");
+
+    expect(permissionManager.getRequestID(801)).toBe("perm-markdown-fallback");
+    expect(permissionManager.getPendingCount()).toBe(1);
+    expect(interactionManager.getSnapshot()?.kind).toBe("permission");
   });
 });

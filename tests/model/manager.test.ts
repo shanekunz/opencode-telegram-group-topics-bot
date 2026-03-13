@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { configMock } = vi.hoisted(() => ({
+const { configMock, providersMock } = vi.hoisted(() => ({
   configMock: {
     opencode: {
       model: {
@@ -12,10 +12,19 @@ const { configMock } = vi.hoisted(() => ({
       },
     },
   },
+  providersMock: vi.fn(),
 }));
 
 vi.mock("../../src/config.js", () => ({
   config: configMock,
+}));
+
+vi.mock("../../src/opencode/client.js", () => ({
+  opencodeClient: {
+    config: {
+      providers: providersMock,
+    },
+  },
 }));
 
 vi.mock("../../src/utils/logger.js", () => ({
@@ -27,7 +36,11 @@ vi.mock("../../src/utils/logger.js", () => ({
   },
 }));
 
-import { getModelSelectionLists, getFavoriteModels } from "../../src/model/manager.js";
+import {
+  __resetModelCatalogCacheForTests,
+  getFavoriteModels,
+  getModelSelectionLists,
+} from "../../src/model/manager.js";
 
 describe("model/manager", () => {
   let tempDir = "";
@@ -37,6 +50,19 @@ describe("model/manager", () => {
   beforeEach(() => {
     originalXdgStateHome = process.env.XDG_STATE_HOME;
     originalHome = process.env.HOME;
+    providersMock.mockReset();
+    providersMock.mockResolvedValue({
+      data: {
+        providers: [
+          { id: "openai", models: { "gpt-4o": {}, "gpt-3.5": {} } },
+          { id: "anthropic", models: { "claude-sonnet": {} } },
+          { id: "google", models: { "gemini-pro": {} } },
+          { id: "opencode", models: { "big-pickle": {} } },
+        ],
+      },
+      error: null,
+    });
+    __resetModelCatalogCacheForTests();
   });
 
   afterEach(async () => {
@@ -47,6 +73,8 @@ describe("model/manager", () => {
       await rm(tempDir, { recursive: true, force: true });
       tempDir = "";
     }
+
+    __resetModelCatalogCacheForTests();
   });
 
   async function setupMockModelFile(content: object): Promise<string> {
@@ -245,6 +273,26 @@ describe("model/manager", () => {
       expect(result.recent).toHaveLength(2);
       expect(result.recent).toContainEqual({ providerID: "openai", modelID: "gpt-4o" });
       expect(result.recent).toContainEqual({ providerID: "google", modelID: "gemini-pro" });
+    });
+
+    it("filters unavailable favorites and recents using provider catalog", async () => {
+      await setupMockModelFile({
+        favorite: [
+          { providerID: "openai", modelID: "gpt-4o" },
+          { providerID: "missing", modelID: "gone" },
+        ],
+        recent: [
+          { providerID: "google", modelID: "gemini-pro" },
+          { providerID: "missing", modelID: "also-gone" },
+        ],
+      });
+
+      const result = await getModelSelectionLists();
+
+      expect(result.favorites).toContainEqual({ providerID: "openai", modelID: "gpt-4o" });
+      expect(result.favorites).not.toContainEqual({ providerID: "missing", modelID: "gone" });
+      expect(result.recent).toContainEqual({ providerID: "google", modelID: "gemini-pro" });
+      expect(result.recent).not.toContainEqual({ providerID: "missing", modelID: "also-gone" });
     });
   });
 

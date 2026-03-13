@@ -2,8 +2,15 @@ import { CommandContext, Context } from "grammy";
 import { InlineKeyboard } from "grammy";
 import { opencodeClient } from "../../opencode/client.js";
 import { setCurrentSession, SessionInfo } from "../../session/manager.js";
-import { getCurrentProject } from "../../settings/manager.js";
+import {
+  TOPIC_SESSION_STATUS,
+  getCurrentProject,
+  setCurrentAgent,
+  setCurrentModel,
+  setCurrentProject,
+} from "../../settings/manager.js";
 import { clearAllInteractionState } from "../../interaction/cleanup.js";
+import { INTERACTION_CLEAR_REASON } from "../../interaction/constants.js";
 import { summaryAggregator } from "../../summary/aggregator.js";
 import { pinnedMessageManager } from "../../pinned/manager.js";
 import { keyboardManager } from "../../keyboard/manager.js";
@@ -16,6 +23,30 @@ import { logger } from "../../utils/logger.js";
 import { safeBackgroundTask } from "../../utils/safe-background-task.js";
 import { config } from "../../config.js";
 import { getDateLocale, t } from "../../i18n/index.js";
+import { getStoredAgent } from "../../agent/manager.js";
+import { getStoredModel } from "../../model/manager.js";
+import { createMainKeyboard } from "../utils/keyboard.js";
+import { formatVariantForButton } from "../../variant/manager.js";
+import {
+  createScopeKeyFromParams,
+  GENERAL_TOPIC_THREAD_ID,
+  GLOBAL_SCOPE_KEY,
+  SCOPE_CONTEXT,
+  getScopeFromContext,
+  getScopeKeyFromContext,
+  getThreadSendOptions,
+  isTopicScope,
+} from "../scope.js";
+import {
+  BOT_I18N_KEY,
+  CHAT_TYPE,
+  TELEGRAM_CHAT_FIELD,
+  TELEGRAM_ERROR_MARKER,
+} from "../constants.js";
+import { getTopicBindingBySessionId, registerTopicSessionBinding } from "../../topic/manager.js";
+import { TOPIC_COLORS } from "../../topic/colors.js";
+import { formatTopicTitle } from "../../topic/title-format.js";
+import { buildTopicThreadLink } from "../utils/topic-link.js";
 
 const SESSION_CALLBACK_PREFIX = "session:";
 const SESSION_PAGE_CALLBACK_PREFIX = "session:page:";
@@ -73,6 +104,42 @@ function formatSessionsSelectText(page: number): string {
   }
 
   return t("sessions.select_page", { page: page + 1 });
+}
+
+function isGeneralForumScope(ctx: Context): boolean {
+  const scope = getScopeFromContext(ctx);
+  const isForumEnabled =
+    ctx.chat?.type === CHAT_TYPE.SUPERGROUP &&
+    Reflect.get(ctx.chat, TELEGRAM_CHAT_FIELD.IS_FORUM) === true;
+
+  return Boolean(
+    isForumEnabled &&
+    scope?.context === SCOPE_CONTEXT.GROUP_GENERAL &&
+    (scope.threadId === null || scope.threadId === GENERAL_TOPIC_THREAD_ID),
+  );
+}
+
+function getErrorText(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message.toLowerCase();
+  }
+
+  const description =
+    typeof error === "object" && error !== null ? Reflect.get(error, "description") : null;
+  if (typeof description === "string") {
+    return description.toLowerCase();
+  }
+
+  return String(error).toLowerCase();
+}
+
+function clearInteractionWithScope(reason: string, scopeKey: string): void {
+  if (scopeKey === GLOBAL_SCOPE_KEY) {
+    clearAllInteractionState(reason);
+    return;
+  }
+
+  clearAllInteractionState(reason, scopeKey);
 }
 
 async function loadSessionPage(
@@ -134,8 +201,19 @@ function buildSessionsKeyboard(pageData: SessionPage, pageSize: number): InlineK
 
 export async function sessionsCommand(ctx: CommandContext<Context>) {
   try {
+    const scope = getScopeFromContext(ctx);
+    const scopeKey = scope?.key ?? GLOBAL_SCOPE_KEY;
+
+    if (isTopicScope(scope)) {
+      await ctx.reply(
+        t(BOT_I18N_KEY.SESSIONS_TOPIC_LOCKED),
+        getThreadSendOptions(scope?.threadId ?? null),
+      );
+      return;
+    }
+
     const pageSize = config.bot.sessionsListLimit;
-    const currentProject = getCurrentProject();
+    const currentProject = getCurrentProject(scopeKey);
 
     if (!currentProject) {
       await ctx.reply(t("sessions.project_not_selected"));
@@ -170,6 +248,9 @@ export async function sessionsCommand(ctx: CommandContext<Context>) {
 }
 
 export async function handleSessionSelect(ctx: Context): Promise<boolean> {
+  const scopeKey = getScopeKeyFromContext(ctx);
+  const scope = getScopeFromContext(ctx);
+  const usePinned = ctx.chat?.type !== CHAT_TYPE.PRIVATE;
   const callbackQuery = ctx.callbackQuery;
   if (!callbackQuery?.data || !callbackQuery.data.startsWith(SESSION_CALLBACK_PREFIX)) {
     return false;
@@ -184,10 +265,10 @@ export async function handleSessionSelect(ctx: Context): Promise<boolean> {
   }
 
   try {
-    const currentProject = getCurrentProject();
+    const currentProject = getCurrentProject(scopeKey);
 
     if (!currentProject) {
-      clearAllInteractionState("session_select_project_missing");
+      clearInteractionWithScope("session_select_project_missing", scopeKey);
       await ctx.answerCallbackQuery();
       await ctx.reply(t("sessions.select_project_first"));
       return true;
@@ -230,6 +311,128 @@ export async function handleSessionSelect(ctx: Context): Promise<boolean> {
       throw error || new Error("Failed to get session details");
     }
 
+    const inGeneralForum = Boolean(ctx.chat && isGeneralForumScope(ctx));
+    if (inGeneralForum && ctx.chat) {
+      const existingBinding = getTopicBindingBySessionId(session.id);
+      if (existingBinding && existingBinding.chatId === ctx.chat.id) {
+        const existingLink = buildTopicThreadLink(ctx.chat, existingBinding.threadId);
+        if (existingLink) {
+          clearInteractionWithScope(INTERACTION_CLEAR_REASON.SESSION_SWITCHED, scopeKey);
+          await ctx.answerCallbackQuery();
+          await ctx.reply(
+            t(BOT_I18N_KEY.SESSIONS_BOUND_TOPIC_LINK, {
+              title: session.title,
+              topic: existingBinding.topicName ?? String(existingBinding.threadId),
+              url: existingLink,
+            }),
+            getThreadSendOptions(scope?.threadId ?? null),
+          );
+          await ctx.deleteMessage().catch(() => {});
+          return true;
+        }
+      }
+
+      const createdTopic = await ctx.api.createForumTopic(
+        ctx.chat.id,
+        formatTopicTitle(session.title, session.title),
+        {
+          icon_color: TOPIC_COLORS.BLUE,
+        },
+      );
+
+      const topicThreadId = createdTopic.message_thread_id;
+      const topicScopeKey = createScopeKeyFromParams({
+        chatId: ctx.chat.id,
+        threadId: topicThreadId,
+        context: SCOPE_CONTEXT.GROUP_TOPIC,
+      });
+
+      const sessionInfo: SessionInfo = {
+        id: session.id,
+        title: session.title,
+        directory: currentProject.worktree,
+      };
+
+      setCurrentProject(currentProject, topicScopeKey);
+      setCurrentSession(sessionInfo, topicScopeKey);
+      setCurrentAgent(getStoredAgent(scopeKey), topicScopeKey);
+      setCurrentModel(getStoredModel(scopeKey), topicScopeKey);
+
+      registerTopicSessionBinding({
+        scopeKey: topicScopeKey,
+        chatId: ctx.chat.id,
+        threadId: topicThreadId,
+        sessionId: session.id,
+        projectId: currentProject.id,
+        projectWorktree: currentProject.worktree,
+        topicName: formatTopicTitle(session.title, session.title),
+        status: TOPIC_SESSION_STATUS.ACTIVE,
+      });
+
+      summaryAggregator.setSession(session.id);
+      clearInteractionWithScope(INTERACTION_CLEAR_REASON.SESSION_SWITCHED, scopeKey);
+      clearInteractionWithScope(INTERACTION_CLEAR_REASON.SESSION_SWITCHED, topicScopeKey);
+
+      if (!pinnedMessageManager.isInitialized(topicScopeKey)) {
+        pinnedMessageManager.initialize(ctx.api, ctx.chat.id, topicScopeKey, topicThreadId);
+      }
+
+      keyboardManager.initialize(ctx.api, ctx.chat.id, topicScopeKey);
+
+      try {
+        await pinnedMessageManager.onSessionChange(session.id, session.title, topicScopeKey);
+        await pinnedMessageManager.loadContextFromHistory(
+          session.id,
+          currentProject.worktree,
+          topicScopeKey,
+        );
+      } catch (err) {
+        logger.error("[Sessions] Error preparing topic pinned message", err);
+      }
+
+      const topicContextInfo =
+        pinnedMessageManager.getContextInfo(topicScopeKey) ??
+        keyboardManager.getContextInfo(topicScopeKey) ??
+        (pinnedMessageManager.getContextLimit(topicScopeKey) > 0
+          ? { tokensUsed: 0, tokensLimit: pinnedMessageManager.getContextLimit(topicScopeKey) }
+          : null);
+      const topicModel = getStoredModel(topicScopeKey);
+      const topicAgent = getStoredAgent(topicScopeKey);
+      const variantName = formatVariantForButton(topicModel.variant || "default");
+      const topicKeyboard = createMainKeyboard(
+        topicAgent,
+        topicModel,
+        topicContextInfo ?? undefined,
+        variantName,
+      );
+
+      await ctx.api.sendMessage(
+        ctx.chat.id,
+        t(BOT_I18N_KEY.NEW_TOPIC_CREATED, { title: session.title }),
+        {
+          ...getThreadSendOptions(topicThreadId),
+          reply_markup: topicKeyboard,
+        },
+      );
+
+      const topicLink = buildTopicThreadLink(ctx.chat, topicThreadId);
+      if (!topicLink) {
+        throw new Error("Unable to build topic link");
+      }
+
+      await ctx.answerCallbackQuery();
+      await ctx.reply(
+        t(BOT_I18N_KEY.SESSIONS_CREATED_TOPIC_LINK, {
+          title: session.title,
+          topic: formatTopicTitle(session.title, session.title),
+          url: topicLink,
+        }),
+        getThreadSendOptions(scope?.threadId ?? null),
+      );
+      await ctx.deleteMessage().catch(() => {});
+      return true;
+    }
+
     logger.info(
       `[Bot] Session selected: id=${session.id}, title="${session.title}", project=${currentProject.worktree}`,
     );
@@ -239,9 +442,9 @@ export async function handleSessionSelect(ctx: Context): Promise<boolean> {
       title: session.title,
       directory: currentProject.worktree,
     };
-    setCurrentSession(sessionInfo);
-    summaryAggregator.clear();
-    clearAllInteractionState("session_switched");
+    setCurrentSession(sessionInfo, scopeKey);
+    summaryAggregator.setSession(session.id);
+    clearInteractionWithScope(INTERACTION_CLEAR_REASON.SESSION_SWITCHED, scopeKey);
 
     await ctx.answerCallbackQuery();
 
@@ -251,6 +454,7 @@ export async function handleSessionSelect(ctx: Context): Promise<boolean> {
         const loadingMessage = await ctx.api.sendMessage(
           ctx.chat.id,
           t("sessions.loading_context"),
+          getThreadSendOptions(scope?.threadId ?? null),
         );
         loadingMessageId = loadingMessage.message_id;
       } catch (err) {
@@ -259,32 +463,46 @@ export async function handleSessionSelect(ctx: Context): Promise<boolean> {
     }
 
     // Initialize pinned message manager if not already
-    if (!pinnedMessageManager.isInitialized() && ctx.chat) {
-      pinnedMessageManager.initialize(ctx.api, ctx.chat.id);
+    if (usePinned && !pinnedMessageManager.isInitialized(scopeKey) && ctx.chat) {
+      pinnedMessageManager.initialize(ctx.api, ctx.chat.id, scopeKey, scope?.threadId ?? null);
     }
 
     // Initialize keyboard manager if not already
     if (ctx.chat) {
-      keyboardManager.initialize(ctx.api, ctx.chat.id);
+      keyboardManager.initialize(ctx.api, ctx.chat.id, scopeKey);
     }
 
-    try {
-      // Create new pinned message for this session
-      await pinnedMessageManager.onSessionChange(session.id, session.title);
-      // Load context from session history (for existing sessions)
-      // Wait for it to complete so keyboard has correct context
-      await pinnedMessageManager.loadContextFromHistory(session.id, currentProject.worktree);
-    } catch (err) {
-      logger.error("[Bot] Error initializing pinned message:", err);
+    if (usePinned && pinnedMessageManager.getContextLimit(scopeKey) === 0) {
+      await pinnedMessageManager.refreshContextLimit(scopeKey);
+    }
+
+    if (usePinned) {
+      try {
+        // Create new pinned message for this session
+        await pinnedMessageManager.onSessionChange(session.id, session.title, scopeKey);
+        // Load context from session history (for existing sessions)
+        // Wait for it to complete so keyboard has correct context
+        await pinnedMessageManager.loadContextFromHistory(
+          session.id,
+          currentProject.worktree,
+          scopeKey,
+        );
+      } catch (err) {
+        logger.error("[Bot] Error initializing pinned message:", err);
+      }
     }
 
     if (ctx.chat) {
       const chatId = ctx.chat.id;
 
       // Update keyboard with loaded context (callback executes async via setImmediate, so update manually)
-      const contextInfo = pinnedMessageManager.getContextInfo();
+      const contextInfo =
+        (usePinned ? pinnedMessageManager.getContextInfo(scopeKey) : null) ??
+        keyboardManager.getContextInfo(scopeKey);
       if (contextInfo) {
-        keyboardManager.updateContext(contextInfo.tokensUsed, contextInfo.tokensLimit);
+        keyboardManager.updateContext(contextInfo.tokensUsed, contextInfo.tokensLimit, scopeKey);
+      } else if (usePinned && pinnedMessageManager.getContextLimit(scopeKey) > 0) {
+        keyboardManager.updateContext(0, pinnedMessageManager.getContextLimit(scopeKey), scopeKey);
       }
 
       // Delete loading message
@@ -297,10 +515,11 @@ export async function handleSessionSelect(ctx: Context): Promise<boolean> {
       }
 
       // Send session selection confirmation with updated keyboard
-      const keyboard = keyboardManager.getKeyboard();
+      const keyboard = keyboardManager.getKeyboard(scopeKey);
       try {
         await ctx.api.sendMessage(chatId, t("sessions.selected", { title: session.title }), {
           reply_markup: keyboard,
+          ...getThreadSendOptions(scope?.threadId ?? null),
         });
       } catch (err) {
         logger.error("[Sessions] Failed to send selection message:", err);
@@ -313,6 +532,7 @@ export async function handleSessionSelect(ctx: Context): Promise<boolean> {
           sendSessionPreview(
             ctx.api,
             chatId,
+            scope?.threadId ?? null,
             null,
             session.title,
             session.id,
@@ -323,10 +543,21 @@ export async function handleSessionSelect(ctx: Context): Promise<boolean> {
 
     await ctx.deleteMessage();
   } catch (error) {
-    clearAllInteractionState("session_select_error");
+    clearInteractionWithScope(INTERACTION_CLEAR_REASON.SESSION_SELECT_ERROR, scopeKey);
     logger.error("[Sessions] Error selecting session:", error);
+    const errorText = getErrorText(error);
     await ctx.answerCallbackQuery();
-    await ctx.reply(t("sessions.select_error"));
+
+    if (errorText.includes(TELEGRAM_ERROR_MARKER.NOT_ENOUGH_RIGHTS_CREATE_TOPIC)) {
+      await ctx.reply(t(BOT_I18N_KEY.NEW_TOPIC_CREATE_NO_RIGHTS));
+      return true;
+    }
+
+    if (scope?.threadId != null) {
+      await ctx.reply(t("sessions.select_error"), getThreadSendOptions(scope.threadId));
+    } else {
+      await ctx.reply(t("sessions.select_error"));
+    }
   }
 
   return true;
@@ -437,6 +668,7 @@ function formatSessionPreview(_sessionTitle: string, items: SessionPreviewItem[]
 async function sendSessionPreview(
   api: Context["api"],
   chatId: number,
+  threadId: number | null,
   messageId: number | null,
   sessionTitle: string,
   sessionId: string,
@@ -455,7 +687,7 @@ async function sendSessionPreview(
   }
 
   try {
-    await api.sendMessage(chatId, finalText);
+    await api.sendMessage(chatId, finalText, getThreadSendOptions(threadId));
   } catch (err) {
     logger.error("[Sessions] Failed to send session preview message:", err);
   }

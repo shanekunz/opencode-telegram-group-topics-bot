@@ -4,9 +4,10 @@ import type {
   StartInteractionOptions,
   TransitionInteractionOptions,
 } from "./types.js";
+import { INTERACTION_CLEAR_REASON } from "./constants.js";
 import { logger } from "../utils/logger.js";
 
-export const DEFAULT_ALLOWED_INTERACTION_COMMANDS = ["/help", "/status", "/stop"] as const;
+export const DEFAULT_ALLOWED_INTERACTION_COMMANDS = ["/help", "/status", "/abort"] as const;
 
 function normalizeCommand(command: string): string | null {
   const trimmed = command.trim().toLowerCase();
@@ -50,14 +51,15 @@ function cloneState(state: InteractionState): InteractionState {
 }
 
 class InteractionManager {
-  private state: InteractionState | null = null;
+  private stateByScope: Map<string, InteractionState> = new Map();
 
-  start(options: StartInteractionOptions): InteractionState {
+  start(options: StartInteractionOptions, scopeKey: string = "global"): InteractionState {
     const now = Date.now();
     let expiresAt: number | null = null;
+    const currentState = this.stateByScope.get(scopeKey) ?? null;
 
-    if (this.state) {
-      this.clear("state_replaced");
+    if (currentState) {
+      this.clear(INTERACTION_CLEAR_REASON.STATE_REPLACED, scopeKey);
     }
 
     if (typeof options.expiresInMs === "number") {
@@ -73,7 +75,7 @@ class InteractionManager {
       expiresAt,
     };
 
-    this.state = nextState;
+    this.stateByScope.set(scopeKey, nextState);
 
     logger.info(
       `[InteractionManager] Started interaction: kind=${nextState.kind}, expectedInput=${nextState.expectedInput}, allowedCommands=${nextState.allowedCommands.join(",") || "none"}`,
@@ -82,71 +84,80 @@ class InteractionManager {
     return cloneState(nextState);
   }
 
-  get(): InteractionState | null {
-    if (!this.state) {
+  get(scopeKey: string = "global"): InteractionState | null {
+    const state = this.stateByScope.get(scopeKey) ?? null;
+    if (!state) {
       return null;
     }
 
-    return cloneState(this.state);
+    return cloneState(state);
   }
 
-  getSnapshot(): InteractionState | null {
-    return this.get();
+  getSnapshot(scopeKey: string = "global"): InteractionState | null {
+    return this.get(scopeKey);
   }
 
-  isActive(): boolean {
-    return this.state !== null;
+  isActive(scopeKey: string = "global"): boolean {
+    return this.stateByScope.has(scopeKey);
   }
 
-  isExpired(referenceTimeMs: number = Date.now()): boolean {
-    if (!this.state || this.state.expiresAt === null) {
+  isExpired(scopeKey: string = "global", referenceTimeMs: number = Date.now()): boolean {
+    const state = this.stateByScope.get(scopeKey) ?? null;
+    if (!state || state.expiresAt === null) {
       return false;
     }
 
-    return referenceTimeMs >= this.state.expiresAt;
+    return referenceTimeMs >= state.expiresAt;
   }
 
-  transition(options: TransitionInteractionOptions): InteractionState | null {
-    if (!this.state) {
+  transition(
+    options: TransitionInteractionOptions,
+    scopeKey: string = "global",
+  ): InteractionState | null {
+    const currentState = this.stateByScope.get(scopeKey) ?? null;
+    if (!currentState) {
       return null;
     }
 
     const now = Date.now();
 
-    this.state = {
-      ...this.state,
-      kind: options.kind ?? this.state.kind,
-      expectedInput: options.expectedInput ?? this.state.expectedInput,
+    const nextState: InteractionState = {
+      ...currentState,
+      kind: options.kind ?? currentState.kind,
+      expectedInput: options.expectedInput ?? currentState.expectedInput,
       allowedCommands:
         options.allowedCommands !== undefined
           ? normalizeAllowedCommands(options.allowedCommands)
-          : [...this.state.allowedCommands],
-      metadata: options.metadata ? { ...options.metadata } : { ...this.state.metadata },
+          : [...currentState.allowedCommands],
+      metadata: options.metadata ? { ...options.metadata } : { ...currentState.metadata },
       expiresAt:
         options.expiresInMs === undefined
-          ? this.state.expiresAt
+          ? currentState.expiresAt
           : options.expiresInMs === null
             ? null
             : now + options.expiresInMs,
     };
 
+    this.stateByScope.set(scopeKey, nextState);
+
     logger.debug(
-      `[InteractionManager] Transitioned interaction: kind=${this.state.kind}, expectedInput=${this.state.expectedInput}, allowedCommands=${this.state.allowedCommands.join(",") || "none"}`,
+      `[InteractionManager] Transitioned interaction: kind=${nextState.kind}, expectedInput=${nextState.expectedInput}, allowedCommands=${nextState.allowedCommands.join(",") || "none"}`,
     );
 
-    return cloneState(this.state);
+    return cloneState(nextState);
   }
 
-  clear(reason: InteractionClearReason = "manual"): void {
-    if (!this.state) {
+  clear(reason: InteractionClearReason = "manual", scopeKey: string = "global"): void {
+    const state = this.stateByScope.get(scopeKey) ?? null;
+    if (!state) {
       return;
     }
 
     logger.info(
-      `[InteractionManager] Cleared interaction: reason=${reason}, kind=${this.state.kind}, expectedInput=${this.state.expectedInput}`,
+      `[InteractionManager] Cleared interaction: reason=${reason}, kind=${state.kind}, expectedInput=${state.expectedInput}`,
     );
 
-    this.state = null;
+    this.stateByScope.delete(scopeKey);
   }
 }
 

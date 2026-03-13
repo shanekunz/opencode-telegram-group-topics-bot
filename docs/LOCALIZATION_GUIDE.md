@@ -84,7 +84,7 @@ Manual checks:
 
 1. Set `BOT_LOCALE=<locale-code>` in `.env` and start the bot.
 2. Confirm command descriptions and user-facing texts use the new language.
-3. Run the setup wizard (`opencode-telegram config`) and verify:
+3. Run the setup wizard (`opencode-telegram-group-topics-bot config`) and verify:
    - new language appears in selection list
    - selection by number and by locale code works.
 4. Check date rendering in session/project related messages.

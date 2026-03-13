@@ -1,10 +1,14 @@
 export const en = {
   "cmd.description.status": "Server and session status",
   "cmd.description.new": "Create a new session",
+  "cmd.description.abort": "Abort current action",
   "cmd.description.stop": "Stop current action",
   "cmd.description.sessions": "List sessions",
   "cmd.description.projects": "List projects",
   "cmd.description.commands": "Custom commands",
+  "cmd.description.model": "Select model",
+  "cmd.description.agent": "Select agent mode",
+  "cmd.description.cleanup": "Close stale topic threads",
   "cmd.description.opencode_start": "Start OpenCode server",
   "cmd.description.opencode_stop": "Stop OpenCode server",
   "cmd.description.help": "Help",
@@ -45,7 +49,9 @@ export const en = {
   "common.unknown_error": "unknown error",
 
   "start.welcome":
-    "👋 Welcome to OpenCode Telegram Bot!\n\nUse commands:\n/projects — select project\n/sessions — session list\n/new — new session\n/status — status\n/help — help\n\nUse the bottom buttons to select agent mode, model, and variant.",
+    "👋 Welcome to OpenCode Telegram Group Topics Bot!\n\nUse commands:\n/projects — select project\n/sessions — session list\n/new — new session\n/status — status\n/help — help\n\nUse the bottom buttons to select agent mode, model, and variant.",
+  "start.welcome_dm":
+    "👋 DM mode is limited to bot/server status and control commands.\n\nUse a group topic thread for project/session work.",
   "help.keyboard_hint":
     "💡 Use the bottom keyboard buttons for agent mode, model, variant, and context actions.",
   "help.text":
@@ -59,13 +65,16 @@ export const en = {
     "🔴 Failed to create session. Try /new or check server status with /status.",
   "bot.session_created": "✅ Session created: {title}",
   "bot.session_busy":
-    "⏳ Agent is already running a task. Wait for completion or use /stop to interrupt current run.",
+    "⏳ Your last request is still running, so this new one was not started.\n\nWhy this happened: OpenCode accepts one active run per session.\nWhat to do: wait for the current reply, or use /abort if it seems stuck, then send your message again.",
   "bot.session_reset_project_mismatch":
     "⚠️ Active session does not match the selected project, so it was reset. Use /sessions to pick one or /new to create a new session.",
-  "bot.prompt_send_error": "Failed to send request to OpenCode.",
+  "bot.prompt_send_error":
+    "⚠️ I could not deliver this message to OpenCode.\n\nLikely cause: a temporary connection hiccup between the bot and OpenCode server.\nWhat to do: send the message again. If it keeps happening, run /status and check that OpenCode is reachable.",
+  "bot.prompt_send_error_session_not_found":
+    "⚠️ I could not deliver this message because the active session is no longer available.\n\nWhy this happened: the session may have been reset, changed, or removed.\nWhat to do: choose a session with /sessions or create a new one with /new, then resend your message.",
   "bot.session_error": "🔴 OpenCode returned an error: {message}",
   "bot.session_retry":
-    "🔁 {message}\n\nProvider keeps returning the same error on repeated retries. Use /stop to abort.",
+    "🔁 {message}\n\nProvider keeps returning the same error on repeated retries. Use /abort to abort.",
   "bot.unknown_command": "⚠️ Unknown command: {command}. Use /help to see available commands.",
   "bot.photo_downloading": "⏳ Downloading photo...",
   "bot.photo_too_large": "⚠️ Photo is too large (max {maxSizeMb}MB)",
@@ -83,8 +92,8 @@ export const en = {
   "status.health.unhealthy": "Unhealthy",
   "status.line.health": "Status: {health}",
   "status.line.version": "Version: {version}",
-  "status.line.managed_yes": "Managed by bot: Yes",
-  "status.line.managed_no": "Managed by bot: No",
+  "status.line.managed_yes": "Started by this bot: Yes",
+  "status.line.managed_no": "Started by this bot: No (external process)",
   "status.line.pid": "PID: {pid}",
   "status.line.uptime_sec": "Uptime: {seconds} sec",
   "status.line.mode": "Mode: {mode}",
@@ -96,8 +105,24 @@ export const en = {
   "status.session_selected": "📋 Current session: {title}",
   "status.session_not_selected": "📋 Current session: not selected",
   "status.session_hint": "Use /sessions to select one or /new to create one",
+  "status.global_overview": "📈 Global overview",
+  "status.global_projects": "Projects: {count}",
+  "status.global_sessions": "Sessions: {count}",
   "status.server_unavailable":
     "🔴 OpenCode Server is unavailable\n\nUse /opencode_start to start the server.",
+
+  "dm.restricted.command":
+    "⚠️ Session control commands are disabled in DM. Use a group topic thread for project/session work.",
+  "dm.restricted.prompt":
+    "⚠️ Prompts are disabled in DM. Use a group topic thread to run OpenCode tasks.",
+  "help.dm.title": "DM control commands",
+  "help.dm.command_start": "show DM mode guidance",
+  "help.dm.hint": "Use group topic threads for project/session work.",
+  "status.dm.title": "DM status overview",
+  "status.dm.hint": "Use group topic threads to run OpenCode sessions.",
+  "group.general.prompts_disabled":
+    "⚠️ Prompts are disabled in General topic. Use /new to create a dedicated session topic.",
+  "topic.unbound": "⚠️ This topic is not linked to any session. Go to General topic and run /new.",
 
   "projects.empty":
     "📭 No projects found.\n\nOpen a directory in OpenCode and create at least one session, then it will appear here.",
@@ -112,6 +137,11 @@ export const en = {
   "projects.selected":
     "✅ Project selected: {project}\n\n📋 Session was reset. Use /sessions or /new for this project.",
   "projects.select_error": "🔴 Failed to select project.",
+  "projects.locked.topic_scope":
+    "⚠️ This topic is bound to its own project/session scope. Switch projects only from General before creating topics.",
+  "projects.locked.group_project":
+    "⚠️ This group is already configured for project: {project}. Create a new group if you want to work on another repository.",
+  "projects.locked.callback": "Project switching is locked for this group.",
 
   "sessions.project_not_selected":
     "🏗 Project is not selected.\n\nFirst select a project with /projects.",
@@ -125,6 +155,13 @@ export const en = {
   "sessions.page_load_error_callback": "Cannot load this page. Please try again.",
   "sessions.button.prev_page": "⬅️ Prev",
   "sessions.button.next_page": "Next ➡️",
+  "sessions.topic_locked":
+    "⚠️ This topic is bound to its current session. Use /new in General to create another topic.",
+  "sessions.general_overview": "Topic sessions overview:",
+  "sessions.general_item": "• {topic} (thread #{thread}) - {status}",
+  "sessions.general_empty": "No session topics yet. Use /new to create one.",
+  "sessions.bound_topic_link": "🔗 Topic for this session: {url}",
+  "sessions.created_topic_link": "✅ Created topic for this session: {url}",
   "sessions.loading_context": "⏳ Loading context and latest messages...",
   "sessions.selected": "✅ Session selected: {title}",
   "sessions.select_error": "🔴 Failed to select session.",
@@ -136,23 +173,40 @@ export const en = {
   "new.project_not_selected":
     "🏗 Project is not selected.\n\nFirst select a project with /projects.",
   "new.created": "✅ New session created: {title}",
+  "new.topic_only_in_general":
+    "⚠️ Run /new from the General topic to create a dedicated session topic.",
+  "new.requires_forum_general": "⚠️ /new requires the General topic in a forum-enabled supergroup.",
+  "new.topic_created": "✅ Session topic is ready: {title}",
+  "new.general_created": "✅ Created a new OpenCode session and group topic.",
+  "new.topic_create_error":
+    "🔴 Failed to create a session topic. Check forum permissions and try again.",
+  "new.topic_create_no_rights":
+    "🔴 I cannot create forum topics in this group. Please grant the bot topic management permission (Manage Topics), then retry /new.",
+  "new.general_open_link": "🔗 Open topic: {url}",
   "new.create_error":
     "🔴 OpenCode Server is unavailable or an error occurred while creating session.",
+
+  "cleanup.topic_use_general": "⚠️ Run /cleanup from the General topic.",
+  "cleanup.requires_forum_general":
+    "⚠️ /cleanup is available only in the General topic of a forum-enabled supergroup.",
+  "cleanup.no_topics": "✅ No topic sessions to clean up.",
+  "cleanup.result":
+    "🧹 Cleanup complete. Checked: {inspected}, closed: {closed}, skipped: {skipped}, failed: {failed}.",
 
   "stop.no_active_session":
     "🛑 Agent was not started\n\nCreate a session with /new or select one via /sessions.",
   "stop.in_progress":
     "🛑 Event stream stopped, sending abort signal...\n\nWaiting for agent to stop.",
   "stop.warn_unconfirmed":
-    "⚠️ Event stream stopped, but server did not confirm abort.\n\nCheck /status and retry /stop in a few seconds.",
+    "⚠️ Event stream stopped, but server did not confirm abort.\n\nCheck /status and retry /abort in a few seconds.",
   "stop.warn_maybe_finished": "⚠️ Event stream stopped, but the agent may have already finished.",
   "stop.success": "✅ Agent action interrupted. No more messages from this run will be sent.",
   "stop.warn_still_busy":
     "⚠️ Signal sent, but agent is still busy.\n\nEvent stream is already disabled, so no intermediate messages will be sent.",
   "stop.warn_timeout":
-    "⚠️ Abort request timeout.\n\nEvent stream is already disabled, retry /stop in a few seconds.",
+    "⚠️ Abort request timeout.\n\nEvent stream is already disabled, retry /abort in a few seconds.",
   "stop.warn_local_only": "⚠️ Event stream stopped locally, but server-side abort failed.",
-  "stop.error": "🔴 Failed to stop action.\n\nEvent stream is stopped, try /stop again.",
+  "stop.error": "🔴 Failed to stop action.\n\nEvent stream is stopped, try /abort again.",
 
   "opencode_start.already_running_managed":
     "⚠️ OpenCode Server is already running\n\nPID: {pid}\nUptime: {seconds} seconds",
@@ -211,6 +265,9 @@ export const en = {
   "context.no_active_session": "⚠️ No active session. Create a session with /new",
   "context.confirm_text":
     '📊 Context compaction for session "{title}"\n\nThis will reduce context usage by removing old messages from history. Current task will not be interrupted.\n\nContinue?',
+  "context.general_not_available":
+    "⚠️ Context compaction is only available inside a session topic, not in General.",
+  "context.general_not_available_callback": "Open a session topic first.",
   "context.callback_session_not_found": "Session not found",
   "context.callback_compacting": "Compacting context...",
   "context.progress": "⏳ Compacting context...",
@@ -266,10 +323,17 @@ export const en = {
 
   "keyboard.agent_mode": "{emoji} {name} Mode",
   "keyboard.context": "📊 {used} / {limit} ({percent}%)",
-  "keyboard.context_empty": "📊 0",
+  "keyboard.context_empty": "📊 Controls",
+  "keyboard.general_defaults": "New Session Defaults:",
+  "keyboard.general_defaults_info":
+    "These defaults apply to newly created sessions in this group:\n• Agent\n• Model\n• Variant",
   "keyboard.variant": "💭 {name}",
   "keyboard.variant_default": "💡 Default",
   "keyboard.updated": "⌨️ Keyboard updated",
+  "keyboard.dm.status": "/status",
+  "keyboard.dm.help": "/help",
+  "keyboard.dm.opencode_start": "/opencode_start",
+  "keyboard.dm.opencode_stop": "/opencode_stop",
 
   "pinned.default_session_title": "new session",
   "pinned.unknown": "Unknown",
@@ -300,13 +364,17 @@ export const en = {
   "runtime.wizard.user_id_invalid": "Enter a positive integer (> 0).\n",
   "runtime.wizard.ask_api_url":
     "Enter OpenCode API URL (optional).\nPress Enter to use default: {defaultUrl}\n> ",
+  "runtime.wizard.ask_server_username":
+    "Enter OpenCode server username (optional).\nPress Enter to use default: {defaultUsername}\n> ",
+  "runtime.wizard.ask_server_password":
+    "Enter OpenCode server password (optional, input hidden).\nPress Enter to skip.\n> ",
   "runtime.wizard.api_url_invalid": "Enter a valid URL (http/https) or press Enter for default.\n",
-  "runtime.wizard.start": "OpenCode Telegram Bot setup.\n",
+  "runtime.wizard.start": "OpenCode Telegram Group Topics Bot setup.\n",
   "runtime.wizard.saved": "Configuration saved:\n- {envPath}\n- {settingsPath}\n",
   "runtime.wizard.not_configured_starting":
     "Application is not configured yet. Starting wizard...\n",
   "runtime.wizard.tty_required":
-    "Interactive wizard requires a TTY terminal. Run `opencode-telegram config` in an interactive shell.",
+    "Interactive wizard requires a TTY terminal. Run `opencode-telegram-group-topics-bot config` in an interactive shell.",
 
   "rename.no_session": "⚠️ No active session. Create or select a session first.",
   "rename.prompt": "📝 Enter new title for session:\n\nCurrent: {title}",
@@ -340,7 +408,7 @@ export const en = {
   "cmd.description.rename": "Rename current session",
 
   "cli.usage":
-    "Usage:\n  opencode-telegram [start] [--mode sources|installed]\n  opencode-telegram status\n  opencode-telegram stop\n  opencode-telegram config\n\nNotes:\n  - No command defaults to `start`\n  - `--mode` is currently supported for `start` only",
+    "Usage:\n  opencode-telegram-group-topics-bot [start] [--mode sources|installed]\n  opencode-telegram-group-topics-bot status\n  opencode-telegram-group-topics-bot stop\n  opencode-telegram-group-topics-bot config [--mode sources|installed]\n\nNotes:\n  - No command defaults to `start`\n  - `config` defaults to installed mode unless `--mode sources` is provided",
   "cli.placeholder.status":
     "Command `status` is currently a placeholder. Real status checks will be added in service layer (Phase 5).",
   "cli.placeholder.stop":
@@ -351,7 +419,7 @@ export const en = {
   "cli.args.mode_requires_value": "Option --mode requires a value: sources|installed",
   "cli.args.invalid_mode": "Invalid mode value: {value}. Expected sources|installed",
   "cli.args.unknown_option": "Unknown option: {value}",
-  "cli.args.mode_only_start": "Option --mode is supported only for the start command",
+  "cli.args.mode_only_start": "Option --mode is supported only for the start and config commands",
 
   "legacy.models.fetch_error": "🔴 Failed to get models list. Check server status with /status.",
   "legacy.models.empty": "📋 No available models. Configure providers in OpenCode.",

@@ -3,10 +3,14 @@ import type { I18nDictionary } from "./en.js";
 export const zh: I18nDictionary = {
   "cmd.description.status": "服务器和会话状态",
   "cmd.description.new": "创建新会话",
+  "cmd.description.abort": "中止当前操作",
   "cmd.description.stop": "停止当前操作",
   "cmd.description.sessions": "列出会话",
   "cmd.description.projects": "列出项目",
   "cmd.description.commands": "自定义命令",
+  "cmd.description.model": "选择模型",
+  "cmd.description.agent": "选择代理模式",
+  "cmd.description.cleanup": "关闭过期话题",
   "cmd.description.opencode_start": "启动 OpenCode 服务器",
   "cmd.description.opencode_stop": "停止 OpenCode 服务器",
   "cmd.description.help": "帮助",
@@ -41,7 +45,7 @@ export const zh: I18nDictionary = {
   "common.unknown_error": "未知错误",
 
   "start.welcome":
-    "👋 欢迎使用 OpenCode Telegram Bot！\n\n可用命令：\n/projects — 选择项目\n/sessions — 会话列表\n/new — 新建会话\n/status — 状态\n/help — 帮助\n\n请使用底部按钮选择模式、模型和变体。",
+    "👋 欢迎使用 OpenCode Telegram Group Topics Bot！\n\n可用命令：\n/projects — 选择项目\n/sessions — 会话列表\n/new — 新建会话\n/status — 状态\n/help — 帮助\n\n请使用底部按钮选择模式、模型和变体。",
   "help.keyboard_hint": "💡 代理模式、模型、变体和上下文操作请使用底部键盘按钮。",
   "help.text":
     "📖 **帮助**\n\n/status - 查看服务器状态\n/sessions - 会话列表\n/new - 创建新会话\n/help - 帮助",
@@ -51,12 +55,16 @@ export const zh: I18nDictionary = {
   "bot.creating_session": "🔄 正在创建新会话...",
   "bot.create_session_error": "🔴 创建会话失败。请重试 /new，或使用 /status 检查服务器状态。",
   "bot.session_created": "✅ 会话已创建：{title}",
-  "bot.session_busy": "⏳ 代理正在执行任务。请等待完成，或使用 /stop 中断当前运行。",
+  "bot.session_busy":
+    "⏳ 你上一条请求还在执行，所以这条新请求没有启动。\n\n原因：OpenCode 在同一个会话里一次只允许一个运行中的任务。\n建议：先等待当前回复；如果看起来卡住了，先用 /abort，再重新发送消息。",
   "bot.session_reset_project_mismatch":
     "⚠️ 活动会话与所选项目不匹配，因此已重置。使用 /sessions 选择一个会话，或 /new 创建新会话。",
-  "bot.prompt_send_error": "向 OpenCode 发送请求失败。",
+  "bot.prompt_send_error":
+    "⚠️ 这条消息没有成功发送到 OpenCode。\n\n可能原因：机器人与 OpenCode 服务器之间出现了临时连接问题。\n建议：请重发一次；如果持续出现，请运行 /status 检查 OpenCode 是否可达。",
+  "bot.prompt_send_error_session_not_found":
+    "⚠️ 这条消息发送失败，因为当前活动会话已不可用。\n\n原因：该会话可能已被重置、切换或删除。\n建议：先用 /sessions 选择会话，或用 /new 创建新会话，然后再重发消息。",
   "bot.session_error": "🔴 OpenCode 返回错误：{message}",
-  "bot.session_retry": "🔁 {message}\n\n提供方在重复重试时持续返回同一错误。使用 /stop 可停止。",
+  "bot.session_retry": "🔁 {message}\n\n提供方在重复重试时持续返回同一错误。使用 /abort 可停止。",
   "bot.unknown_command": "⚠️ 未知命令：{command}。使用 /help 查看可用命令。",
   "bot.photo_downloading": "⏳ 正在下载照片...",
   "bot.photo_too_large": "⚠️ 照片过大（最大 {maxSizeMb}MB）",
@@ -101,6 +109,11 @@ export const zh: I18nDictionary = {
   "projects.selected":
     "✅ 已选择项目：{project}\n\n📋 会话已重置。请在此项目中使用 /sessions 或 /new。",
   "projects.select_error": "🔴 选择项目失败。",
+  "projects.locked.topic_scope":
+    "⚠️ 此话题已绑定自己的项目/会话范围。请仅在 General 中、创建话题前切换项目。",
+  "projects.locked.group_project":
+    "⚠️ 此群组已配置为项目：{project}。若要处理其他仓库，请创建新群组。",
+  "projects.locked.callback": "此群组已锁定项目切换。",
 
   "sessions.project_not_selected": "🏗 未选择项目。\n\n请先使用 /projects 选择一个项目。",
   "sessions.empty": "📭 未找到会话。\n\n使用 /new 创建新会话。",
@@ -112,6 +125,12 @@ export const zh: I18nDictionary = {
   "sessions.page_load_error_callback": "无法加载此页面。请重试。",
   "sessions.button.prev_page": "⬅️ 上一页",
   "sessions.button.next_page": "下一页 ➡️",
+  "sessions.topic_locked": "⚠️ 此话题已绑定当前会话。请在 General 话题中使用 /new 创建新话题。",
+  "sessions.general_overview": "话题会话概览：",
+  "sessions.general_item": "• {topic}（线程 #{thread}）- {status}",
+  "sessions.general_empty": "尚无会话话题。请使用 /new 创建。",
+  "sessions.bound_topic_link": "🔗 此会话的话题链接：{url}",
+  "sessions.created_topic_link": "✅ 已为此会话创建话题：{url}",
   "sessions.loading_context": "⏳ 正在加载上下文和最新消息...",
   "sessions.selected": "✅ 已选择会话：{title}",
   "sessions.select_error": "🔴 选择会话失败。",
@@ -122,18 +141,32 @@ export const zh: I18nDictionary = {
 
   "new.project_not_selected": "🏗 未选择项目。\n\n请先使用 /projects 选择一个项目。",
   "new.created": "✅ 新会话已创建：{title}",
+  "new.topic_only_in_general": "⚠️ 请在 General 话题中运行 /new 以创建专用会话话题。",
+  "new.requires_forum_general": "⚠️ /new 仅可在启用论坛的超级群 General 话题中使用。",
+  "new.topic_created": "✅ 会话话题已就绪：{title}",
+  "new.general_created": "✅ 已创建新的 OpenCode 会话和群组话题。",
+  "new.topic_create_error": "🔴 创建会话话题失败。请检查论坛权限后重试。",
+  "new.topic_create_no_rights":
+    "🔴 我无法在该群组创建论坛话题。请给机器人授予管理话题（Manage Topics）权限后再执行 /new。",
+  "new.general_open_link": "🔗 打开话题：{url}",
   "new.create_error": "🔴 OpenCode 服务器不可用，或创建会话时发生错误。",
+
+  "cleanup.topic_use_general": "⚠️ 请在 General 话题中运行 /cleanup。",
+  "cleanup.requires_forum_general": "⚠️ /cleanup 仅在启用论坛的超级群 General 话题中可用。",
+  "cleanup.no_topics": "✅ 没有需要清理的会话话题。",
+  "cleanup.result":
+    "🧹 清理完成。检查：{inspected}，关闭：{closed}，跳过：{skipped}，失败：{failed}。",
 
   "stop.no_active_session": "🛑 代理尚未启动\n\n使用 /new 创建会话，或通过 /sessions 选择一个。",
   "stop.in_progress": "🛑 已停止事件流，正在发送中止信号...\n\n等待代理停止。",
   "stop.warn_unconfirmed":
-    "⚠️ 事件流已停止，但服务器未确认中止。\n\n检查 /status，并在几秒后重试 /stop。",
+    "⚠️ 事件流已停止，但服务器未确认中止。\n\n检查 /status，并在几秒后重试 /abort。",
   "stop.warn_maybe_finished": "⚠️ 事件流已停止，但代理可能已完成。",
   "stop.success": "✅ 代理操作已中断。本次运行的后续消息将不再发送。",
   "stop.warn_still_busy": "⚠️ 信号已发送，但代理仍在忙。\n\n事件流已禁用，因此不会发送中间消息。",
-  "stop.warn_timeout": "⚠️ 中止请求超时。\n\n事件流已禁用，请在几秒后重试 /stop。",
+  "stop.warn_timeout": "⚠️ 中止请求超时。\n\n事件流已禁用，请在几秒后重试 /abort。",
   "stop.warn_local_only": "⚠️ 已在本地停止事件流，但服务器端中止失败。",
-  "stop.error": "🔴 停止操作失败。\n\n事件流已停止，请再次尝试 /stop。",
+  "stop.error": "🔴 停止操作失败。\n\n事件流已停止，请再次尝试 /abort。",
 
   "opencode_start.already_running_managed":
     "⚠️ OpenCode 服务器已在运行\n\nPID：{pid}\n运行时间：{seconds} 秒",
@@ -188,6 +221,8 @@ export const zh: I18nDictionary = {
   "context.no_active_session": "⚠️ 没有活动会话。使用 /new 创建会话",
   "context.confirm_text":
     '📊 会话 "{title}" 的上下文压缩\n\n这会通过移除历史中的旧消息来减少上下文占用。当前任务不会被中断。\n\n继续？',
+  "context.general_not_available": "⚠️ 上下文压缩仅在会话话题中可用，General 中不可用。",
+  "context.general_not_available_callback": "请先打开一个会话话题。",
   "context.callback_session_not_found": "未找到会话",
   "context.callback_compacting": "正在压缩上下文...",
   "context.progress": "⏳ 正在压缩上下文...",
@@ -240,10 +275,17 @@ export const zh: I18nDictionary = {
 
   "keyboard.agent_mode": "{emoji} {name} 模式",
   "keyboard.context": "📊 {used} / {limit} ({percent}%)",
-  "keyboard.context_empty": "📊 0",
+  "keyboard.context_empty": "📊 控制面板",
+  "keyboard.general_defaults": "新会话默认项：",
+  "keyboard.general_defaults_info":
+    "你在此群组中设置的这些默认项会应用到新创建的会话：\n• Agent\n• Model\n• Variant",
   "keyboard.variant": "💭 {name}",
   "keyboard.variant_default": "💡 默认",
   "keyboard.updated": "⌨️ 键盘已更新",
+  "keyboard.dm.status": "/status",
+  "keyboard.dm.help": "/help",
+  "keyboard.dm.opencode_start": "/opencode_start",
+  "keyboard.dm.opencode_stop": "/opencode_stop",
 
   "pinned.default_session_title": "新会话",
   "pinned.unknown": "未知",
@@ -271,12 +313,16 @@ export const zh: I18nDictionary = {
   "runtime.wizard.user_id_invalid": "请输入一个正整数（> 0）。\n",
   "runtime.wizard.ask_api_url":
     "请输入 OpenCode API URL（可选）。\n按 Enter 使用默认值：{defaultUrl}\n> ",
+  "runtime.wizard.ask_server_username":
+    "请输入 OpenCode 服务器用户名（可选）。\n按 Enter 使用默认值：{defaultUsername}\n> ",
+  "runtime.wizard.ask_server_password":
+    "请输入 OpenCode 服务器密码（可选，输入隐藏）。\n按 Enter 跳过。\n> ",
   "runtime.wizard.api_url_invalid": "请输入有效 URL（http/https），或按 Enter 使用默认值。\n",
-  "runtime.wizard.start": "OpenCode Telegram Bot 设置。\n",
+  "runtime.wizard.start": "OpenCode Telegram Group Topics Bot 设置。\n",
   "runtime.wizard.saved": "配置已保存：\n- {envPath}\n- {settingsPath}\n",
   "runtime.wizard.not_configured_starting": "应用尚未配置。正在启动向导...\n",
   "runtime.wizard.tty_required":
-    "交互式向导需要 TTY 终端。请在交互式 shell 中运行 `opencode-telegram config`。",
+    "交互式向导需要 TTY 终端。请在交互式 shell 中运行 `opencode-telegram-group-topics-bot config`。",
 
   "rename.no_session": "⚠️ 没有活动会话。请先创建或选择一个会话。",
   "rename.prompt": "📝 请输入会话的新标题：\n\n当前：{title}",
@@ -307,7 +353,7 @@ export const zh: I18nDictionary = {
   "cmd.description.rename": "重命名当前会话",
 
   "cli.usage":
-    "用法：\n  opencode-telegram [start] [--mode sources|installed]\n  opencode-telegram status\n  opencode-telegram stop\n  opencode-telegram config\n\n说明：\n  - 不带命令时默认执行 `start`\n  - `--mode` 目前仅支持 `start` 命令",
+    "用法：\n  opencode-telegram-group-topics-bot [start] [--mode sources|installed]\n  opencode-telegram-group-topics-bot status\n  opencode-telegram-group-topics-bot stop\n  opencode-telegram-group-topics-bot config [--mode sources|installed]\n\n说明：\n  - 不带命令时默认执行 `start`\n  - `config` 默认使用 `installed` 模式，除非显式传入 `--mode sources`",
   "cli.placeholder.status":
     "命令 `status` 目前是占位符。真实状态检查将会在 service 层（阶段 5）添加。",
   "cli.placeholder.stop":
@@ -318,7 +364,7 @@ export const zh: I18nDictionary = {
   "cli.args.mode_requires_value": "选项 --mode 需要一个值：sources|installed",
   "cli.args.invalid_mode": "无效的 --mode 值：{value}。期望 sources|installed",
   "cli.args.unknown_option": "未知选项：{value}",
-  "cli.args.mode_only_start": "选项 --mode 仅支持 start 命令",
+  "cli.args.mode_only_start": "选项 --mode 仅支持 start 和 config 命令",
 
   "legacy.models.fetch_error": "🔴 获取模型列表失败。请使用 /status 检查服务器状态。",
   "legacy.models.empty": "📋 没有可用模型。请在 OpenCode 中配置 providers。",
@@ -333,4 +379,20 @@ export const zh: I18nDictionary = {
     "🎤 语音识别尚未配置。\n\n在 .env 中设置 STT_API_URL 和 STT_API_KEY 以启用。",
   "stt.error": "🔴 识别音频失败：{error}",
   "stt.empty_result": "🎤 音频消息中未检测到语音。",
+
+  "start.welcome_dm":
+    "👋 私聊模式仅支持机器人/服务器状态与控制命令。\n\n请在群组话题线程中进行项目与会话工作。",
+  "status.global_overview": "📈 全局概览",
+  "status.global_projects": "项目数：{count}",
+  "status.global_sessions": "会话数：{count}",
+  "dm.restricted.command": "⚠️ 私聊中已禁用会话控制命令。请使用群组话题线程进行项目/会话工作。",
+  "dm.restricted.prompt": "⚠️ 私聊中已禁用任务输入。请使用群组话题线程运行 OpenCode 任务。",
+  "help.dm.title": "私聊控制命令",
+  "help.dm.command_start": "显示私聊模式说明",
+  "help.dm.hint": "请使用群组话题线程进行项目/会话工作。",
+  "status.dm.title": "私聊状态概览",
+  "status.dm.hint": "请使用群组话题线程运行 OpenCode 会话。",
+  "group.general.prompts_disabled":
+    "⚠️ General 话题中已禁用任务输入。请使用 /new 创建专用会话话题。",
+  "topic.unbound": "⚠️ 此话题尚未绑定会话。请前往 General 话题并执行 /new。",
 };

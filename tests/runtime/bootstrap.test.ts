@@ -52,6 +52,7 @@ describe("runtime/bootstrap", () => {
       BOT_LOCALE: "ru",
       TELEGRAM_BOT_TOKEN: "new-token:value",
       TELEGRAM_ALLOWED_USER_ID: "777",
+      OPENCODE_SERVER_USERNAME: "opencode",
       OPENCODE_MODEL_PROVIDER: "old-provider",
       OPENCODE_MODEL_ID: "old-model",
     });
@@ -71,6 +72,7 @@ describe("runtime/bootstrap", () => {
       BOT_LOCALE: "en",
       TELEGRAM_BOT_TOKEN: "token:value",
       TELEGRAM_ALLOWED_USER_ID: "42",
+      OPENCODE_SERVER_USERNAME: "opencode",
       OPENCODE_MODEL_PROVIDER: "opencode",
       OPENCODE_MODEL_ID: "big-pickle",
       OPENCODE_API_URL: "https://localhost:4096",
@@ -80,7 +82,35 @@ describe("runtime/bootstrap", () => {
     expect(updated).toContain("TELEGRAM_BOT_TOKEN=token:value");
     expect(updated).toContain("TELEGRAM_ALLOWED_USER_ID=42");
     expect(updated).toContain("OPENCODE_API_URL=https://localhost:4096");
+    expect(updated).toContain("OPENCODE_SERVER_USERNAME=opencode");
     expect(updated).toContain("OPENCODE_MODEL_PROVIDER=opencode");
     expect(updated).toContain("OPENCODE_MODEL_ID=big-pickle");
+  });
+
+  it("adds and removes optional server password entries", () => {
+    const updated = buildEnvFileContent("OPENCODE_SERVER_PASSWORD=old-secret\n", {
+      BOT_LOCALE: "en",
+      TELEGRAM_BOT_TOKEN: "token:value",
+      TELEGRAM_ALLOWED_USER_ID: "42",
+      OPENCODE_SERVER_USERNAME: "alice",
+      OPENCODE_SERVER_PASSWORD: "new-secret",
+      OPENCODE_MODEL_PROVIDER: "opencode",
+      OPENCODE_MODEL_ID: "big-pickle",
+    });
+
+    expect(updated).toContain("OPENCODE_SERVER_USERNAME=alice");
+    expect(updated).toContain("OPENCODE_SERVER_PASSWORD=new-secret");
+
+    const withoutPassword = buildEnvFileContent(updated, {
+      BOT_LOCALE: "en",
+      TELEGRAM_BOT_TOKEN: "token:value",
+      TELEGRAM_ALLOWED_USER_ID: "42",
+      OPENCODE_SERVER_USERNAME: "alice",
+      OPENCODE_MODEL_PROVIDER: "opencode",
+      OPENCODE_MODEL_ID: "big-pickle",
+    });
+
+    expect(withoutPassword).toContain("OPENCODE_SERVER_USERNAME=alice");
+    expect(withoutPassword).not.toContain("OPENCODE_SERVER_PASSWORD=");
   });
 });

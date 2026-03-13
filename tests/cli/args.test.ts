@@ -56,12 +56,22 @@ describe("cli/args", () => {
     expect(parsed.error).toContain("Invalid mode value");
   });
 
-  it("rejects --mode for non-start commands", () => {
+  it("allows --mode for config command", () => {
+    const parsed = parseCliArgs(["config", "--mode", "sources"]);
+
+    expect(parsed).toEqual({
+      command: "config",
+      mode: "sources",
+      showHelp: false,
+    });
+  });
+
+  it("rejects --mode for commands other than start/config", () => {
     const parsed = parseCliArgs(["status", "--mode", "sources"]);
 
     expect(parsed.command).toBe("status");
     expect(parsed.showHelp).toBe(true);
-    expect(parsed.error).toContain("supported only for the start command");
+    expect(parsed.error).toContain("supported only for the start and config commands");
   });
 
   it("shows help when requested", () => {

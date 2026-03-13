@@ -136,15 +136,15 @@ function preprocessMarkdownForTelegram(text: string): string {
   return output.join("\n");
 }
 
-export function normalizePathForDisplay(filePath: string): string {
+export function normalizePathForDisplay(filePath: string, projectWorktree?: string): string {
   const normalizedPath = filePath.replace(/\\/g, "/");
-  const project = getCurrentProject();
+  const worktree = projectWorktree ?? getCurrentProject()?.worktree;
 
-  if (!project?.worktree) {
+  if (!worktree) {
     return normalizedPath;
   }
 
-  const normalizedWorktree = project.worktree.replace(/\\/g, "/").replace(/\/+$/, "");
+  const normalizedWorktree = worktree.replace(/\\/g, "/").replace(/\/+$/, "");
   if (!normalizedWorktree) {
     return normalizedPath;
   }
@@ -225,7 +225,11 @@ export function formatSummaryWithMode(text: string, mode: MessageFormatMode): st
   return formattedParts;
 }
 
-function getToolDetails(tool: string, input?: { [key: string]: unknown }): string {
+function getToolDetails(
+  tool: string,
+  input?: { [key: string]: unknown },
+  projectWorktree?: string,
+): string {
   if (!input) {
     return "";
   }
@@ -237,7 +241,7 @@ function getToolDetails(tool: string, input?: { [key: string]: unknown }): strin
     case "write":
     case "apply_patch":
       const filePath = input.path || input.filePath;
-      if (typeof filePath === "string") return normalizePathForDisplay(filePath);
+      if (typeof filePath === "string") return normalizePathForDisplay(filePath, projectWorktree);
       break;
     case "bash":
       if (typeof input.command === "string") return input.command;
@@ -365,7 +369,7 @@ function extractFirstUpdatedFileFromTitle(title: string): string {
   return "";
 }
 
-export function formatToolInfo(toolInfo: ToolInfo): string | null {
+export function formatToolInfo(toolInfo: ToolInfo, projectWorktree?: string): string | null {
   const { tool, input, title } = toolInfo;
   logger.debug(
     `[Formatter] formatToolInfo: tool=${tool}, hasMetadata=${!!toolInfo.metadata}, hasFilediff=${!!toolInfo.metadata?.filediff}`,
@@ -383,7 +387,7 @@ export function formatToolInfo(toolInfo: ToolInfo): string | null {
     return `${toolIcon} ${tool} (${todos.length})\n${todosList}`;
   }
 
-  let details = title || getToolDetails(tool, input);
+  let details = title || getToolDetails(tool, input, projectWorktree);
   const toolIcon = getToolIcon(tool);
 
   let description = "";
@@ -401,11 +405,11 @@ export function formatToolInfo(toolInfo: ToolInfo): string | null {
         ? (toolInfo.metadata.filediff as { file?: string })
         : undefined;
     if (filediff?.file) {
-      details = normalizePathForDisplay(filediff.file);
+      details = normalizePathForDisplay(filediff.file, projectWorktree);
     } else if (title) {
       const fileFromTitle = extractFirstUpdatedFileFromTitle(title);
       if (fileFromTitle) {
-        details = normalizePathForDisplay(fileFromTitle);
+        details = normalizePathForDisplay(fileFromTitle, projectWorktree);
       }
     }
   }
@@ -493,8 +497,9 @@ export function prepareCodeFile(
   content: string,
   filePath: string,
   operation: "write" | "edit",
+  projectWorktree?: string,
 ): CodeFileData | null {
-  const displayPath = normalizePathForDisplay(filePath);
+  const displayPath = normalizePathForDisplay(filePath, projectWorktree);
   let processedContent = content;
 
   if (operation === "edit") {

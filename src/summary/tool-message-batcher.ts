@@ -359,6 +359,7 @@ export class ToolMessageBatcher {
 
     const result: string[] = [];
     let current = "";
+    const joinSeparator = normalizedEntries.length >= 8 ? "\n" : "\n\n";
 
     for (const entry of normalizedEntries) {
       if (!current) {
@@ -366,7 +367,7 @@ export class ToolMessageBatcher {
         continue;
       }
 
-      const candidate = `${current}\n\n${entry}`;
+      const candidate = `${current}${joinSeparator}${entry}`;
       if (candidate.length <= TELEGRAM_MESSAGE_MAX_LENGTH) {
         current = candidate;
         continue;

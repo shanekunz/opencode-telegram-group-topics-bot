@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Context } from "grammy";
-import { stopCommand } from "../../../src/bot/commands/stop.js";
+import { abortCommand } from "../../../src/bot/commands/abort.js";
 import { clearAllInteractionState } from "../../../src/interaction/cleanup.js";
 import { questionManager } from "../../../src/question/manager.js";
 import { permissionManager } from "../../../src/permission/manager.js";
@@ -58,7 +58,7 @@ function activateInteractionState(): void {
   });
 }
 
-describe("bot/commands/stop", () => {
+describe("bot/commands/abort", () => {
   beforeEach(() => {
     clearAllInteractionState("test_setup");
     mocked.currentSession = null;
@@ -74,7 +74,7 @@ describe("bot/commands/stop", () => {
       reply: replyMock,
     } as unknown as Context;
 
-    await stopCommand(ctx as never);
+    await abortCommand(ctx as never);
 
     expect(replyMock).toHaveBeenCalledWith(t("stop.no_active_session"));
     expect(questionManager.isActive()).toBe(false);
@@ -112,7 +112,7 @@ describe("bot/commands/stop", () => {
       },
     } as unknown as Context;
 
-    await stopCommand(ctx as never);
+    await abortCommand(ctx as never);
 
     expect(replyMock).toHaveBeenCalledWith(t("stop.in_progress"));
     expect(mocked.abortMock).toHaveBeenCalled();

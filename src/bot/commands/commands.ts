@@ -1,4 +1,4 @@
-import { Bot, CommandContext, Context, InlineKeyboard } from "grammy";
+import { CommandContext, Context, InlineKeyboard } from "grammy";
 import { opencodeClient } from "../../opencode/client.js";
 import { getCurrentProject } from "../../settings/manager.js";
 import {
@@ -16,6 +16,7 @@ import { getStoredModel } from "../../model/manager.js";
 import { safeBackgroundTask } from "../../utils/safe-background-task.js";
 import { logger } from "../../utils/logger.js";
 import { t } from "../../i18n/index.js";
+import { getScopeFromContext, getScopeKeyFromContext, getThreadSendOptions } from "../scope.js";
 
 const COMMANDS_CALLBACK_PREFIX = "commands:";
 const COMMANDS_CALLBACK_SELECT_PREFIX = `${COMMANDS_CALLBACK_PREFIX}select:`;
@@ -53,7 +54,6 @@ interface ExecuteCommandParams {
 }
 
 export interface ExecuteCommandDeps {
-  bot: Bot<Context>;
   ensureEventSubscription: (directory: string) => Promise<void>;
 }
 
@@ -184,10 +184,10 @@ function parseCommandsMetadata(state: InteractionState | null): CommandsMetadata
   return null;
 }
 
-function clearCommandsInteraction(reason: string): void {
-  const metadata = parseCommandsMetadata(interactionManager.getSnapshot());
+function clearCommandsInteraction(reason: string, scopeKey: string): void {
+  const metadata = parseCommandsMetadata(interactionManager.getSnapshot(scopeKey));
   if (metadata) {
-    interactionManager.clear(reason);
+    interactionManager.clear(reason, scopeKey);
   }
 }
 
@@ -248,14 +248,14 @@ async function ensureSessionForProject(
   ctx: Context,
   projectDirectory: string,
 ): Promise<SessionInfo | null> {
-  let currentSession = getCurrentSession();
+  const scopeKey = getScopeKeyFromContext(ctx);
+  let currentSession = getCurrentSession(scopeKey);
 
   if (currentSession && currentSession.directory !== projectDirectory) {
     logger.warn(
       `[Commands] Session/project mismatch detected. sessionDirectory=${currentSession.directory}, projectDirectory=${projectDirectory}. Resetting session context.`,
     );
-    clearSession();
-    summaryAggregator.clear();
+    clearSession(scopeKey);
     await ctx.reply(t("bot.session_reset_project_mismatch"));
     currentSession = null;
   }
@@ -281,7 +281,8 @@ async function ensureSessionForProject(
     directory: projectDirectory,
   };
 
-  setCurrentSession(sessionInfo);
+  setCurrentSession(sessionInfo, scopeKey);
+  summaryAggregator.setSession(sessionInfo.id);
   await ingestSessionInfoForCache(session);
   await ctx.reply(t("bot.session_created", { title: session.title }));
 
@@ -298,6 +299,7 @@ async function executeCommand(
   }
 
   const args = params.argumentsText.trim();
+  const threadId = getScopeFromContext(ctx)?.threadId ?? null;
   await ctx.reply(formatExecutingCommandMessage(params.commandName, args));
 
   const session = await ensureSessionForProject(ctx, params.projectDirectory);
@@ -307,7 +309,6 @@ async function executeCommand(
 
   await deps.ensureEventSubscription(session.directory);
   summaryAggregator.setSession(session.id);
-  summaryAggregator.setBotAndChatId(deps.bot, ctx.chat.id);
 
   const sessionIsBusy = await isSessionBusy(session.id, session.directory);
   if (sessionIsBusy) {
@@ -315,8 +316,9 @@ async function executeCommand(
     return;
   }
 
-  const currentAgent = getStoredAgent();
-  const storedModel = getStoredModel();
+  const scopeKey = getScopeKeyFromContext(ctx);
+  const currentAgent = getStoredAgent(scopeKey);
+  const storedModel = getStoredModel(scopeKey);
   const model =
     storedModel.providerID && storedModel.modelID
       ? `${storedModel.providerID}/${storedModel.modelID}`
@@ -342,7 +344,9 @@ async function executeCommand(
           args,
         });
         logger.error("[Commands] session.command error details:", error);
-        void ctx.api.sendMessage(ctx.chat!.id, t("commands.execute_error")).catch(() => {});
+        void ctx.api
+          .sendMessage(ctx.chat!.id, t("commands.execute_error"), getThreadSendOptions(threadId))
+          .catch(() => {});
         return;
       }
 
@@ -357,14 +361,17 @@ async function executeCommand(
         args,
       });
       logger.error("[Commands] session.command background failure details:", error);
-      void ctx.api.sendMessage(ctx.chat!.id, t("commands.execute_error")).catch(() => {});
+      void ctx.api
+        .sendMessage(ctx.chat!.id, t("commands.execute_error"), getThreadSendOptions(threadId))
+        .catch(() => {});
     },
   });
 }
 
 export async function commandsCommand(ctx: CommandContext<Context>): Promise<void> {
   try {
-    const currentProject = getCurrentProject();
+    const scopeKey = getScopeKeyFromContext(ctx);
+    const currentProject = getCurrentProject(scopeKey);
     if (!currentProject) {
       await ctx.reply(t("bot.project_not_selected"));
       return;
@@ -381,17 +388,20 @@ export async function commandsCommand(ctx: CommandContext<Context>): Promise<voi
       reply_markup: keyboard,
     });
 
-    interactionManager.start({
-      kind: "custom",
-      expectedInput: "callback",
-      metadata: {
-        flow: "commands",
-        stage: "list",
-        messageId: message.message_id,
-        projectDirectory: currentProject.worktree,
-        commands,
+    interactionManager.start(
+      {
+        kind: "custom",
+        expectedInput: "callback",
+        metadata: {
+          flow: "commands",
+          stage: "list",
+          messageId: message.message_id,
+          projectDirectory: currentProject.worktree,
+          commands,
+        },
       },
-    });
+      scopeKey,
+    );
   } catch (error) {
     logger.error("[Commands] Error fetching commands list:", error);
     await ctx.reply(t("commands.fetch_error"));
@@ -407,7 +417,8 @@ export async function handleCommandsCallback(
     return false;
   }
 
-  const metadata = parseCommandsMetadata(interactionManager.getSnapshot());
+  const scopeKey = getScopeKeyFromContext(ctx);
+  const metadata = parseCommandsMetadata(interactionManager.getSnapshot(scopeKey));
   const callbackMessageId = getCallbackMessageId(ctx);
 
   if (!metadata || callbackMessageId === null || metadata.messageId !== callbackMessageId) {
@@ -417,7 +428,7 @@ export async function handleCommandsCallback(
 
   try {
     if (data === COMMANDS_CALLBACK_CANCEL) {
-      clearCommandsInteraction("commands_cancelled");
+      clearCommandsInteraction("commands_cancelled", scopeKey);
       await ctx.answerCallbackQuery({ text: t("commands.cancelled_callback") });
       await ctx.deleteMessage().catch(() => {});
       return true;
@@ -429,7 +440,7 @@ export async function handleCommandsCallback(
         return true;
       }
 
-      clearCommandsInteraction("commands_execute_clicked");
+      clearCommandsInteraction("commands_execute_clicked", scopeKey);
       await ctx.answerCallbackQuery({ text: t("commands.execute_callback") });
       await ctx.deleteMessage().catch(() => {});
 
@@ -458,21 +469,24 @@ export async function handleCommandsCallback(
       reply_markup: buildCommandsConfirmKeyboard(),
     });
 
-    interactionManager.transition({
-      expectedInput: "mixed",
-      metadata: {
-        flow: "commands",
-        stage: "confirm",
-        messageId: metadata.messageId,
-        projectDirectory: metadata.projectDirectory,
-        commandName: selectedCommand.name,
+    interactionManager.transition(
+      {
+        expectedInput: "mixed",
+        metadata: {
+          flow: "commands",
+          stage: "confirm",
+          messageId: metadata.messageId,
+          projectDirectory: metadata.projectDirectory,
+          commandName: selectedCommand.name,
+        },
       },
-    });
+      scopeKey,
+    );
 
     return true;
   } catch (error) {
     logger.error("[Commands] Error handling command callback:", error);
-    clearCommandsInteraction("commands_callback_error");
+    clearCommandsInteraction("commands_callback_error", scopeKey);
     await ctx.answerCallbackQuery({ text: t("callback.processing_error") }).catch(() => {});
     return true;
   }
@@ -487,7 +501,8 @@ export async function handleCommandTextArguments(
     return false;
   }
 
-  const metadata = parseCommandsMetadata(interactionManager.getSnapshot());
+  const scopeKey = getScopeKeyFromContext(ctx);
+  const metadata = parseCommandsMetadata(interactionManager.getSnapshot(scopeKey));
   if (!metadata || metadata.stage !== "confirm") {
     return false;
   }
@@ -498,7 +513,7 @@ export async function handleCommandTextArguments(
     return true;
   }
 
-  clearCommandsInteraction("commands_arguments_submitted");
+  clearCommandsInteraction("commands_arguments_submitted", scopeKey);
 
   if (ctx.chat) {
     await ctx.api.deleteMessage(ctx.chat.id, metadata.messageId).catch(() => {});

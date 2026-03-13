@@ -1,38 +1,72 @@
 import { Context } from "grammy";
-import { createMainKeyboard } from "../utils/keyboard.js";
+import { createDmKeyboard, createMainKeyboard } from "../utils/keyboard.js";
 import { getStoredAgent } from "../../agent/manager.js";
 import { getStoredModel } from "../../model/manager.js";
 import { formatVariantForButton } from "../../variant/manager.js";
 import { pinnedMessageManager } from "../../pinned/manager.js";
 import { keyboardManager } from "../../keyboard/manager.js";
+import { abortCurrentOperation } from "./abort.js";
+import { clearSession } from "../../session/manager.js";
+import { clearProject } from "../../settings/manager.js";
 import { t } from "../../i18n/index.js";
+import { SCOPE_CONTEXT, getScopeFromContext } from "../scope.js";
 
 export async function startCommand(ctx: Context): Promise<void> {
-  if (ctx.chat) {
-    if (!pinnedMessageManager.isInitialized()) {
-      pinnedMessageManager.initialize(ctx.api, ctx.chat.id);
-    }
-    keyboardManager.initialize(ctx.api, ctx.chat.id);
+  const scope = getScopeFromContext(ctx);
+  const scopeKey = scope?.key ?? "global";
+  const usePinned = ctx.chat?.type !== "private";
+  const isPrivateChat = ctx.chat?.type === "private";
+  const isTopicScope = scope?.context === SCOPE_CONTEXT.GROUP_TOPIC;
+
+  if (isPrivateChat) {
+    await abortCurrentOperation(ctx, { notifyUser: false });
+    await ctx.reply(`${t("start.welcome")}\n\n${t("start.welcome_dm")}`, {
+      reply_markup: createDmKeyboard(),
+    });
+    return;
   }
 
-  if (pinnedMessageManager.getContextLimit() === 0) {
-    await pinnedMessageManager.refreshContextLimit();
+  if (ctx.chat) {
+    if (usePinned && !pinnedMessageManager.isInitialized(scopeKey)) {
+      pinnedMessageManager.initialize(ctx.api, ctx.chat.id, scopeKey, scope?.threadId ?? null);
+    }
+    keyboardManager.initialize(ctx.api, ctx.chat.id, scopeKey);
+  }
+
+  await abortCurrentOperation(ctx, { notifyUser: false });
+
+  if (!isTopicScope) {
+    clearSession(scopeKey);
+    clearProject(scopeKey);
+    keyboardManager.clearContext(scopeKey);
+
+    if (usePinned) {
+      await pinnedMessageManager.clear(scopeKey);
+      if (!pinnedMessageManager.isInitialized(scopeKey) && ctx.chat) {
+        pinnedMessageManager.initialize(ctx.api, ctx.chat.id, scopeKey, scope?.threadId ?? null);
+      }
+    }
+  }
+
+  if (usePinned && pinnedMessageManager.getContextLimit(scopeKey) === 0) {
+    await pinnedMessageManager.refreshContextLimit(scopeKey);
   }
 
   // Get current agent, model, and context
-  const currentAgent = getStoredAgent();
-  const currentModel = getStoredModel();
+  const currentAgent = getStoredAgent(scopeKey);
+  const currentModel = getStoredModel(scopeKey);
   const variantName = formatVariantForButton(currentModel.variant || "default");
   const contextInfo =
-    pinnedMessageManager.getContextInfo() ??
-    (pinnedMessageManager.getContextLimit() > 0
-      ? { tokensUsed: 0, tokensLimit: pinnedMessageManager.getContextLimit() }
+    keyboardManager.getContextInfo(scopeKey) ??
+    (usePinned ? pinnedMessageManager.getContextInfo(scopeKey) : null) ??
+    (usePinned && pinnedMessageManager.getContextLimit(scopeKey) > 0
+      ? { tokensUsed: 0, tokensLimit: pinnedMessageManager.getContextLimit(scopeKey) }
       : null);
 
-  keyboardManager.updateAgent(currentAgent);
-  keyboardManager.updateModel(currentModel);
+  keyboardManager.updateAgent(currentAgent, scopeKey);
+  keyboardManager.updateModel(currentModel, scopeKey);
   if (contextInfo) {
-    keyboardManager.updateContext(contextInfo.tokensUsed, contextInfo.tokensLimit);
+    keyboardManager.updateContext(contextInfo.tokensUsed, contextInfo.tokensLimit, scopeKey);
   }
 
   const keyboard = createMainKeyboard(
@@ -40,6 +74,12 @@ export async function startCommand(ctx: Context): Promise<void> {
     currentModel,
     contextInfo ?? undefined,
     variantName,
+    scope?.context === SCOPE_CONTEXT.GROUP_GENERAL
+      ? {
+          contextFirst: true,
+          contextLabel: t("keyboard.general_defaults"),
+        }
+      : undefined,
   );
 
   await ctx.reply(t("start.welcome"), { reply_markup: keyboard });

@@ -22,8 +22,10 @@ export interface FileChange {
  * State of the pinned status message
  */
 export interface PinnedMessageState {
+  scopeKey?: string;
   messageId: number | null;
   chatId: number | null;
+  threadId?: number | null;
   sessionId: string | null;
   sessionTitle: string;
   projectName: string;

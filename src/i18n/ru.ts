@@ -3,10 +3,14 @@ import type { I18nDictionary } from "./en.js";
 export const ru: I18nDictionary = {
   "cmd.description.status": "Статус сервера и сессии",
   "cmd.description.new": "Создать новую сессию",
+  "cmd.description.abort": "Прервать текущее действие",
   "cmd.description.stop": "Прервать текущее действие",
   "cmd.description.sessions": "Список сессий",
   "cmd.description.projects": "Список проектов",
   "cmd.description.commands": "Пользовательские команды",
+  "cmd.description.model": "Выбрать модель",
+  "cmd.description.agent": "Выбрать режим агента",
+  "cmd.description.cleanup": "Закрыть устаревшие темы",
   "cmd.description.opencode_start": "Запустить OpenCode сервер",
   "cmd.description.opencode_stop": "Остановить OpenCode сервер",
   "cmd.description.help": "Справка",
@@ -45,7 +49,7 @@ export const ru: I18nDictionary = {
   "common.unknown_error": "неизвестная ошибка",
 
   "start.welcome":
-    "👋 Добро пожаловать в OpenCode Telegram Bot!\n\nИспользуйте команды:\n/projects — выбрать проект\n/sessions — список сессий\n/new — новая сессия\n/status — статус\n/help — справка\n\nРежим, модель и вариант выбираются кнопками внизу.",
+    "👋 Добро пожаловать в OpenCode Telegram Group Topics Bot!\n\nИспользуйте команды:\n/projects — выбрать проект\n/sessions — список сессий\n/new — новая сессия\n/status — статус\n/help — справка\n\nРежим, модель и вариант выбираются кнопками внизу.",
   "help.keyboard_hint":
     "💡 Режим, модель, вариант и действия с контекстом доступны через нижние кнопки клавиатуры.",
   "help.text":
@@ -58,13 +62,16 @@ export const ru: I18nDictionary = {
     "🔴 Не удалось создать сессию. Попробуйте команду /new или проверьте статус сервера /status.",
   "bot.session_created": "✅ Сессия создана: {title}",
   "bot.session_busy":
-    "⏳ Агент уже выполняет задачу. Дождитесь завершения или используйте /stop, чтобы прервать текущий запуск.",
+    "⏳ Предыдущий запрос все еще выполняется, поэтому новый не был запущен.\n\nПочему так: в одной сессии OpenCode обрабатывает только один активный запуск одновременно.\nЧто делать: дождитесь ответа, либо используйте /abort, если процесс завис, и отправьте сообщение снова.",
   "bot.session_reset_project_mismatch":
     "⚠️ Активная сессия не соответствует выбранному проекту, поэтому была сброшена. Используйте /sessions для выбора или /new для создания новой сессии.",
-  "bot.prompt_send_error": "Не удалось отправить запрос в OpenCode.",
+  "bot.prompt_send_error":
+    "⚠️ Не удалось передать это сообщение в OpenCode.\n\nВозможная причина: временный сбой соединения между ботом и сервером OpenCode.\nЧто делать: отправьте сообщение еще раз. Если ошибка повторяется, выполните /status и проверьте доступность OpenCode.",
+  "bot.prompt_send_error_session_not_found":
+    "⚠️ Не удалось передать сообщение, потому что активная сессия больше недоступна.\n\nПочему так: сессия могла быть сброшена, переключена или удалена.\nЧто делать: выберите сессию через /sessions или создайте новую через /new, затем отправьте сообщение снова.",
   "bot.session_error": "🔴 OpenCode вернул ошибку: {message}",
   "bot.session_retry":
-    "🔁 {message}\n\nПровайдер возвращает одну и ту же ошибку при повторных запросах. Используйте /stop для остановки.",
+    "🔁 {message}\n\nПровайдер возвращает одну и ту же ошибку при повторных запросах. Используйте /abort для остановки.",
   "bot.unknown_command": "⚠️ Неизвестная команда: {command}. Используйте /help для списка команд.",
   "bot.photo_downloading": "⏳ Скачиваю фото...",
   "bot.photo_too_large": "⚠️ Фото слишком большое (макс. {maxSizeMb}МБ)",
@@ -112,6 +119,11 @@ export const ru: I18nDictionary = {
   "projects.selected":
     "✅ Проект выбран: {project}\n\n📋 Сессия сброшена. Используйте /sessions или /new для работы с этим проектом.",
   "projects.select_error": "🔴 Ошибка при выборе проекта.",
+  "projects.locked.topic_scope":
+    "⚠️ Этот топик привязан к собственному контексту проекта/сессии. Переключайте проекты только из General до создания топиков.",
+  "projects.locked.group_project":
+    "⚠️ Эта группа уже настроена для проекта: {project}. Создайте новую группу, если хотите работать с другим репозиторием.",
+  "projects.locked.callback": "Смена проекта для этой группы заблокирована.",
 
   "sessions.project_not_selected":
     "🏗 Проект не выбран.\n\nСначала выберите проект командой /projects.",
@@ -126,6 +138,13 @@ export const ru: I18nDictionary = {
     "Не удалось загрузить эту страницу. Пожалуйста, попробуйте снова.",
   "sessions.button.prev_page": "⬅️ Назад",
   "sessions.button.next_page": "Вперёд ➡️",
+  "sessions.topic_locked":
+    "⚠️ Эта тема привязана к текущей сессии. Используйте /new в General, чтобы создать новую тему.",
+  "sessions.general_overview": "Обзор сессий по темам:",
+  "sessions.general_item": "• {topic} (тред #{thread}) - {status}",
+  "sessions.general_empty": "Тем сессий пока нет. Используйте /new для создания.",
+  "sessions.bound_topic_link": "🔗 Топик для этой сессии: {url}",
+  "sessions.created_topic_link": "✅ Топик для этой сессии создан: {url}",
   "sessions.loading_context": "⏳ Загружаю контекст и последние сообщения...",
   "sessions.selected": "✅ Сессия выбрана: {title}",
   "sessions.select_error": "🔴 Ошибка при выборе сессии.",
@@ -136,14 +155,32 @@ export const ru: I18nDictionary = {
 
   "new.project_not_selected": "🏗 Проект не выбран.\n\nСначала выберите проект командой /projects.",
   "new.created": "✅ Создана новая сессия: {title}",
+  "new.topic_only_in_general":
+    "⚠️ Запустите /new в теме General, чтобы создать отдельную тему сессии.",
+  "new.requires_forum_general":
+    "⚠️ /new требует тему General в супергруппе с включёнными форумами.",
+  "new.topic_created": "✅ Тема сессии готова: {title}",
+  "new.general_created": "✅ Созданы новая сессия OpenCode и тема группы.",
+  "new.topic_create_error":
+    "🔴 Не удалось создать тему сессии. Проверьте права форума и попробуйте снова.",
+  "new.topic_create_no_rights":
+    '🔴 Я не могу создавать темы форума в этой группе. Выдайте боту право "Управление темами" и повторите /new.',
+  "new.general_open_link": "🔗 Открыть тему: {url}",
   "new.create_error": "🔴 OpenCode Server недоступен или произошла ошибка при создании сессии.",
+
+  "cleanup.topic_use_general": "⚠️ Выполните /cleanup из темы General.",
+  "cleanup.requires_forum_general":
+    "⚠️ /cleanup доступен только в теме General супергруппы с включёнными форумами.",
+  "cleanup.no_topics": "✅ Нет тем сессий для очистки.",
+  "cleanup.result":
+    "🧹 Очистка завершена. Проверено: {inspected}, закрыто: {closed}, пропущено: {skipped}, ошибок: {failed}.",
 
   "stop.no_active_session":
     "🛑 Агент не был запущен\n\nСначала создайте сессию командой /new или выберите существующую через /sessions.",
   "stop.in_progress":
     "🛑 Отключил поток событий и отправляю сигнал прерывания...\n\nОжидание остановки агента.",
   "stop.warn_unconfirmed":
-    "⚠️ Поток событий остановлен, но сервер не подтвердил прерывание.\n\nПроверьте /status и повторите /stop через пару секунд.",
+    "⚠️ Поток событий остановлен, но сервер не подтвердил прерывание.\n\nПроверьте /status и повторите /abort через пару секунд.",
   "stop.warn_maybe_finished":
     "⚠️ Поток событий остановлен, но агент мог уже завершиться к моменту запроса.",
   "stop.success":
@@ -151,11 +188,11 @@ export const ru: I18nDictionary = {
   "stop.warn_still_busy":
     "⚠️ Сигнал отправлен, но агент еще busy.\n\nПоток событий уже отключен, поэтому бот не будет присылать промежуточные сообщения.",
   "stop.warn_timeout":
-    "⚠️ Таймаут запроса на прерывание.\n\nПоток событий уже отключен, повторите /stop через пару секунд.",
+    "⚠️ Таймаут запроса на прерывание.\n\nПоток событий уже отключен, повторите /abort через пару секунд.",
   "stop.warn_local_only":
     "⚠️ Поток событий остановлен локально, но при прерывании на сервере произошла ошибка.",
   "stop.error":
-    "🔴 Ошибка при прерывании действия.\n\nПоток событий остановлен, попробуйте /stop еще раз.",
+    "🔴 Ошибка при прерывании действия.\n\nПоток событий остановлен, попробуйте /abort еще раз.",
 
   "opencode_start.already_running_managed":
     "⚠️ OpenCode Server уже запущен\n\nPID: {pid}\nUptime: {seconds} секунд",
@@ -213,6 +250,9 @@ export const ru: I18nDictionary = {
   "context.no_active_session": "⚠️ Нет активной сессии. Создайте сессию командой /new",
   "context.confirm_text":
     '📊 Сжатие контекста для сессии "{title}"\n\nЭто уменьшит использование контекста, удалив старые сообщения из истории. Текущая задача не будет прервана.\n\nПродолжить?',
+  "context.general_not_available":
+    "⚠️ Сжатие контекста доступно только внутри топика сессии, а не в General.",
+  "context.general_not_available_callback": "Сначала откройте топик сессии.",
   "context.callback_session_not_found": "Сессия не найдена",
   "context.callback_compacting": "Сжатие контекста...",
   "context.progress": "⏳ Сжимаю контекст...",
@@ -267,10 +307,17 @@ export const ru: I18nDictionary = {
 
   "keyboard.agent_mode": "{emoji} {name} Mode",
   "keyboard.context": "📊 {used} / {limit} ({percent}%)",
-  "keyboard.context_empty": "📊 0",
+  "keyboard.context_empty": "📊 Управление",
+  "keyboard.general_defaults": "Параметры новой сессии:",
+  "keyboard.general_defaults_info":
+    "Эти значения будут применяться к новым сессиям, созданным в этой группе:\n• Агент\n• Модель\n• Вариант",
   "keyboard.variant": "💭 {name}",
   "keyboard.variant_default": "💡 Default",
   "keyboard.updated": "⌨️ Клавиатура обновлена",
+  "keyboard.dm.status": "/status",
+  "keyboard.dm.help": "/help",
+  "keyboard.dm.opencode_start": "/opencode_start",
+  "keyboard.dm.opencode_stop": "/opencode_stop",
 
   "pinned.default_session_title": "new session",
   "pinned.unknown": "Unknown",
@@ -300,14 +347,18 @@ export const ru: I18nDictionary = {
   "runtime.wizard.user_id_invalid": "Введите положительное целое число (> 0).\n",
   "runtime.wizard.ask_api_url":
     "Введите URL OpenCode API (опционально).\nНажмите Enter для значения по умолчанию: {defaultUrl}\n> ",
+  "runtime.wizard.ask_server_username":
+    "Введите имя пользователя сервера OpenCode (опционально).\nНажмите Enter для значения по умолчанию: {defaultUsername}\n> ",
+  "runtime.wizard.ask_server_password":
+    "Введите пароль сервера OpenCode (опционально, ввод скрыт).\nНажмите Enter, чтобы пропустить.\n> ",
   "runtime.wizard.api_url_invalid":
     "Введите корректный URL (http/https) или нажмите Enter для значения по умолчанию.\n",
-  "runtime.wizard.start": "Настройка OpenCode Telegram Bot.\n",
+  "runtime.wizard.start": "Настройка OpenCode Telegram Group Topics Bot.\n",
   "runtime.wizard.saved": "Конфигурация сохранена:\n- {envPath}\n- {settingsPath}\n",
   "runtime.wizard.not_configured_starting":
     "Приложение еще не сконфигурировано. Запускаю wizard...\n",
   "runtime.wizard.tty_required":
-    "Интерактивный wizard требует TTY-терминал. Запустите `opencode-telegram config` в интерактивной оболочке.",
+    "Интерактивный wizard требует TTY-терминал. Запустите `opencode-telegram-group-topics-bot config` в интерактивной оболочке.",
 
   "rename.no_session": "⚠️ Нет активной сессии. Сначала создайте или выберите сессию.",
   "rename.prompt": "📝 Введите новое название сессии:\n\nТекущее: {title}",
@@ -342,7 +393,7 @@ export const ru: I18nDictionary = {
   "cmd.description.rename": "Переименовать текущую сессию",
 
   "cli.usage":
-    "Использование:\n  opencode-telegram [start] [--mode sources|installed]\n  opencode-telegram status\n  opencode-telegram stop\n  opencode-telegram config\n\nЗаметки:\n  - Без команды по умолчанию используется `start`\n  - `--mode` сейчас поддерживается только для `start`",
+    "Использование:\n  opencode-telegram-group-topics-bot [start] [--mode sources|installed]\n  opencode-telegram-group-topics-bot status\n  opencode-telegram-group-topics-bot stop\n  opencode-telegram-group-topics-bot config [--mode sources|installed]\n\nЗаметки:\n  - Без команды по умолчанию используется `start`\n  - Для `config` по умолчанию используется режим `installed`, если не указан `--mode sources`",
   "cli.placeholder.status":
     "Команда `status` пока работает как заглушка. Реальная проверка статуса появится на этапе service-слоя (Этап 5).",
   "cli.placeholder.stop":
@@ -353,7 +404,7 @@ export const ru: I18nDictionary = {
   "cli.args.mode_requires_value": "Опция --mode требует значение: sources|installed",
   "cli.args.invalid_mode": "Некорректное значение --mode: {value}. Ожидается sources|installed",
   "cli.args.unknown_option": "Неизвестная опция: {value}",
-  "cli.args.mode_only_start": "Опция --mode поддерживается только для команды start",
+  "cli.args.mode_only_start": "Опция --mode поддерживается только для команд start и config",
 
   "legacy.models.fetch_error":
     "🔴 Не удалось получить список моделей. Проверьте статус сервера /status.",
@@ -369,4 +420,23 @@ export const ru: I18nDictionary = {
     "🎤 Распознавание голоса не настроено.\n\nУстановите STT_API_URL и STT_API_KEY в .env для включения.",
   "stt.error": "🔴 Не удалось распознать аудио: {error}",
   "stt.empty_result": "🎤 В аудиосообщении не обнаружена речь.",
+
+  "start.welcome_dm":
+    "👋 В режиме ЛС доступны только команды статуса/управления ботом и сервером.\n\nДля работы с проектами и сессиями используйте топик в группе.",
+  "status.global_overview": "📈 Глобальный обзор",
+  "status.global_projects": "Проекты: {count}",
+  "status.global_sessions": "Сессии: {count}",
+  "dm.restricted.command":
+    "⚠️ Команды управления сессией отключены в ЛС. Используйте топик в группе для работы с проектами/сессиями.",
+  "dm.restricted.prompt":
+    "⚠️ Промпты отключены в ЛС. Используйте топик в группе для запуска задач OpenCode.",
+  "help.dm.title": "Команды управления в ЛС",
+  "help.dm.command_start": "показать подсказки режима ЛС",
+  "help.dm.hint": "Используйте топики в группе для работы с проектами/сессиями.",
+  "status.dm.title": "Обзор статуса в ЛС",
+  "status.dm.hint": "Используйте топики в группе для запуска сессий OpenCode.",
+  "group.general.prompts_disabled":
+    "⚠️ Промпты отключены в теме General. Используйте /new, чтобы создать отдельную тему сессии.",
+  "topic.unbound":
+    "⚠️ Эта тема не связана ни с одной сессией. Перейдите в тему General и выполните /new.",
 };

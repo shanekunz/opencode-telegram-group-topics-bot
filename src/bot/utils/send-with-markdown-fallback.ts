@@ -65,10 +65,11 @@ export async function sendMessageWithMarkdownFallback({
   text,
   options,
   parseMode,
-}: SendMessageWithMarkdownFallbackParams): Promise<void> {
+}: SendMessageWithMarkdownFallbackParams): Promise<
+  Awaited<ReturnType<SendMessageApi["sendMessage"]>>
+> {
   if (!parseMode) {
-    await api.sendMessage(chatId, text, options);
-    return;
+    return await api.sendMessage(chatId, text, options);
   }
 
   const markdownOptions: TelegramSendMessageOptions = {
@@ -77,13 +78,13 @@ export async function sendMessageWithMarkdownFallback({
   };
 
   try {
-    await api.sendMessage(chatId, text, markdownOptions);
+    return await api.sendMessage(chatId, text, markdownOptions);
   } catch (error) {
     if (!isTelegramMarkdownParseError(error)) {
       throw error;
     }
 
     logger.warn("[Bot] Markdown parse failed, retrying assistant message in raw mode", error);
-    await api.sendMessage(chatId, text, options);
+    return await api.sendMessage(chatId, text, options);
   }
 }

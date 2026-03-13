@@ -1,12 +1,11 @@
 import { Event, ToolState } from "@opencode-ai/sdk/v2";
-import type { Bot } from "grammy";
 import type { CodeFileData } from "./formatter.js";
 import { normalizePathForDisplay, prepareCodeFile } from "./formatter.js";
 import type { Question } from "../question/types.js";
 import type { PermissionRequest } from "../permission/types.js";
 import type { FileChange } from "../pinned/types.js";
 import { logger } from "../utils/logger.js";
-import { getCurrentProject } from "../settings/manager.js";
+import { getSessionById } from "../session/manager.js";
 
 export interface SummaryInfo {
   sessionId: string;
@@ -38,11 +37,13 @@ type ToolCallback = (toolInfo: ToolInfo) => void;
 
 type ToolFileCallback = (fileInfo: ToolFileInfo) => void;
 
-type QuestionCallback = (questions: Question[], requestID: string) => void;
+type QuestionCallback = (sessionId: string, questions: Question[], requestID: string) => void;
 
 type QuestionErrorCallback = () => void;
 
 type ThinkingCallback = (sessionId: string) => void;
+
+type TypingIndicatorCallback = (sessionId: string) => void;
 
 export interface TokensInfo {
   input: number;
@@ -52,7 +53,7 @@ export interface TokensInfo {
   cacheWrite: number;
 }
 
-type TokensCallback = (tokens: TokensInfo) => void;
+type TokensCallback = (sessionId: string, tokens: TokensInfo) => void;
 
 type SessionCompactedCallback = (sessionId: string, directory: string) => void;
 
@@ -71,7 +72,7 @@ type PermissionCallback = (request: PermissionRequest) => void;
 
 type SessionDiffCallback = (sessionId: string, diffs: FileChange[]) => void;
 
-type FileChangeCallback = (change: FileChange) => void;
+type FileChangeCallback = (change: FileChange, sessionId: string) => void;
 
 type ClearedCallback = () => void;
 
@@ -108,11 +109,40 @@ function countDiffChangesFromText(text: string): { additions: number; deletions:
   return { additions, deletions };
 }
 
+function extractEventSessionId(event: Event): string | null {
+  const eventWithProperties = event as Event & {
+    properties?: {
+      info?: { sessionID?: unknown };
+      part?: { sessionID?: unknown };
+      request?: { sessionID?: unknown };
+      session?: { id?: unknown };
+    };
+  };
+
+  if (typeof eventWithProperties.properties?.info?.sessionID === "string") {
+    return eventWithProperties.properties.info.sessionID;
+  }
+
+  if (typeof eventWithProperties.properties?.part?.sessionID === "string") {
+    return eventWithProperties.properties.part.sessionID;
+  }
+
+  if (typeof eventWithProperties.properties?.request?.sessionID === "string") {
+    return eventWithProperties.properties.request.sessionID;
+  }
+
+  if (typeof eventWithProperties.properties?.session?.id === "string") {
+    return eventWithProperties.properties.session.id;
+  }
+
+  return null;
+}
+
 class SummaryAggregator {
-  private currentSessionId: string | null = null;
+  private trackedSessionIds: Set<string> = new Set();
   private currentMessageParts: Map<string, string[]> = new Map();
   private pendingParts: Map<string, string[]> = new Map();
-  private messages: Map<string, { role: string }> = new Map();
+  private messages: Map<string, { role: string; sessionId: string }> = new Map();
   private messageCount = 0;
   private lastUpdated = 0;
   private onCompleteCallback: MessageCompleteCallback | null = null;
@@ -121,6 +151,7 @@ class SummaryAggregator {
   private onQuestionCallback: QuestionCallback | null = null;
   private onQuestionErrorCallback: QuestionErrorCallback | null = null;
   private onThinkingCallback: ThinkingCallback | null = null;
+  private onTypingIndicatorCallback: TypingIndicatorCallback | null = null;
   private onTokensCallback: TokensCallback | null = null;
   private onSessionCompactedCallback: SessionCompactedCallback | null = null;
   private onSessionErrorCallback: SessionErrorCallback | null = null;
@@ -131,14 +162,16 @@ class SummaryAggregator {
   private onClearedCallback: ClearedCallback | null = null;
   private processedToolStates: Set<string> = new Set();
   private thinkingFiredForMessages: Set<string> = new Set();
-  private bot: Bot | null = null;
-  private chatId: number | null = null;
   private typingTimer: ReturnType<typeof setInterval> | null = null;
+  private activeTypingSessions: Set<string> = new Set();
   private partHashes: Map<string, Set<string>> = new Map();
 
-  setBotAndChatId(bot: Bot, chatId: number): void {
-    this.bot = bot;
-    this.chatId = chatId;
+  private getMessageKey(sessionId: string, messageId: string): string {
+    return `${sessionId}:${messageId}`;
+  }
+
+  private isTrackedSession(sessionId: string): boolean {
+    return this.trackedSessionIds.has(sessionId);
   }
 
   setOnComplete(callback: MessageCompleteCallback): void {
@@ -163,6 +196,10 @@ class SummaryAggregator {
 
   setOnThinking(callback: ThinkingCallback): void {
     this.onThinkingCallback = callback;
+  }
+
+  setOnTypingIndicator(callback: TypingIndicatorCallback): void {
+    this.onTypingIndicatorCallback = callback;
   }
 
   setOnTokens(callback: TokensCallback): void {
@@ -197,100 +234,154 @@ class SummaryAggregator {
     this.onClearedCallback = callback;
   }
 
-  private startTypingIndicator(): void {
+  private hasActiveMessageForSession(sessionId: string): boolean {
+    for (const value of this.messages.values()) {
+      if (value.sessionId === sessionId && value.role === "assistant") {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private emitTypingIndicators(): void {
+    const callback = this.onTypingIndicatorCallback;
+    if (!callback) {
+      return;
+    }
+
+    for (const sessionId of this.activeTypingSessions) {
+      try {
+        callback(sessionId);
+      } catch (error) {
+        logger.error("[Aggregator] Typing callback failed", { sessionId }, error);
+      }
+    }
+  }
+
+  private startTypingIndicator(sessionId: string): void {
+    this.activeTypingSessions.add(sessionId);
+
     if (this.typingTimer) {
       return;
     }
 
-    const sendTyping = () => {
-      if (this.bot && this.chatId) {
-        this.bot.api.sendChatAction(this.chatId, "typing").catch((err) => {
-          logger.error("Failed to send typing action:", err);
-        });
-      }
-    };
-
-    sendTyping();
-    this.typingTimer = setInterval(sendTyping, 4000);
+    this.emitTypingIndicators();
+    this.typingTimer = setInterval(() => {
+      this.emitTypingIndicators();
+    }, 4000);
   }
 
-  stopTypingIndicator(): void {
-    if (this.typingTimer) {
-      clearInterval(this.typingTimer);
-      this.typingTimer = null;
+  stopTypingIndicator(sessionId?: string): void {
+    if (sessionId) {
+      this.activeTypingSessions.delete(sessionId);
+    } else {
+      this.activeTypingSessions.clear();
     }
+
+    if (!this.typingTimer || this.activeTypingSessions.size > 0) {
+      return;
+    }
+
+    clearInterval(this.typingTimer);
+    this.typingTimer = null;
   }
 
   processEvent(event: Event): void {
-    // Log all question-related events for debugging
-    if (event.type.startsWith("question.")) {
-      logger.info(
-        `[Aggregator] Question event: ${event.type}`,
-        JSON.stringify(event.properties, null, 2),
-      );
-    }
+    try {
+      // Log all question-related events for debugging
+      if (event.type.startsWith("question.")) {
+        logger.info(
+          `[Aggregator] Question event: ${event.type}`,
+          JSON.stringify(event.properties, null, 2),
+        );
+      }
 
-    // Log all session-related events for debugging
-    if (event.type.startsWith("session.")) {
-      logger.debug(
-        `[Aggregator] Session event: ${event.type}`,
-        JSON.stringify(event.properties, null, 2),
-      );
-    }
+      // Log all session-related events for debugging
+      if (event.type.startsWith("session.")) {
+        logger.debug(
+          `[Aggregator] Session event: ${event.type}`,
+          JSON.stringify(event.properties, null, 2),
+        );
+      }
 
-    switch (event.type) {
-      case "message.updated":
-        this.handleMessageUpdated(event);
-        break;
-      case "message.part.updated":
-        this.handleMessagePartUpdated(event);
-        break;
-      case "session.status":
-        this.handleSessionStatus(event);
-        break;
-      case "session.idle":
-        this.handleSessionIdle(event);
-        break;
-      case "session.compacted":
-        this.handleSessionCompacted(event);
-        break;
-      case "session.error":
-        this.handleSessionError(event);
-        break;
-      case "question.asked":
-        this.handleQuestionAsked(event);
-        break;
-      case "question.replied":
-        logger.info(`[Aggregator] Question replied: requestID=${event.properties.requestID}`);
-        break;
-      case "question.rejected":
-        logger.info(`[Aggregator] Question rejected: requestID=${event.properties.requestID}`);
-        break;
-      case "session.diff":
-        this.handleSessionDiff(event);
-        break;
-      case "permission.asked":
-        this.handlePermissionAsked(event);
-        break;
-      case "permission.replied":
-        logger.info(`[Aggregator] Permission replied: requestID=${event.properties.requestID}`);
-        break;
-      default:
-        logger.debug(`[Aggregator] Unhandled event type: ${event.type}`);
-        break;
+      switch (event.type) {
+        case "message.updated":
+          this.handleMessageUpdated(event);
+          break;
+        case "message.part.updated":
+          this.handleMessagePartUpdated(event);
+          break;
+        case "session.status":
+          this.handleSessionStatus(event);
+          break;
+        case "session.idle":
+          this.handleSessionIdle(event);
+          break;
+        case "session.compacted":
+          this.handleSessionCompacted(event);
+          break;
+        case "session.error":
+          this.handleSessionError(event);
+          break;
+        case "question.asked":
+          this.handleQuestionAsked(event);
+          break;
+        case "question.replied":
+          logger.info(`[Aggregator] Question replied: requestID=${event.properties.requestID}`);
+          break;
+        case "question.rejected":
+          logger.info(`[Aggregator] Question rejected: requestID=${event.properties.requestID}`);
+          break;
+        case "session.diff":
+          this.handleSessionDiff(event);
+          break;
+        case "permission.asked":
+          this.handlePermissionAsked(event);
+          break;
+        case "permission.replied":
+          logger.info(`[Aggregator] Permission replied: requestID=${event.properties.requestID}`);
+          break;
+        default:
+          logger.debug(`[Aggregator] Unhandled event type: ${event.type}`);
+          break;
+      }
+    } catch (error) {
+      logger.error(
+        "[Aggregator] Failed to process event",
+        {
+          eventType: event.type,
+          sessionId: extractEventSessionId(event),
+        },
+        error,
+      );
     }
   }
 
   setSession(sessionId: string): void {
-    if (this.currentSessionId !== sessionId) {
-      this.clear();
-      this.currentSessionId = sessionId;
+    this.trackedSessionIds.add(sessionId);
+  }
+
+  clearSession(sessionId: string): void {
+    this.trackedSessionIds.delete(sessionId);
+    this.stopTypingIndicator(sessionId);
+
+    for (const [messageKey, message] of this.messages.entries()) {
+      if (message.sessionId !== sessionId) {
+        continue;
+      }
+
+      this.messages.delete(messageKey);
+      this.currentMessageParts.delete(messageKey);
+      this.pendingParts.delete(messageKey);
+      this.partHashes.delete(messageKey);
+      this.thinkingFiredForMessages.delete(messageKey);
     }
   }
 
   clear(): void {
     this.stopTypingIndicator();
-    this.currentSessionId = null;
+    this.trackedSessionIds.clear();
     this.currentMessageParts.clear();
     this.pendingParts.clear();
     this.messages.clear();
@@ -316,35 +407,36 @@ class SummaryAggregator {
   ): void {
     const { info } = event.properties;
 
-    if (info.sessionID !== this.currentSessionId) {
+    if (!this.isTrackedSession(info.sessionID)) {
       return;
     }
 
     const messageID = info.id;
+    const messageKey = this.getMessageKey(info.sessionID, messageID);
 
-    this.messages.set(messageID, { role: info.role });
+    this.messages.set(messageKey, { role: info.role, sessionId: info.sessionID });
 
     if (info.role === "assistant") {
-      if (!this.currentMessageParts.has(messageID)) {
-        this.currentMessageParts.set(messageID, []);
+      if (!this.currentMessageParts.has(messageKey)) {
+        this.currentMessageParts.set(messageKey, []);
         this.messageCount++;
-        this.startTypingIndicator();
+        this.startTypingIndicator(info.sessionID);
       }
 
-      const pending = this.pendingParts.get(messageID) || [];
-      const current = this.currentMessageParts.get(messageID) || [];
-      this.currentMessageParts.set(messageID, [...current, ...pending]);
-      this.pendingParts.delete(messageID);
+      const pending = this.pendingParts.get(messageKey) || [];
+      const current = this.currentMessageParts.get(messageKey) || [];
+      this.currentMessageParts.set(messageKey, [...current, ...pending]);
+      this.pendingParts.delete(messageKey);
 
       const assistantMessage = info as { time?: { created: number; completed?: number } };
       const time = assistantMessage.time;
 
       if (time?.completed) {
-        const parts = this.currentMessageParts.get(messageID) || [];
+        const parts = this.currentMessageParts.get(messageKey) || [];
         const lastPart = parts[parts.length - 1] || "";
 
         logger.debug(
-          `[Aggregator] Message part completed: messageId=${messageID}, textLength=${lastPart.length}, totalParts=${parts.length}, session=${this.currentSessionId}`,
+          `[Aggregator] Message part completed: messageId=${messageID}, textLength=${lastPart.length}, totalParts=${parts.length}, session=${info.sessionID}`,
         );
 
         // Extract and report tokens BEFORE onComplete so keyboard context is updated
@@ -369,24 +461,26 @@ class SummaryAggregator {
             `[Aggregator] Tokens: input=${tokens.input}, output=${tokens.output}, reasoning=${tokens.reasoning}`,
           );
           // Call synchronously so keyboardManager is updated before onComplete sends the reply
-          this.onTokensCallback(tokens);
+          this.onTokensCallback(info.sessionID, tokens);
         }
 
         if (this.onCompleteCallback && lastPart.length > 0) {
-          this.onCompleteCallback(this.currentSessionId!, lastPart);
+          this.onCompleteCallback(info.sessionID, lastPart);
         }
 
-        this.currentMessageParts.delete(messageID);
-        this.messages.delete(messageID);
-        this.partHashes.delete(messageID);
+        this.currentMessageParts.delete(messageKey);
+        this.messages.delete(messageKey);
+        this.partHashes.delete(messageKey);
 
         logger.debug(
           `[Aggregator] Message completed cleanup: remaining messages=${this.currentMessageParts.size}`,
         );
 
-        if (this.currentMessageParts.size === 0) {
-          logger.debug("[Aggregator] No more active messages, stopping typing indicator");
-          this.stopTypingIndicator();
+        if (!this.hasActiveMessageForSession(info.sessionID)) {
+          logger.debug(
+            `[Aggregator] No more active messages for session ${info.sessionID}, stopping typing indicator`,
+          );
+          this.stopTypingIndicator(info.sessionID);
         }
       }
 
@@ -401,18 +495,19 @@ class SummaryAggregator {
   ): void {
     const { part } = event.properties;
 
-    if (part.sessionID !== this.currentSessionId) {
+    if (!this.isTrackedSession(part.sessionID)) {
       return;
     }
 
     const messageID = part.messageID;
-    const messageInfo = this.messages.get(messageID);
+    const messageKey = this.getMessageKey(part.sessionID, messageID);
+    const messageInfo = this.messages.get(messageKey);
 
     if (part.type === "reasoning") {
       // Fire the thinking callback once per message on the first reasoning part.
       // This is the signal that the model is actually doing extended thinking.
-      if (!this.thinkingFiredForMessages.has(messageID) && this.onThinkingCallback) {
-        this.thinkingFiredForMessages.add(messageID);
+      if (!this.thinkingFiredForMessages.has(messageKey) && this.onThinkingCallback) {
+        this.thinkingFiredForMessages.add(messageKey);
         const callback = this.onThinkingCallback;
         const sessionID = part.sessionID;
         setImmediate(() => {
@@ -424,11 +519,11 @@ class SummaryAggregator {
     } else if (part.type === "text" && "text" in part && part.text) {
       const partHash = this.hashString(part.text);
 
-      if (!this.partHashes.has(messageID)) {
-        this.partHashes.set(messageID, new Set());
+      if (!this.partHashes.has(messageKey)) {
+        this.partHashes.set(messageKey, new Set());
       }
 
-      const hashes = this.partHashes.get(messageID)!;
+      const hashes = this.partHashes.get(messageKey)!;
 
       if (hashes.has(partHash)) {
         return;
@@ -437,19 +532,19 @@ class SummaryAggregator {
       hashes.add(partHash);
 
       if (messageInfo && messageInfo.role === "assistant") {
-        if (!this.currentMessageParts.has(messageID)) {
-          this.currentMessageParts.set(messageID, []);
-          this.startTypingIndicator();
+        if (!this.currentMessageParts.has(messageKey)) {
+          this.currentMessageParts.set(messageKey, []);
+          this.startTypingIndicator(part.sessionID);
         }
 
-        const parts = this.currentMessageParts.get(messageID)!;
+        const parts = this.currentMessageParts.get(messageKey)!;
         parts.push(part.text);
       } else {
-        if (!this.pendingParts.has(messageID)) {
-          this.pendingParts.set(messageID, []);
+        if (!this.pendingParts.has(messageKey)) {
+          this.pendingParts.set(messageKey, []);
         }
 
-        const pending = this.pendingParts.get(messageID)!;
+        const pending = this.pendingParts.get(messageKey)!;
         pending.push(part.text);
       }
     } else if (part.type === "tool") {
@@ -532,7 +627,7 @@ class SummaryAggregator {
           }
 
           if (preparedFileContext.fileChange && this.onFileChangeCallback) {
-            this.onFileChangeCallback(preparedFileContext.fileChange);
+            this.onFileChangeCallback(preparedFileContext.fileChange, toolData.sessionId);
           }
         }
       }
@@ -673,7 +768,7 @@ class SummaryAggregator {
       };
     };
 
-    if (sessionID !== this.currentSessionId) {
+    if (!this.isTrackedSession(sessionID)) {
       return;
     }
 
@@ -705,7 +800,7 @@ class SummaryAggregator {
   ): void {
     const { sessionID } = event.properties;
 
-    if (sessionID !== this.currentSessionId) {
+    if (!this.isTrackedSession(sessionID)) {
       return;
     }
 
@@ -723,7 +818,7 @@ class SummaryAggregator {
     const properties = event.properties as { sessionID: string };
     const { sessionID } = properties;
 
-    if (sessionID !== this.currentSessionId) {
+    if (!this.isTrackedSession(sessionID)) {
       return;
     }
 
@@ -732,9 +827,9 @@ class SummaryAggregator {
     // Reload context from history after compaction
     if (this.onSessionCompactedCallback) {
       setImmediate(() => {
-        const project = getCurrentProject();
-        if (project) {
-          this.onSessionCompactedCallback!(sessionID, project.worktree);
+        const session = getSessionById(sessionID);
+        if (session?.directory) {
+          this.onSessionCompactedCallback!(sessionID, session.directory);
         }
       });
     }
@@ -754,7 +849,7 @@ class SummaryAggregator {
       };
     };
 
-    if (sessionID !== this.currentSessionId) {
+    if (!this.isTrackedSession(sessionID)) {
       return;
     }
 
@@ -779,10 +874,8 @@ class SummaryAggregator {
   ): void {
     const { id, sessionID, questions } = event.properties;
 
-    if (sessionID !== this.currentSessionId) {
-      logger.debug(
-        `[Aggregator] Ignoring question.asked for different session: ${sessionID} (current: ${this.currentSessionId})`,
-      );
+    if (!this.isTrackedSession(sessionID)) {
+      logger.debug(`[Aggregator] Ignoring question.asked for untracked session: ${sessionID}`);
       return;
     }
 
@@ -792,7 +885,7 @@ class SummaryAggregator {
       const callback = this.onQuestionCallback;
       setImmediate(async () => {
         try {
-          await callback(questions as Question[], id);
+          await callback(sessionID, questions as Question[], id);
         } catch (err) {
           logger.error("[Aggregator] Error in question callback:", err);
         }
@@ -806,7 +899,7 @@ class SummaryAggregator {
       diff: Array<{ file: string; additions: number; deletions: number }>;
     };
 
-    if (properties.sessionID !== this.currentSessionId) {
+    if (!this.isTrackedSession(properties.sessionID)) {
       return;
     }
 
@@ -833,9 +926,9 @@ class SummaryAggregator {
   ): void {
     const request = event.properties;
 
-    if (request.sessionID !== this.currentSessionId) {
+    if (!this.isTrackedSession(request.sessionID)) {
       logger.debug(
-        `[Aggregator] Ignoring permission.asked for different session: ${request.sessionID} (current: ${this.currentSessionId})`,
+        `[Aggregator] Ignoring permission.asked for untracked session: ${request.sessionID}`,
       );
       return;
     }

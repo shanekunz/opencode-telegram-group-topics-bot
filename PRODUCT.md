@@ -2,6 +2,10 @@
 
 Telegram bot client for OpenCode that lets you run and monitor coding tasks on your local machine from Telegram.
 
+This fork extends the original single-chat bot with thread-scoped group workflows: the General topic acts as the control lane, and each created topic can host its own OpenCode session.
+
+Fork maintenance notes live in [`FORK_SYNC.md`](./FORK_SYNC.md).
+
 ## Concept
 
 The app works as a bridge between Telegram and a locally running OpenCode server:
@@ -18,9 +22,10 @@ No public inbound ports are required for normal usage.
 1. The user works on a project locally with OpenCode (Desktop/TUI).
 2. They finish the local session and leave the computer.
 3. Later, while away, they run this bridge service and connect via Telegram.
-4. They choose an existing session or create a new one.
-5. They send coding tasks and receive periodic progress updates.
-6. They receive completed assistant responses in chat and continue the workflow asynchronously.
+4. In a forum-enabled supergroup, they use the General topic to manage projects and create new session topics.
+5. Each session topic becomes an independent coding lane with its own session, status, and pinned updates.
+6. They send coding tasks and receive periodic progress updates.
+7. They receive completed assistant responses in chat and continue the workflow asynchronously.
 
 ## Functional Requirements
 
@@ -91,7 +96,7 @@ Current command set:
 
 - [x] `/status` - server, project, and session status
 - [x] `/new` - create a new session
-- [x] `/stop` - stop the current task
+- [x] `/abort` - stop the current task
 - [x] `/sessions` - show and switch recent sessions
 - [x] `/projects` - show and switch projects
 - [x] `/rename` - rename current session
@@ -108,9 +113,9 @@ Interaction routing rules:
 
 - Only one interactive flow can be active at a time (inline menu, permission, question, rename, commands)
 - While an interaction is active, unrelated input is blocked with a contextual hint
-- Allowed utility commands during active interactions: `/help`, `/status`, `/stop`
+- Allowed utility commands during active interactions: `/help`, `/status`, `/abort`
 - Unknown slash commands return an explicit fallback message
-- Interaction flows do not expire automatically and wait for explicit completion (`answer`, `cancel`, `/stop`, reset/cleanup)
+- Interaction flows do not expire automatically and wait for explicit completion (`answer`, `cancel`, `/abort`, reset/cleanup)
 
 Model picker behavior:
 
@@ -124,6 +129,7 @@ Model picker behavior:
 - [x] OpenCode server control and health checks via bot commands
 - [x] Project management (list/switch) with inline menus
 - [x] Session management (list/switch/create) with inline menus
+- [x] Group-threaded workflow with General control topic plus per-session forum topics
 - [x] Prompt execution through OpenCode with SSE-based event handling
 - [x] Interactive question and permission flows (buttons + custom text answers)
 - [x] Single-active interaction routing with contextual blocking and cleanup recovery

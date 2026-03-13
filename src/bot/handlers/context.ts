@@ -9,6 +9,29 @@ import {
 } from "./inline-menu.js";
 import { logger } from "../../utils/logger.js";
 import { t } from "../../i18n/index.js";
+import {
+  GENERAL_TOPIC_THREAD_ID,
+  SCOPE_CONTEXT,
+  getChatActionThreadOptions,
+  getScopeFromContext,
+  getScopeKeyFromContext,
+  getThreadSendOptions,
+} from "../scope.js";
+import { TELEGRAM_CHAT_ACTION } from "../telegram-constants.js";
+import { CHAT_TYPE, TELEGRAM_CHAT_FIELD } from "../constants.js";
+
+function isGeneralForumScope(ctx: Context): boolean {
+  const scope = getScopeFromContext(ctx);
+  const isForumEnabled =
+    ctx.chat?.type === CHAT_TYPE.SUPERGROUP &&
+    Reflect.get(ctx.chat, TELEGRAM_CHAT_FIELD.IS_FORUM) === true;
+
+  return Boolean(
+    isForumEnabled &&
+    scope?.context === SCOPE_CONTEXT.GROUP_GENERAL &&
+    (scope.threadId === null || scope.threadId === GENERAL_TOPIC_THREAD_ID),
+  );
+}
 
 /**
  * Build inline keyboard with compact confirmation menu
@@ -29,11 +52,21 @@ export function buildCompactConfirmationMenu(): InlineKeyboard {
  */
 export async function handleContextButtonPress(ctx: Context): Promise<void> {
   logger.debug("[ContextHandler] Context button pressed");
+  const scope = getScopeFromContext(ctx);
+  const scopeKey = getScopeKeyFromContext(ctx);
 
-  const session = getCurrentSession();
+  if (isGeneralForumScope(ctx)) {
+    await ctx.reply(
+      t("context.general_not_available"),
+      getThreadSendOptions(scope?.threadId ?? null),
+    );
+    return;
+  }
+
+  const session = getCurrentSession(scopeKey);
 
   if (!session) {
-    await ctx.reply(t("context.no_active_session"));
+    await ctx.reply(t("context.no_active_session"), getThreadSendOptions(scope?.threadId ?? null));
     return;
   }
 
@@ -66,28 +99,48 @@ export async function handleCompactConfirm(ctx: Context): Promise<boolean> {
   logger.debug("[ContextHandler] Compact confirmed");
 
   try {
-    const session = getCurrentSession();
+    const scope = getScopeFromContext(ctx);
+    const scopeKey = getScopeKeyFromContext(ctx);
+
+    if (isGeneralForumScope(ctx)) {
+      clearActiveInlineMenu("context_general_scope", scopeKey);
+      await ctx.answerCallbackQuery({ text: t("context.general_not_available_callback") });
+      await ctx.deleteMessage().catch(() => {});
+      return true;
+    }
+
+    const session = getCurrentSession(scopeKey);
 
     if (!session) {
-      clearActiveInlineMenu("context_session_missing");
+      clearActiveInlineMenu("context_session_missing", scopeKey);
       await ctx.answerCallbackQuery({ text: t("context.callback_session_not_found") });
-      await ctx.reply(t("context.no_active_session"));
+      await ctx.reply(
+        t("context.no_active_session"),
+        getThreadSendOptions(scope?.threadId ?? null),
+      );
       await ctx.deleteMessage().catch(() => {});
       return true;
     }
 
     // Answer callback query and delete menu immediately
     await ctx.answerCallbackQuery({ text: t("context.callback_compacting") });
-    clearActiveInlineMenu("context_compact_confirmed");
+    clearActiveInlineMenu("context_compact_confirmed", scopeKey);
     await ctx.deleteMessage().catch(() => {});
 
     // Send progress message
-    const progressMessage = await ctx.reply(t("context.progress"));
+    const progressMessage = await ctx.reply(
+      t("context.progress"),
+      getThreadSendOptions(scope?.threadId ?? null),
+    );
 
     // Show typing indicator
-    await ctx.api.sendChatAction(ctx.chat!.id, "typing");
+    await ctx.api.sendChatAction(
+      ctx.chat!.id,
+      TELEGRAM_CHAT_ACTION.TYPING,
+      getChatActionThreadOptions(scope?.threadId ?? null),
+    );
 
-    const storedModel = getStoredModel();
+    const storedModel = getStoredModel(scopeKey);
 
     logger.debug(
       `[ContextHandler] Calling summarize with sessionID=${session.id}, directory=${session.directory}, model=${storedModel.providerID}/${storedModel.modelID}`,
@@ -118,10 +171,13 @@ export async function handleCompactConfirm(ctx: Context): Promise<boolean> {
 
     return true;
   } catch (err) {
-    clearActiveInlineMenu("context_compact_error");
+    clearActiveInlineMenu("context_compact_error", getScopeKeyFromContext(ctx));
     logger.error("[ContextHandler] Compact exception:", err);
     await ctx.answerCallbackQuery({ text: t("callback.processing_error") }).catch(() => {});
-    await ctx.reply(t("context.error"));
+    await ctx.reply(
+      t("context.error"),
+      getThreadSendOptions(getScopeFromContext(ctx)?.threadId ?? null),
+    );
     await ctx.deleteMessage().catch(() => {});
     return false;
   }

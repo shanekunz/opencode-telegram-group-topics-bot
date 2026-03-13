@@ -109,7 +109,7 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
     };
   }
 
-  if (command !== "start" && mode) {
+  if (command !== "start" && command !== "config" && mode) {
     return {
       command,
       mode,

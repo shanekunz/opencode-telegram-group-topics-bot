@@ -1,17 +1,14 @@
 import { opencodeClient } from "../opencode/client.js";
-import { getCurrentProject } from "../settings/manager.js";
+import { getCurrentProject, getCurrentAgent, setCurrentAgent } from "../settings/manager.js";
 import { getCurrentSession } from "../session/manager.js";
-import { getCurrentAgent, setCurrentAgent } from "../settings/manager.js";
 import { logger } from "../utils/logger.js";
 import type { AgentInfo } from "./types.js";
 
-/**
- * Get list of available agents from OpenCode API
- * @returns Array of available agents (filtered by mode and hidden flag)
- */
-export async function getAvailableAgents(): Promise<AgentInfo[]> {
+const DEFAULT_AGENT = "build";
+
+export async function getAvailableAgents(scopeKey: string = "global"): Promise<AgentInfo[]> {
   try {
-    const project = getCurrentProject();
+    const project = getCurrentProject(scopeKey);
     const { data: agents, error } = await opencodeClient.app.agents(
       project ? { directory: project.worktree } : undefined,
     );
@@ -25,33 +22,21 @@ export async function getAvailableAgents(): Promise<AgentInfo[]> {
       return [];
     }
 
-    // Filter out hidden agents and subagents (only show primary and all)
-    const filtered = agents.filter(
+    return agents.filter(
       (agent) => !agent.hidden && (agent.mode === "primary" || agent.mode === "all"),
     );
-
-    logger.debug(`[AgentManager] Fetched ${filtered.length} available agents`);
-    return filtered;
   } catch (err) {
     logger.error("[AgentManager] Error fetching agents:", err);
     return [];
   }
 }
 
-const DEFAULT_AGENT = "build";
-
-/**
- * Get current agent from last session message or settings.
- * Falls back to "build" if nothing is stored.
- * @returns Current agent name
- */
-export async function fetchCurrentAgent(): Promise<string> {
-  const storedAgent = getCurrentAgent();
-  const session = getCurrentSession();
-  const project = getCurrentProject();
+export async function fetchCurrentAgent(scopeKey: string = "global"): Promise<string> {
+  const storedAgent = getCurrentAgent(scopeKey);
+  const session = getCurrentSession(scopeKey);
+  const project = getCurrentProject(scopeKey);
 
   if (!session || !project) {
-    // No active session, return stored agent from settings
     return storedAgent ?? DEFAULT_AGENT;
   }
 
@@ -63,25 +48,16 @@ export async function fetchCurrentAgent(): Promise<string> {
     });
 
     if (error || !messages || messages.length === 0) {
-      logger.debug("[AgentManager] No messages found, using stored agent");
       return storedAgent ?? DEFAULT_AGENT;
     }
 
     const lastAgent = messages[0].info.agent;
-    logger.debug(`[AgentManager] Current agent from session: ${lastAgent}`);
-
-    // If user explicitly selected an agent in bot settings, prefer it.
-    // Session messages may contain stale agent until next prompt is sent.
     if (storedAgent && lastAgent !== storedAgent) {
-      logger.debug(
-        `[AgentManager] Using stored agent "${storedAgent}" instead of session agent "${lastAgent}"`,
-      );
       return storedAgent;
     }
 
-    // No stored agent yet: sync from session history
     if (lastAgent && lastAgent !== storedAgent) {
-      setCurrentAgent(lastAgent);
+      setCurrentAgent(lastAgent, scopeKey);
     }
 
     return lastAgent || storedAgent || DEFAULT_AGENT;
@@ -91,19 +67,11 @@ export async function fetchCurrentAgent(): Promise<string> {
   }
 }
 
-/**
- * Select agent and persist to settings
- * @param agentName Name of the agent to select
- */
-export function selectAgent(agentName: string): void {
+export function selectAgent(agentName: string, scopeKey: string = "global"): void {
   logger.info(`[AgentManager] Selected agent: ${agentName}`);
-  setCurrentAgent(agentName);
+  setCurrentAgent(agentName, scopeKey);
 }
 
-/**
- * Get stored agent from settings (synchronous)
- * @returns Current agent name or default "build"
- */
-export function getStoredAgent(): string {
-  return getCurrentAgent() ?? "build";
+export function getStoredAgent(scopeKey: string = "global"): string {
+  return getCurrentAgent(scopeKey) ?? DEFAULT_AGENT;
 }

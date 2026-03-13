@@ -2,10 +2,12 @@ import { readFile } from "node:fs/promises";
 
 import { createBot } from "../bot/index.js";
 import { config } from "../config.js";
+import { reconcileStoredModelSelection } from "../model/manager.js";
 import { loadSettings } from "../settings/manager.js";
 import { processManager } from "../process/manager.js";
 import { warmupSessionDirectoryCache } from "../session/cache-manager.js";
 import { getRuntimeMode } from "../runtime/mode.js";
+import { getRuntimePaths } from "../runtime/paths.js";
 import { logger } from "../utils/logger.js";
 
 async function getBotVersion(): Promise<string> {
@@ -23,14 +25,17 @@ async function getBotVersion(): Promise<string> {
 
 export async function startBotApp(): Promise<void> {
   const mode = getRuntimeMode();
+  const runtimePaths = getRuntimePaths();
   const version = await getBotVersion();
 
-  logger.info(`Starting OpenCode Telegram Bot v${version}...`);
+  logger.info(`Starting OpenCode Telegram Group Topics Bot v${version}...`);
+  logger.info(`Config loaded from ${runtimePaths.envFilePath}`);
   logger.info(`Allowed User ID: ${config.telegram.allowedUserId}`);
   logger.debug(`[Runtime] Application start mode: ${mode}`);
 
   await loadSettings();
   await processManager.initialize();
+  await reconcileStoredModelSelection();
   await warmupSessionDirectoryCache();
 
   const bot = createBot();

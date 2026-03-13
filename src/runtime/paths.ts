@@ -11,7 +11,7 @@ export interface RuntimePaths {
   runDirPath: string;
 }
 
-const APP_DIR_NAME = "opencode-telegram-bot";
+const APP_DIR_NAME = "opencode-telegram-group-topics-bot";
 
 function getInstalledAppHome(): string {
   if (process.platform === "win32") {
