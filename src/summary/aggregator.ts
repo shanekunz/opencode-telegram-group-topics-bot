@@ -56,6 +56,7 @@ export interface TokensInfo {
 type TokensCallback = (sessionId: string, tokens: TokensInfo) => void;
 
 type SessionCompactedCallback = (sessionId: string, directory: string) => void;
+type SessionIdleCallback = (sessionId: string) => void;
 
 type SessionErrorCallback = (sessionId: string, message: string) => void;
 
@@ -139,6 +140,8 @@ function extractEventSessionId(event: Event): string | null {
 }
 
 class SummaryAggregator {
+  private static readonly COMPLETION_DEBOUNCE_MS = 100;
+
   private trackedSessionIds: Set<string> = new Set();
   private currentMessageParts: Map<string, string[]> = new Map();
   private pendingParts: Map<string, string[]> = new Map();
@@ -154,6 +157,7 @@ class SummaryAggregator {
   private onTypingIndicatorCallback: TypingIndicatorCallback | null = null;
   private onTokensCallback: TokensCallback | null = null;
   private onSessionCompactedCallback: SessionCompactedCallback | null = null;
+  private onSessionIdleCallback: SessionIdleCallback | null = null;
   private onSessionErrorCallback: SessionErrorCallback | null = null;
   private onSessionRetryCallback: SessionRetryCallback | null = null;
   private onPermissionCallback: PermissionCallback | null = null;
@@ -165,6 +169,7 @@ class SummaryAggregator {
   private typingTimer: ReturnType<typeof setInterval> | null = null;
   private activeTypingSessions: Set<string> = new Set();
   private partHashes: Map<string, Set<string>> = new Map();
+  private completionTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   private getMessageKey(sessionId: string, messageId: string): string {
     return `${sessionId}:${messageId}`;
@@ -208,6 +213,10 @@ class SummaryAggregator {
 
   setOnSessionCompacted(callback: SessionCompactedCallback): void {
     this.onSessionCompactedCallback = callback;
+  }
+
+  setOnSessionIdle(callback: SessionIdleCallback): void {
+    this.onSessionIdleCallback = callback;
   }
 
   setOnSessionError(callback: SessionErrorCallback): void {
@@ -376,6 +385,7 @@ class SummaryAggregator {
       this.pendingParts.delete(messageKey);
       this.partHashes.delete(messageKey);
       this.thinkingFiredForMessages.delete(messageKey);
+      this.clearCompletionTimer(messageKey);
     }
   }
 
@@ -386,6 +396,10 @@ class SummaryAggregator {
     this.pendingParts.clear();
     this.messages.clear();
     this.partHashes.clear();
+    for (const timer of this.completionTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.completionTimers.clear();
     this.processedToolStates.clear();
     this.thinkingFiredForMessages.clear();
     this.messageCount = 0;
@@ -432,13 +446,6 @@ class SummaryAggregator {
       const time = assistantMessage.time;
 
       if (time?.completed) {
-        const parts = this.currentMessageParts.get(messageKey) || [];
-        const lastPart = parts[parts.length - 1] || "";
-
-        logger.debug(
-          `[Aggregator] Message part completed: messageId=${messageID}, textLength=${lastPart.length}, totalParts=${parts.length}, session=${info.sessionID}`,
-        );
-
         // Extract and report tokens BEFORE onComplete so keyboard context is updated
         const assistantInfo = info as {
           tokens?: {
@@ -464,24 +471,7 @@ class SummaryAggregator {
           this.onTokensCallback(info.sessionID, tokens);
         }
 
-        if (this.onCompleteCallback && lastPart.length > 0) {
-          this.onCompleteCallback(info.sessionID, lastPart);
-        }
-
-        this.currentMessageParts.delete(messageKey);
-        this.messages.delete(messageKey);
-        this.partHashes.delete(messageKey);
-
-        logger.debug(
-          `[Aggregator] Message completed cleanup: remaining messages=${this.currentMessageParts.size}`,
-        );
-
-        if (!this.hasActiveMessageForSession(info.sessionID)) {
-          logger.debug(
-            `[Aggregator] No more active messages for session ${info.sessionID}, stopping typing indicator`,
-          );
-          this.stopTypingIndicator(info.sessionID);
-        }
+        this.scheduleMessageCompletion(messageKey, info.sessionID);
       }
 
       this.lastUpdated = Date.now();
@@ -539,6 +529,10 @@ class SummaryAggregator {
 
         const parts = this.currentMessageParts.get(messageKey)!;
         parts.push(part.text);
+
+        if (this.completionTimers.has(messageKey)) {
+          this.scheduleMessageCompletion(messageKey, part.sessionID);
+        }
       } else {
         if (!this.pendingParts.has(messageKey)) {
           this.pendingParts.set(messageKey, []);
@@ -806,8 +800,17 @@ class SummaryAggregator {
 
     logger.info(`[Aggregator] Session became idle: ${sessionID}`);
 
+    this.flushPendingCompletionsForSession(sessionID);
+
     // Stop typing indicator when session goes idle
-    this.stopTypingIndicator();
+    this.stopTypingIndicator(sessionID);
+
+    if (this.onSessionIdleCallback) {
+      const callback = this.onSessionIdleCallback;
+      setImmediate(() => {
+        callback(sessionID);
+      });
+    }
   }
 
   private handleSessionCompacted(
@@ -857,7 +860,8 @@ class SummaryAggregator {
       error?.data?.message || error?.message || error?.name || "Unknown session error";
 
     logger.warn(`[Aggregator] Session error: ${sessionID}: ${message}`);
-    this.stopTypingIndicator();
+    this.flushPendingCompletionsForSession(sessionID);
+    this.stopTypingIndicator(sessionID);
 
     if (this.onSessionErrorCallback) {
       const callback = this.onSessionErrorCallback;
@@ -946,6 +950,66 @@ class SummaryAggregator {
           logger.error("[Aggregator] Error in permission callback:", err);
         }
       });
+    }
+  }
+
+  private clearCompletionTimer(messageKey: string): void {
+    const timer = this.completionTimers.get(messageKey);
+    if (!timer) {
+      return;
+    }
+
+    clearTimeout(timer);
+    this.completionTimers.delete(messageKey);
+  }
+
+  private scheduleMessageCompletion(messageKey: string, sessionId: string): void {
+    this.clearCompletionTimer(messageKey);
+
+    const timer = setTimeout(() => {
+      this.completionTimers.delete(messageKey);
+      this.finalizeMessageCompletion(messageKey, sessionId);
+    }, SummaryAggregator.COMPLETION_DEBOUNCE_MS);
+
+    this.completionTimers.set(messageKey, timer);
+  }
+
+  private flushPendingCompletionsForSession(sessionId: string): void {
+    for (const [messageKey, message] of this.messages.entries()) {
+      if (message.sessionId !== sessionId || !this.completionTimers.has(messageKey)) {
+        continue;
+      }
+
+      this.clearCompletionTimer(messageKey);
+      this.finalizeMessageCompletion(messageKey, sessionId);
+    }
+  }
+
+  private finalizeMessageCompletion(messageKey: string, sessionId: string): void {
+    const parts = this.currentMessageParts.get(messageKey) || [];
+    const messageText = parts.join("");
+
+    logger.debug(
+      `[Aggregator] Message completed: messageKey=${messageKey}, textLength=${messageText.length}, totalParts=${parts.length}, session=${sessionId}`,
+    );
+
+    if (this.onCompleteCallback && messageText.length > 0) {
+      this.onCompleteCallback(sessionId, messageText);
+    }
+
+    this.currentMessageParts.delete(messageKey);
+    this.messages.delete(messageKey);
+    this.pendingParts.delete(messageKey);
+    this.partHashes.delete(messageKey);
+    this.thinkingFiredForMessages.delete(messageKey);
+
+    logger.debug(
+      `[Aggregator] Message completed cleanup: remaining messages=${this.currentMessageParts.size}`,
+    );
+
+    if (!this.hasActiveMessageForSession(sessionId)) {
+      logger.debug(`[Aggregator] No more active messages for session ${sessionId}, stopping typing indicator`);
+      this.stopTypingIndicator(sessionId);
     }
   }
 }

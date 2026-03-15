@@ -604,42 +604,51 @@ async function ensureEventSubscription(directory: string): Promise<void> {
     }
   });
 
+  summaryAggregator.setOnSessionIdle((sessionId) => {
+    enqueueSessionDelivery(sessionId, async () => {
+      await toolMessageBatcher.flushSession(sessionId, "session_idle");
+    });
+  });
+
   summaryAggregator.setOnSessionError(async (sessionId, message) => {
-    if (!botInstance) {
-      return;
-    }
+    enqueueSessionDelivery(sessionId, async () => {
+      if (!botInstance) {
+        return;
+      }
 
-    const target = getTargetBySessionId(sessionId);
-    if (!target) {
-      return;
-    }
+      const target = getTargetBySessionId(sessionId);
+      if (!target) {
+        return;
+      }
 
-    await toolMessageBatcher.flushSession(sessionId, "session_error");
+      await toolMessageBatcher.flushSession(sessionId, "session_error");
 
-    const normalizedMessage = message.trim() || t("common.unknown_error");
+      const normalizedMessage = message.trim() || t("common.unknown_error");
 
-    if (isOperationAbortedSessionError(normalizedMessage)) {
-      logger.info(`[Bot] Suppressing session.abort error notification for ${sessionId}`);
-      return;
-    }
+      if (isOperationAbortedSessionError(normalizedMessage)) {
+        logger.info(`[Bot] Suppressing session.abort error notification for ${sessionId}`);
+        return;
+      }
 
-    if (sessionErrorThrottle.shouldSuppress(sessionId, normalizedMessage)) {
-      logger.debug(`[Bot] Suppressing duplicate session.error notification for ${sessionId}`);
-      return;
-    }
+      if (sessionErrorThrottle.shouldSuppress(sessionId, normalizedMessage)) {
+        logger.debug(`[Bot] Suppressing duplicate session.error notification for ${sessionId}`);
+        return;
+      }
 
-    const truncatedMessage =
-      normalizedMessage.length > 3500
-        ? `${normalizedMessage.slice(0, 3497)}...`
-        : normalizedMessage;
+      const truncatedMessage =
+        normalizedMessage.length > 3500
+          ? `${normalizedMessage.slice(0, 3497)}...`
+          : normalizedMessage;
 
-    await botInstance.api
-      .sendMessage(target.chatId, t("bot.session_error", { message: truncatedMessage }), {
-        ...getThreadSendOptions(target.threadId),
-      })
-      .catch((err) => {
-        logger.error("[Bot] Failed to send session.error message:", err);
+      await botInstance.api
+        .sendMessage(target.chatId, t("bot.session_error", { message: truncatedMessage }), {
+          ...getThreadSendOptions(target.threadId),
+        })
+        .catch((err) => {
+          logger.error("[Bot] Failed to send session.error message:", err);
+        });
       });
+    });
   });
 
   summaryAggregator.setOnSessionRetry(async ({ sessionId, message }) => {

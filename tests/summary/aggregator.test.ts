@@ -26,6 +26,7 @@ describe("summary/aggregator", () => {
     summaryAggregator.setOnTool(() => {});
     summaryAggregator.setOnToolFile(() => {});
     summaryAggregator.setOnThinking(() => {});
+    summaryAggregator.setOnSessionIdle(() => {});
     summaryAggregator.setOnSessionError(() => {});
     summaryAggregator.setOnSessionRetry(() => {});
   });
@@ -272,6 +273,205 @@ describe("summary/aggregator", () => {
     await new Promise<void>((resolve) => setImmediate(resolve));
 
     expect(onSessionError).toHaveBeenCalledWith("session-1", "Model not found: opencode/foo.");
+  });
+
+  it("emits the full assistant message across all text parts", async () => {
+    vi.useFakeTimers();
+    const onComplete = vi.fn();
+    summaryAggregator.setOnComplete(onComplete);
+    summaryAggregator.setSession("session-1");
+
+    summaryAggregator.processEvent({
+      type: "message.updated",
+      properties: {
+        info: {
+          id: "message-1",
+          sessionID: "session-1",
+          role: "assistant",
+          time: { created: Date.now() },
+        },
+      },
+    } as unknown as Event);
+
+    summaryAggregator.processEvent({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "part-1",
+          sessionID: "session-1",
+          messageID: "message-1",
+          type: "text",
+          text: "Hello ",
+          time: { start: Date.now() },
+        },
+      },
+    } as unknown as Event);
+
+    summaryAggregator.processEvent({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "part-2",
+          sessionID: "session-1",
+          messageID: "message-1",
+          type: "text",
+          text: "world!",
+          time: { start: Date.now() },
+        },
+      },
+    } as unknown as Event);
+
+    summaryAggregator.processEvent({
+      type: "message.updated",
+      properties: {
+        info: {
+          id: "message-1",
+          sessionID: "session-1",
+          role: "assistant",
+          time: { created: Date.now(), completed: Date.now() },
+        },
+      },
+    } as unknown as Event);
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(onComplete).toHaveBeenCalledWith("session-1", "Hello world!");
+
+    vi.useRealTimers();
+  });
+
+  it("waits for trailing text parts after message completion before emitting final text", async () => {
+    vi.useFakeTimers();
+    const onComplete = vi.fn();
+    summaryAggregator.setOnComplete(onComplete);
+    summaryAggregator.setSession("session-1");
+
+    summaryAggregator.processEvent({
+      type: "message.updated",
+      properties: {
+        info: {
+          id: "message-2",
+          sessionID: "session-1",
+          role: "assistant",
+          time: { created: Date.now() },
+        },
+      },
+    } as unknown as Event);
+
+    summaryAggregator.processEvent({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "part-a",
+          sessionID: "session-1",
+          messageID: "message-2",
+          type: "text",
+          text: "First",
+          time: { start: Date.now() },
+        },
+      },
+    } as unknown as Event);
+
+    summaryAggregator.processEvent({
+      type: "message.updated",
+      properties: {
+        info: {
+          id: "message-2",
+          sessionID: "session-1",
+          role: "assistant",
+          time: { created: Date.now(), completed: Date.now() },
+        },
+      },
+    } as unknown as Event);
+
+    await vi.advanceTimersByTimeAsync(50);
+
+    summaryAggregator.processEvent({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "part-b",
+          sessionID: "session-1",
+          messageID: "message-2",
+          type: "text",
+          text: " second",
+          time: { start: Date.now() },
+        },
+      },
+    } as unknown as Event);
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(onComplete).toHaveBeenCalledWith("session-1", "First second");
+
+    vi.useRealTimers();
+  });
+
+  it("reports session.idle through callback", async () => {
+    const onSessionIdle = vi.fn();
+    summaryAggregator.setOnSessionIdle(onSessionIdle);
+    summaryAggregator.setSession("session-1");
+
+    summaryAggregator.processEvent({
+      type: "session.idle",
+      properties: {
+        sessionID: "session-1",
+      },
+    } as unknown as Event);
+
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(onSessionIdle).toHaveBeenCalledWith("session-1");
+  });
+
+  it("keeps other typing indicators active when one session becomes idle", async () => {
+    vi.useFakeTimers();
+    const onTyping = vi.fn();
+    summaryAggregator.setOnTypingIndicator(onTyping);
+    summaryAggregator.setSession("session-1");
+    summaryAggregator.setSession("session-2");
+
+    const now = Date.now();
+    summaryAggregator.processEvent({
+      type: "message.updated",
+      properties: {
+        info: {
+          id: "message-1",
+          sessionID: "session-1",
+          role: "assistant",
+          time: { created: now },
+        },
+      },
+    } as unknown as Event);
+
+    summaryAggregator.processEvent({
+      type: "message.updated",
+      properties: {
+        info: {
+          id: "message-2",
+          sessionID: "session-2",
+          role: "assistant",
+          time: { created: now },
+        },
+      },
+    } as unknown as Event);
+
+    onTyping.mockClear();
+
+    summaryAggregator.processEvent({
+      type: "session.idle",
+      properties: {
+        sessionID: "session-1",
+      },
+    } as unknown as Event);
+
+    await vi.advanceTimersByTimeAsync(4000);
+
+    expect(onTyping).toHaveBeenCalledWith("session-2");
+    expect(onTyping).not.toHaveBeenCalledWith("session-1");
+
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
   });
 
   it("reports session.status retry through callback", async () => {
