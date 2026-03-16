@@ -7,6 +7,10 @@ import {
   getCurrentAgent,
   setCurrentModel,
   getCurrentModel,
+  setCurrentSession,
+  getCurrentSession,
+  setScopedPinnedMessageId,
+  getScopedPinnedMessageId,
 } from "../../src/settings/manager.js";
 
 describe("settings scoped values", () => {
@@ -39,5 +43,24 @@ describe("settings scoped values", () => {
 
     expect(getCurrentAgent("global")).toBe("build");
     expect(getCurrentModel("global")?.modelID).toBe("gpt-4");
+  });
+
+  it("stores session and pinned message per scope", () => {
+    setCurrentSession({ id: "ses-global", title: "Global", directory: "/global" });
+    setCurrentSession({ id: "ses-topic", title: "Topic", directory: "/topic" }, "-100:22");
+    setScopedPinnedMessageId("chat:-100", 10);
+    setScopedPinnedMessageId("-100:22", 20);
+
+    expect(getCurrentSession("global")?.id).toBe("ses-global");
+    expect(getCurrentSession("-100:22")?.id).toBe("ses-topic");
+    expect(getScopedPinnedMessageId("chat:-100")).toBe(10);
+    expect(getScopedPinnedMessageId("-100:22")).toBe(20);
+  });
+
+  it("normalizes general-topic aliases to the chat general scope", () => {
+    setCurrentProject({ id: "p-general", worktree: "/general" }, "-100:1");
+
+    expect(getCurrentProject("-100:1")?.id).toBe("p-general");
+    expect(getCurrentProject("chat:-100")?.id).toBe("p-general");
   });
 });
