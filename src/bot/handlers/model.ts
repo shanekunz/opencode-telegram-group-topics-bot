@@ -14,7 +14,13 @@ import {
   replyWithInlineMenu,
 } from "./inline-menu.js";
 import { t } from "../../i18n/index.js";
-import { SCOPE_CONTEXT, getScopeFromKey, getScopeKeyFromContext } from "../scope.js";
+import {
+  SCOPE_CONTEXT,
+  getScopeFromContext,
+  getScopeFromKey,
+  getScopeKeyFromContext,
+  getThreadSendOptions,
+} from "../scope.js";
 
 function buildModelSelectionMenuText(modelLists: ModelSelectionLists): string {
   const lines = [t("model.menu.select"), t("model.menu.favorites_title")];
@@ -111,6 +117,7 @@ export async function handleModelSelect(ctx: Context): Promise<boolean> {
         : undefined,
     );
     const displayName = formatModelForDisplay(modelInfo.providerID, modelInfo.modelID);
+    const threadId = getScopeFromContext(ctx)?.threadId ?? null;
 
     clearActiveInlineMenu("model_selected", scopeKey);
 
@@ -118,6 +125,7 @@ export async function handleModelSelect(ctx: Context): Promise<boolean> {
     await ctx.answerCallbackQuery({ text: t("model.changed_callback", { name: displayName }) });
     await ctx.reply(t("model.changed_message", { name: displayName }), {
       reply_markup: keyboard,
+      ...getThreadSendOptions(threadId),
     });
 
     // Delete the inline menu message
@@ -176,13 +184,14 @@ export async function buildModelSelectionMenu(
  */
 export async function showModelSelectionMenu(ctx: Context): Promise<void> {
   try {
+    const threadId = getScopeFromContext(ctx)?.threadId ?? null;
     const scopeKey = getScopeKeyFromContext(ctx);
     const currentModel = fetchCurrentModel(scopeKey);
     const modelLists = await getModelSelectionLists();
     const keyboard = await buildModelSelectionMenu(currentModel, modelLists);
 
     if (keyboard.inline_keyboard.length === 0) {
-      await ctx.reply(t("model.menu.empty"));
+      await ctx.reply(t("model.menu.empty"), getThreadSendOptions(threadId));
       return;
     }
 
@@ -195,6 +204,6 @@ export async function showModelSelectionMenu(ctx: Context): Promise<void> {
     });
   } catch (err) {
     logger.error("[ModelHandler] Error showing model menu:", err);
-    await ctx.reply(t("model.menu.error"));
+    await ctx.reply(t("model.menu.error"), getThreadSendOptions(getScopeFromContext(ctx)?.threadId ?? null));
   }
 }

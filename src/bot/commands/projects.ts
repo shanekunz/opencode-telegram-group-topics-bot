@@ -282,6 +282,7 @@ export async function projectsCommand(ctx: CommandContext<Context>) {
 
 export async function handleProjectSelect(ctx: Context): Promise<boolean> {
   const scopeKey = getScopeKeyFromContext(ctx);
+  const scope = getScopeFromContext(ctx);
   const usePinned = ctx.chat?.type !== "private";
   const callbackQuery = ctx.callbackQuery;
   if (!callbackQuery?.data) {
@@ -305,12 +306,12 @@ export async function handleProjectSelect(ctx: Context): Promise<boolean> {
     }
 
     try {
-      const projects = await getProjects();
-      if (projects.length === 0) {
-        await ctx.answerCallbackQuery();
-        await ctx.reply(t("projects.empty"));
-        return true;
-      }
+        const projects = await getProjects();
+        if (projects.length === 0) {
+          await ctx.answerCallbackQuery();
+          await ctx.reply(t("projects.empty"), getThreadSendOptions(scope?.threadId ?? null));
+          return true;
+        }
 
       const { text, keyboard } = buildProjectsMenuView(projects, page, scopeKey);
       await ctx.answerCallbackQuery();
@@ -393,13 +394,13 @@ export async function handleProjectSelect(ctx: Context): Promise<boolean> {
     const currentModel = getStoredModel(scopeKey);
     const contextInfo = { tokensUsed: 0, tokensLimit: contextLimit };
     const variantName = formatVariantForButton(currentModel.variant || "default");
-    const scope = getScopeFromKey(scopeKey);
+    const scopeFromKey = getScopeFromKey(scopeKey);
     const scopedKeyboard = createMainKeyboard(
       currentAgent,
       currentModel,
       contextInfo,
       variantName,
-      scope?.context === SCOPE_CONTEXT.GROUP_GENERAL
+      scopeFromKey?.context === SCOPE_CONTEXT.GROUP_GENERAL
         ? {
             contextFirst: true,
             contextLabel: t("keyboard.general_defaults"),
@@ -412,6 +413,7 @@ export async function handleProjectSelect(ctx: Context): Promise<boolean> {
     await ctx.answerCallbackQuery();
     await ctx.reply(t("projects.selected", { project: projectName }), {
       reply_markup: scopedKeyboard,
+      ...getThreadSendOptions(scope?.threadId ?? null),
     });
 
     await ctx.deleteMessage();
@@ -419,7 +421,7 @@ export async function handleProjectSelect(ctx: Context): Promise<boolean> {
     clearInteractionWithScope(INTERACTION_CLEAR_REASON.PROJECT_SELECT_ERROR, scopeKey);
     logger.error("[Bot] Error selecting project:", error);
     await ctx.answerCallbackQuery();
-    await ctx.reply(t("projects.select_error"));
+    await ctx.reply(t("projects.select_error"), getThreadSendOptions(scope?.threadId ?? null));
   }
 
   return true;

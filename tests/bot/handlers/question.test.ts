@@ -10,6 +10,39 @@ import {
 import type { Question } from "../../../src/question/types.js";
 import { t } from "../../../src/i18n/index.js";
 
+vi.mock("../../../src/settings/manager.js", () => ({
+  getCurrentProject: vi.fn(() => ({ worktree: "/tmp/project" })),
+}));
+
+vi.mock("../../../src/session/manager.js", () => ({
+  getCurrentSession: vi.fn(() => null),
+}));
+
+vi.mock("../../../src/opencode/client.js", () => ({
+  opencodeClient: {
+    question: {
+      reply: vi.fn(() => Promise.resolve({ error: null })),
+    },
+  },
+}));
+
+vi.mock("../../../src/summary/aggregator.js", () => ({
+  summaryAggregator: {
+    clear: vi.fn(),
+    stopTypingIndicator: vi.fn(),
+  },
+}));
+
+vi.mock("../../../src/utils/safe-background-task.js", () => ({
+  safeBackgroundTask: ({ task, onSuccess, onError }: {
+    task: () => Promise<unknown>;
+    onSuccess?: (value: unknown) => void;
+    onError?: (error: unknown) => void;
+  }) => {
+    void task().then((value) => onSuccess?.(value)).catch((error) => onError?.(error));
+  },
+}));
+
 const QUESTION_ONE: Question = {
   header: "Q1",
   question: "Pick one",
@@ -51,13 +84,19 @@ function createApi(sendMessageIds: number[]): Context["api"] {
   } as unknown as Context["api"];
 }
 
-function createCallbackContext(data: string, messageId: number, api: Context["api"]): Context {
+function createCallbackContext(
+  data: string,
+  messageId: number,
+  api: Context["api"],
+  threadId?: number,
+): Context {
   return {
     chat: { id: 123 },
     callbackQuery: {
       data,
       message: {
         message_id: messageId,
+        ...(typeof threadId === "number" ? { message_thread_id: threadId } : {}),
       },
     } as Context["callbackQuery"],
     api,
@@ -172,5 +211,25 @@ describe("bot/handlers/question", () => {
       show_alert: true,
     });
     expect(questionManager.isActive()).toBe(true);
+  });
+
+  it("sends poll completion summary back into the originating topic", async () => {
+    const api = createApi([500, 501]);
+    const topicScope = "123:777";
+
+    questionManager.startQuestions([QUESTION_ONE], "req-6", topicScope);
+    await showCurrentQuestion(api, 123, topicScope, 777);
+
+    const selectCtx = createCallbackContext("question:select:0:0", 500, api, 777);
+    const handled = await handleQuestionCallback(selectCtx);
+
+    expect(handled).toBe(true);
+    expect(api.sendMessage).toHaveBeenNthCalledWith(
+      2,
+      123,
+      expect.stringContaining("✅ Poll completed!"),
+      { message_thread_id: 777 },
+    );
+    expect(questionManager.isActive(topicScope)).toBe(false);
   });
 });

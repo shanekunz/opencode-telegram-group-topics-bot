@@ -249,6 +249,7 @@ async function ensureSessionForProject(
   projectDirectory: string,
 ): Promise<SessionInfo | null> {
   const scopeKey = getScopeKeyFromContext(ctx);
+  const threadId = getScopeFromContext(ctx)?.threadId ?? null;
   let currentSession = getCurrentSession(scopeKey);
 
   if (currentSession && currentSession.directory !== projectDirectory) {
@@ -256,7 +257,7 @@ async function ensureSessionForProject(
       `[Commands] Session/project mismatch detected. sessionDirectory=${currentSession.directory}, projectDirectory=${projectDirectory}. Resetting session context.`,
     );
     clearSession(scopeKey);
-    await ctx.reply(t("bot.session_reset_project_mismatch"));
+    await ctx.reply(t("bot.session_reset_project_mismatch"), getThreadSendOptions(threadId));
     currentSession = null;
   }
 
@@ -264,14 +265,14 @@ async function ensureSessionForProject(
     return currentSession;
   }
 
-  await ctx.reply(t("bot.creating_session"));
+  await ctx.reply(t("bot.creating_session"), getThreadSendOptions(threadId));
 
   const { data: session, error } = await opencodeClient.session.create({
     directory: projectDirectory,
   });
 
   if (error || !session) {
-    await ctx.reply(t("bot.create_session_error"));
+    await ctx.reply(t("bot.create_session_error"), getThreadSendOptions(threadId));
     return null;
   }
 
@@ -284,7 +285,7 @@ async function ensureSessionForProject(
   setCurrentSession(sessionInfo, scopeKey);
   summaryAggregator.setSession(sessionInfo.id);
   await ingestSessionInfoForCache(session);
-  await ctx.reply(t("bot.session_created", { title: session.title }));
+  await ctx.reply(t("bot.session_created", { title: session.title }), getThreadSendOptions(threadId));
 
   return sessionInfo;
 }
@@ -300,7 +301,7 @@ async function executeCommand(
 
   const args = params.argumentsText.trim();
   const threadId = getScopeFromContext(ctx)?.threadId ?? null;
-  await ctx.reply(formatExecutingCommandMessage(params.commandName, args));
+  await ctx.reply(formatExecutingCommandMessage(params.commandName, args), getThreadSendOptions(threadId));
 
   const session = await ensureSessionForProject(ctx, params.projectDirectory);
   if (!session) {
@@ -312,7 +313,7 @@ async function executeCommand(
 
   const sessionIsBusy = await isSessionBusy(session.id, session.directory);
   if (sessionIsBusy) {
-    await ctx.reply(t("bot.session_busy"));
+    await ctx.reply(t("bot.session_busy"), getThreadSendOptions(threadId));
     return;
   }
 

@@ -6,6 +6,7 @@ export const zh: I18nDictionary = {
   "cmd.description.abort": "中止当前操作",
   "cmd.description.stop": "停止当前操作",
   "cmd.description.sessions": "列出会话",
+  "cmd.description.last": "显示会话的最新消息",
   "cmd.description.projects": "列出项目",
   "cmd.description.commands": "自定义命令",
   "cmd.description.model": "选择模型",
@@ -138,6 +139,13 @@ export const zh: I18nDictionary = {
   "sessions.preview.title": "最近消息：",
   "sessions.preview.you": "你：",
   "sessions.preview.agent": "代理：",
+  "sessions.resume.assistant_title": "代理的最后一条消息：",
+  "sessions.resume.last_turn_title": "最后一条可见消息：",
+
+  "last.title": "最新消息：",
+  "last.session_not_selected": "📋 尚未选择会话。请先使用 /sessions 或 /new。",
+  "last.empty": "此会话中没有最近的可见消息。",
+  "last.fetch_error": "🔴 加载会话最新消息失败。",
 
   "new.project_not_selected": "🏗 未选择项目。\n\n请先使用 /projects 选择一个项目。",
   "new.created": "✅ 新会话已创建：{title}",

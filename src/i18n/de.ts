@@ -6,6 +6,7 @@ export const de: I18nDictionary = {
   "cmd.description.abort": "Aktuelle Aktion abbrechen",
   "cmd.description.stop": "Aktuelle Aktion stoppen",
   "cmd.description.sessions": "Sitzungen auflisten",
+  "cmd.description.last": "Neueste Sitzungsnachricht anzeigen",
   "cmd.description.projects": "Projekte auflisten",
   "cmd.description.commands": "Benutzerdefinierte Befehle",
   "cmd.description.model": "Modell auswählen",
@@ -158,6 +159,13 @@ export const de: I18nDictionary = {
   "sessions.preview.title": "Letzte Nachrichten:",
   "sessions.preview.you": "Du:",
   "sessions.preview.agent": "Agent:",
+  "sessions.resume.assistant_title": "Letzte Agentennachricht:",
+  "sessions.resume.last_turn_title": "Letzte sichtbare Nachricht:",
+
+  "last.title": "Neueste Nachricht:",
+  "last.session_not_selected": "📋 Keine Sitzung ausgewählt. Nutze zuerst /sessions oder /new.",
+  "last.empty": "Keine aktuellen sichtbaren Nachrichten in dieser Sitzung.",
+  "last.fetch_error": "🔴 Die neueste Sitzungsnachricht konnte nicht geladen werden.",
 
   "new.project_not_selected":
     "🏗 Projekt ist nicht ausgewählt.\n\nWähle zuerst ein Projekt mit /projects.",

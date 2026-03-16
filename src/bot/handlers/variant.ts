@@ -18,7 +18,13 @@ import {
   replyWithInlineMenu,
 } from "./inline-menu.js";
 import { t } from "../../i18n/index.js";
-import { SCOPE_CONTEXT, getScopeFromKey, getScopeKeyFromContext } from "../scope.js";
+import {
+  SCOPE_CONTEXT,
+  getScopeFromContext,
+  getScopeFromKey,
+  getScopeKeyFromContext,
+  getThreadSendOptions,
+} from "../scope.js";
 
 /**
  * Handle variant selection callback
@@ -100,12 +106,14 @@ export async function handleVariantSelect(ctx: Context): Promise<boolean> {
 
     // Send confirmation message with updated keyboard
     const displayName = formatVariantForDisplay(variantId);
+    const threadId = getScopeFromContext(ctx)?.threadId ?? null;
 
     clearActiveInlineMenu("variant_selected", scopeKey);
 
     await ctx.answerCallbackQuery({ text: t("variant.changed_callback", { name: displayName }) });
     await ctx.reply(t("variant.changed_message", { name: displayName }), {
       reply_markup: keyboard,
+      ...getThreadSendOptions(threadId),
     });
 
     // Delete the inline menu message
@@ -168,11 +176,12 @@ export async function buildVariantSelectionMenu(
  */
 export async function showVariantSelectionMenu(ctx: Context): Promise<void> {
   try {
+    const threadId = getScopeFromContext(ctx)?.threadId ?? null;
     const scopeKey = getScopeKeyFromContext(ctx);
     const currentModel = getStoredModel(scopeKey);
 
     if (!currentModel.providerID || !currentModel.modelID) {
-      await ctx.reply(t("variant.select_model_first"));
+      await ctx.reply(t("variant.select_model_first"), getThreadSendOptions(threadId));
       return;
     }
 
@@ -184,7 +193,7 @@ export async function showVariantSelectionMenu(ctx: Context): Promise<void> {
     );
 
     if (keyboard.inline_keyboard.length === 0) {
-      await ctx.reply(t("variant.menu.empty"));
+      await ctx.reply(t("variant.menu.empty"), getThreadSendOptions(threadId));
       return;
     }
 
@@ -198,6 +207,6 @@ export async function showVariantSelectionMenu(ctx: Context): Promise<void> {
     });
   } catch (err) {
     logger.error("[VariantHandler] Error showing variant menu:", err);
-    await ctx.reply(t("variant.menu.error"));
+    await ctx.reply(t("variant.menu.error"), getThreadSendOptions(getScopeFromContext(ctx)?.threadId ?? null));
   }
 }

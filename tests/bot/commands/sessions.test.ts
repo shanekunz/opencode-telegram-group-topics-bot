@@ -173,7 +173,15 @@ describe("bot/commands/sessions", () => {
     mocked.sessionListMock.mockReset();
     mocked.sessionGetMock.mockReset();
     mocked.sessionMessagesMock.mockReset();
-    mocked.sessionMessagesMock.mockResolvedValue({ data: [], error: null });
+    mocked.sessionMessagesMock.mockResolvedValue({
+      data: [
+        {
+          info: { role: "assistant", time: { created: 2 } },
+          parts: [{ type: "text", text: "Latest agent reply" }],
+        },
+      ],
+      error: null,
+    });
     mocked.setCurrentSessionMock.mockReset();
     mocked.clearSummaryMock.mockReset();
     mocked.setSummarySessionMock.mockReset();
@@ -337,5 +345,73 @@ describe("bot/commands/sessions", () => {
     const allCalls = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
     const previewCall = allCalls[allCalls.length - 1];
     expect(previewCall?.[2]).toMatchObject({ message_thread_id: 777 });
+    expect(previewCall?.[1]).toContain(t("sessions.resume.assistant_title"));
+  });
+
+  it("falls back to the last visible turn when no assistant reply exists", async () => {
+    mocked.sessionGetMock.mockResolvedValueOnce({
+      data: {
+        id: "session-1",
+        title: "Thread Session",
+      },
+      error: null,
+    });
+    mocked.sessionMessagesMock
+      .mockResolvedValueOnce({
+        data: [
+          {
+            info: { role: "user", time: { created: 1 } },
+            parts: [{ type: "text", text: "Latest user note" }],
+          },
+        ],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            info: { role: "user", time: { created: 1 } },
+            parts: [{ type: "text", text: "Latest user note" }],
+          },
+        ],
+        error: null,
+      });
+
+    mocked.pinnedGetContextLimitMock.mockReturnValue(200000);
+
+    startActiveSessionInlineMenu();
+    const ctx = createCallbackContext("session:session-1", 456);
+    await handleSessionSelect(ctx);
+
+    const queued = mocked.safeBackgroundTaskMock.mock.calls[0]?.[0] as {
+      task: () => Promise<void>;
+    };
+    await queued.task();
+
+    const allCalls = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+    const previewCall = allCalls[allCalls.length - 1];
+    expect(previewCall?.[1]).toContain(t("sessions.resume.last_turn_title"));
+    expect(previewCall?.[1]).toContain("Latest user note");
+  });
+
+  it("does not convert a successful selection into an error when menu deletion fails", async () => {
+    mocked.sessionGetMock.mockResolvedValueOnce({
+      data: {
+        id: "session-1",
+        title: "Thread Session",
+      },
+      error: null,
+    });
+
+    mocked.pinnedGetContextLimitMock.mockReturnValue(200000);
+
+    startActiveSessionInlineMenu();
+    const ctx = createCallbackContext("session:session-1", 456);
+    (ctx.deleteMessage as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("delete failed"));
+
+    const handled = await handleSessionSelect(ctx);
+
+    expect(handled).toBe(true);
+    expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+    expect(ctx.reply).not.toHaveBeenCalledWith(t("sessions.select_error"), expect.anything());
   });
 });

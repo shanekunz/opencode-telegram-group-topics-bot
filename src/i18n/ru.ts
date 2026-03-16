@@ -6,6 +6,7 @@ export const ru: I18nDictionary = {
   "cmd.description.abort": "Прервать текущее действие",
   "cmd.description.stop": "Прервать текущее действие",
   "cmd.description.sessions": "Список сессий",
+  "cmd.description.last": "Показать последнее сообщение сессии",
   "cmd.description.projects": "Список проектов",
   "cmd.description.commands": "Пользовательские команды",
   "cmd.description.model": "Выбрать модель",
@@ -152,6 +153,13 @@ export const ru: I18nDictionary = {
   "sessions.preview.title": "Последние сообщения:",
   "sessions.preview.you": "Вы:",
   "sessions.preview.agent": "Агент:",
+  "sessions.resume.assistant_title": "Последнее сообщение агента:",
+  "sessions.resume.last_turn_title": "Последнее видимое сообщение:",
+
+  "last.title": "Последнее сообщение:",
+  "last.session_not_selected": "📋 Сессия не выбрана. Сначала используйте /sessions или /new.",
+  "last.empty": "В этой сессии нет недавних видимых сообщений.",
+  "last.fetch_error": "🔴 Не удалось загрузить последнее сообщение сессии.",
 
   "new.project_not_selected": "🏗 Проект не выбран.\n\nСначала выберите проект командой /projects.",
   "new.created": "✅ Создана новая сессия: {title}",

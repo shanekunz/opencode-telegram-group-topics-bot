@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Context } from "grammy";
 import { helpCommand } from "../../../src/bot/commands/help.js";
-import { getLocalizedBotCommands } from "../../../src/bot/commands/definitions.js";
+import {
+  getLocalizedBotCommands,
+  getLocalizedDmBotCommands,
+} from "../../../src/bot/commands/definitions.js";
 
 describe("bot/commands/help", () => {
   it("returns full commands list from centralized definitions", async () => {
@@ -35,8 +38,22 @@ describe("bot/commands/help", () => {
     expect(replyMock).toHaveBeenCalledTimes(1);
     const helpText = replyMock.mock.calls[0][0] as string;
     expect(helpText).toContain("/status");
+    expect(helpText).toContain("/start");
     expect(helpText).toContain("/opencode_start");
     expect(helpText).not.toContain("/projects");
     expect(helpText).not.toContain("/sessions");
+    expect(helpText).not.toContain("/last");
+  });
+
+  it("keeps DM command definitions aligned with DM restrictions", () => {
+    const commands = getLocalizedDmBotCommands();
+
+    expect(commands.map((item) => item.command)).toEqual([
+      "start",
+      "status",
+      "opencode_start",
+      "opencode_stop",
+      "help",
+    ]);
   });
 });

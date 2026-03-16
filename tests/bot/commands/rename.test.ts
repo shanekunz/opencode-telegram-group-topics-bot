@@ -72,6 +72,17 @@ function createRenameCallbackContext(messageId: number): Context {
   } as unknown as Context;
 }
 
+function createRenameTopicTextContext(text: string, threadId: number): Context {
+  return {
+    chat: { id: 101, type: "supergroup" },
+    message: { text, message_thread_id: threadId } as Context["message"],
+    api: {
+      deleteMessage: vi.fn().mockResolvedValue(true),
+    },
+    reply: vi.fn().mockResolvedValue(undefined),
+  } as unknown as Context;
+}
+
 describe("bot/commands/rename", () => {
   beforeEach(() => {
     renameManager.clear();
@@ -148,7 +159,7 @@ describe("bot/commands/rename", () => {
       "global",
     );
     expect(ctx.api.deleteMessage).toHaveBeenCalledWith(101, 555);
-    expect(ctx.reply).toHaveBeenCalledWith(t("rename.success", { title: "New title" }));
+    expect(ctx.reply).toHaveBeenCalledWith(t("rename.success", { title: "New title" }), {});
     expect(renameManager.isWaitingForName()).toBe(false);
     expect(interactionManager.getSnapshot()).toBeNull();
   });
@@ -166,7 +177,7 @@ describe("bot/commands/rename", () => {
     const handled = await handleRenameTextAnswer(ctx);
 
     expect(handled).toBe(true);
-    expect(ctx.reply).toHaveBeenCalledWith(t("rename.empty_title"));
+    expect(ctx.reply).toHaveBeenCalledWith(t("rename.empty_title"), {});
     expect(mocked.updateSessionMock).not.toHaveBeenCalled();
     expect(renameManager.isWaitingForName()).toBe(true);
     expect(interactionManager.getSnapshot()?.kind).toBe("rename");
@@ -220,8 +231,29 @@ describe("bot/commands/rename", () => {
     const handled = await handleRenameTextAnswer(ctx);
 
     expect(handled).toBe(true);
-    expect(ctx.reply).toHaveBeenCalledWith(t("rename.inactive"));
+    expect(ctx.reply).toHaveBeenCalledWith(t("rename.inactive"), {});
     expect(mocked.updateSessionMock).not.toHaveBeenCalled();
     expect(renameManager.isWaitingForName()).toBe(false);
+  });
+
+  it("keeps rename success replies in the originating topic", async () => {
+    renameManager.startWaiting("session-1", "D:/repo", "Old title", "101:777");
+    renameManager.setMessageId(555, "101:777");
+    interactionManager.start(
+      {
+        kind: "rename",
+        expectedInput: "text",
+        metadata: { sessionId: "session-1", messageId: 555 },
+      },
+      "101:777",
+    );
+
+    const ctx = createRenameTopicTextContext("New title", 777);
+    const handled = await handleRenameTextAnswer(ctx);
+
+    expect(handled).toBe(true);
+    expect(ctx.reply).toHaveBeenCalledWith(t("rename.success", { title: "New title" }), {
+      message_thread_id: 777,
+    });
   });
 });

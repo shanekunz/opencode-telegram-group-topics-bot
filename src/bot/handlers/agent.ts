@@ -13,7 +13,13 @@ import {
   replyWithInlineMenu,
 } from "./inline-menu.js";
 import { t } from "../../i18n/index.js";
-import { SCOPE_CONTEXT, getScopeFromKey, getScopeKeyFromContext } from "../scope.js";
+import {
+  SCOPE_CONTEXT,
+  getScopeFromContext,
+  getScopeFromKey,
+  getScopeKeyFromContext,
+  getThreadSendOptions,
+} from "../scope.js";
 
 /**
  * Handle agent selection callback
@@ -82,6 +88,7 @@ export async function handleAgentSelect(ctx: Context): Promise<boolean> {
         : undefined,
     );
     const displayName = getAgentDisplayName(agentName);
+    const threadId = getScopeFromContext(ctx)?.threadId ?? null;
 
     clearActiveInlineMenu("agent_selected", scopeKey);
 
@@ -89,6 +96,7 @@ export async function handleAgentSelect(ctx: Context): Promise<boolean> {
     await ctx.answerCallbackQuery({ text: t("agent.changed_callback", { name: displayName }) });
     await ctx.reply(t("agent.changed_message", { name: displayName }), {
       reply_markup: keyboard,
+      ...getThreadSendOptions(threadId),
     });
 
     // Delete the inline menu message
@@ -140,12 +148,13 @@ export async function buildAgentSelectionMenu(
  */
 export async function showAgentSelectionMenu(ctx: Context): Promise<void> {
   try {
+    const threadId = getScopeFromContext(ctx)?.threadId ?? null;
     const scopeKey = getScopeKeyFromContext(ctx);
     const currentAgent = await fetchCurrentAgent(scopeKey);
     const keyboard = await buildAgentSelectionMenu(scopeKey, currentAgent);
 
     if (keyboard.inline_keyboard.length === 0) {
-      await ctx.reply(t("agent.menu.empty"));
+      await ctx.reply(t("agent.menu.empty"), getThreadSendOptions(threadId));
       return;
     }
 
@@ -160,6 +169,6 @@ export async function showAgentSelectionMenu(ctx: Context): Promise<void> {
     });
   } catch (err) {
     logger.error("[AgentHandler] Error showing agent menu:", err);
-    await ctx.reply(t("agent.menu.error"));
+    await ctx.reply(t("agent.menu.error"), getThreadSendOptions(getScopeFromContext(ctx)?.threadId ?? null));
   }
 }

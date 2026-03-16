@@ -5,6 +5,7 @@ export const fr: I18nDictionary = {
   "cmd.description.status": "Statut du serveur et de la session",
   "cmd.description.new": "Créer une nouvelle session",
   "cmd.description.sessions": "Lister les sessions",
+  "cmd.description.last": "Afficher le dernier message de la session",
   "cmd.description.projects": "Lister les projets",
   "cmd.description.commands": "Commandes personnalisées",
   "cmd.description.opencode_start": "Démarrer le serveur OpenCode",

@@ -4,6 +4,7 @@ export const en = {
   "cmd.description.abort": "Abort current action",
   "cmd.description.stop": "Stop current action",
   "cmd.description.sessions": "List sessions",
+  "cmd.description.last": "Show latest session message",
   "cmd.description.projects": "List projects",
   "cmd.description.commands": "Custom commands",
   "cmd.description.model": "Select model",
@@ -169,6 +170,13 @@ export const en = {
   "sessions.preview.title": "Recent messages:",
   "sessions.preview.you": "You:",
   "sessions.preview.agent": "Agent:",
+  "sessions.resume.assistant_title": "Last agent message:",
+  "sessions.resume.last_turn_title": "Last visible message:",
+
+  "last.title": "Latest message:",
+  "last.session_not_selected": "📋 No session selected. Use /sessions or /new first.",
+  "last.empty": "No recent visible messages in this session.",
+  "last.fetch_error": "🔴 Failed to load the latest session message.",
 
   "new.project_not_selected":
     "🏗 Project is not selected.\n\nFirst select a project with /projects.",

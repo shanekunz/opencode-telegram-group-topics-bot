@@ -1,6 +1,6 @@
 import type { I18nKey } from "../../i18n/en.js";
 import { t } from "../../i18n/index.js";
-import { BOT_COMMAND } from "./constants.js";
+import { BOT_COMMAND, DM_ALLOWED_COMMANDS } from "./constants.js";
 
 /**
  * Centralized bot commands definitions
@@ -26,6 +26,7 @@ const COMMAND_DEFINITIONS: BotCommandI18nDefinition[] = [
   { command: BOT_COMMAND.NEW, descriptionKey: "cmd.description.new" },
   { command: BOT_COMMAND.ABORT, descriptionKey: "cmd.description.abort" },
   { command: BOT_COMMAND.SESSIONS, descriptionKey: "cmd.description.sessions" },
+  { command: BOT_COMMAND.LAST, descriptionKey: "cmd.description.last" },
   { command: BOT_COMMAND.PROJECTS, descriptionKey: "cmd.description.projects" },
   { command: BOT_COMMAND.RENAME, descriptionKey: "cmd.description.rename" },
   { command: BOT_COMMAND.COMMANDS, descriptionKey: "cmd.description.commands" },
@@ -39,6 +40,19 @@ export function getLocalizedBotCommands(): BotCommandDefinition[] {
     command,
     description: t(descriptionKey),
   }));
+}
+
+export function getLocalizedDmBotCommands(): BotCommandDefinition[] {
+  const allowedCommands = new Set<string>(DM_ALLOWED_COMMANDS);
+  const commands = getLocalizedBotCommands().filter((command) => allowedCommands.has(command.command));
+
+  return [
+    {
+      command: BOT_COMMAND.START,
+      description: t("help.dm.command_start"),
+    },
+    ...commands,
+  ];
 }
 
 export const BOT_COMMANDS: BotCommandDefinition[] = getLocalizedBotCommands();

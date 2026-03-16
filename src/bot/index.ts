@@ -8,9 +8,10 @@ import { config } from "../config.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { interactionGuardMiddleware } from "./middleware/interaction-guard.js";
 import { unknownCommandMiddleware } from "./middleware/unknown-command.js";
-import { BOT_COMMANDS } from "./commands/definitions.js";
+import { BOT_COMMANDS, getLocalizedDmBotCommands } from "./commands/definitions.js";
 import { startCommand } from "./commands/start.js";
 import { helpCommand } from "./commands/help.js";
+import { lastCommand } from "./commands/last.js";
 import { statusCommand } from "./commands/status.js";
 import {
   AGENT_MODE_BUTTON_TEXT_PATTERN,
@@ -310,7 +311,7 @@ async function ensureCommandsInitialized(ctx: Context, next: NextFunction): Prom
 
   try {
     if (ctx.chat.type === CHAT_TYPE.PRIVATE) {
-      await ctx.api.setMyCommands(BOT_COMMANDS, {
+      await ctx.api.setMyCommands(getLocalizedDmBotCommands(), {
         scope: {
           type: "chat",
           chat_id: ctx.chat.id,
@@ -880,6 +881,7 @@ export function createBot(): Bot<Context> {
   bot.command(BOT_COMMAND.START, startCommand);
   bot.command(BOT_COMMAND.HELP, helpCommand);
   bot.command(BOT_COMMAND.STATUS, statusCommand);
+  bot.command(BOT_COMMAND.LAST, lastCommand);
   bot.command(BOT_COMMAND.OPENCODE_START, opencodeStartCommand);
   bot.command(BOT_COMMAND.OPENCODE_STOP, opencodeStopCommand);
   bot.command(BOT_COMMAND.PROJECTS, projectsCommand);

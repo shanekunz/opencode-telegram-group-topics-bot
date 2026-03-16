@@ -47,6 +47,12 @@ import { getTopicBindingBySessionId, registerTopicSessionBinding } from "../../t
 import { TOPIC_COLORS } from "../../topic/colors.js";
 import { formatTopicTitle } from "../../topic/title-format.js";
 import { buildTopicThreadLink } from "../utils/topic-link.js";
+import {
+  loadLastAssistantMessage,
+  loadLastVisibleTurn,
+  truncateText,
+  type SessionHistoryItem,
+} from "../../session/history.js";
 
 const SESSION_CALLBACK_PREFIX = "session:";
 const SESSION_PAGE_CALLBACK_PREFIX = "session:page:";
@@ -270,7 +276,7 @@ export async function handleSessionSelect(ctx: Context): Promise<boolean> {
     if (!currentProject) {
       clearInteractionWithScope("session_select_project_missing", scopeKey);
       await ctx.answerCallbackQuery();
-      await ctx.reply(t("sessions.select_project_first"));
+      await ctx.reply(t("sessions.select_project_first"), getThreadSendOptions(scope?.threadId ?? null));
       return true;
     }
 
@@ -541,7 +547,7 @@ export async function handleSessionSelect(ctx: Context): Promise<boolean> {
       });
     }
 
-    await ctx.deleteMessage();
+    await ctx.deleteMessage().catch(() => {});
   } catch (error) {
     clearInteractionWithScope(INTERACTION_CLEAR_REASON.SESSION_SELECT_ERROR, scopeKey);
     logger.error("[Sessions] Error selecting session:", error);
@@ -549,7 +555,10 @@ export async function handleSessionSelect(ctx: Context): Promise<boolean> {
     await ctx.answerCallbackQuery();
 
     if (errorText.includes(TELEGRAM_ERROR_MARKER.NOT_ENOUGH_RIGHTS_CREATE_TOPIC)) {
-      await ctx.reply(t(BOT_I18N_KEY.NEW_TOPIC_CREATE_NO_RIGHTS));
+      await ctx.reply(
+        t(BOT_I18N_KEY.NEW_TOPIC_CREATE_NO_RIGHTS),
+        getThreadSendOptions(scope?.threadId ?? null),
+      );
       return true;
     }
 
@@ -563,106 +572,25 @@ export async function handleSessionSelect(ctx: Context): Promise<boolean> {
   return true;
 }
 
-type SessionPreviewItem = {
-  role: "user" | "assistant";
-  text: string;
-  created: number;
-};
+type SessionPreviewItem = SessionHistoryItem;
 
-const PREVIEW_MESSAGES_LIMIT = 6;
 const PREVIEW_ITEM_MAX_LENGTH = 420;
 const TELEGRAM_MESSAGE_LIMIT = 4096;
 
-function extractTextParts(parts: Array<{ type: string; text?: string }>): string | null {
-  const textParts = parts
-    .filter((part) => part.type === "text" && typeof part.text === "string")
-    .map((part) => part.text as string);
-
-  if (textParts.length === 0) {
-    return null;
-  }
-
-  const text = textParts.join("").trim();
-  return text.length > 0 ? text : null;
+function formatHistoryLabel(item: SessionPreviewItem): string {
+  return item.role === "user" ? t("sessions.preview.you") : t("sessions.preview.agent");
 }
 
-function truncateText(text: string, maxLength: number): string {
-  if (text.length <= maxLength) {
-    return text;
+function formatSessionResume(item: SessionPreviewItem | null, prefersAssistant: boolean): string {
+  if (!item) {
+    return t("sessions.preview.empty");
   }
 
-  const clipped = text.slice(0, Math.max(0, maxLength - 3)).trimEnd();
-  return `${clipped}...`;
-}
-
-async function loadSessionPreview(
-  sessionId: string,
-  directory: string,
-): Promise<SessionPreviewItem[]> {
-  try {
-    const { data: messages, error } = await opencodeClient.session.messages({
-      sessionID: sessionId,
-      directory,
-      limit: PREVIEW_MESSAGES_LIMIT,
-    });
-
-    if (error || !messages) {
-      logger.warn("[Sessions] Failed to fetch session messages:", error);
-      return [];
-    }
-
-    const items = messages
-      .map(({ info, parts }) => {
-        const role = info.role as "user" | "assistant" | undefined;
-        if (role !== "user" && role !== "assistant") {
-          return null;
-        }
-
-        if (role === "assistant" && (info as { summary?: boolean }).summary) {
-          return null;
-        }
-
-        const text = extractTextParts(parts as Array<{ type: string; text?: string }>);
-        if (!text) {
-          return null;
-        }
-
-        const created = info.time?.created ?? 0;
-        return {
-          role,
-          text: truncateText(text, PREVIEW_ITEM_MAX_LENGTH),
-          created,
-        } as SessionPreviewItem;
-      })
-      .filter((item): item is SessionPreviewItem => Boolean(item));
-
-    return items.sort((a, b) => a.created - b.created);
-  } catch (err) {
-    logger.error("[Sessions] Error loading session preview:", err);
-    return [];
-  }
-}
-
-function formatSessionPreview(_sessionTitle: string, items: SessionPreviewItem[]): string {
-  const lines: string[] = [];
-
-  if (items.length === 0) {
-    lines.push(t("sessions.preview.empty"));
-    return lines.join("\n");
-  }
-
-  lines.push(t("sessions.preview.title"));
-
-  items.forEach((item, index) => {
-    const label = item.role === "user" ? t("sessions.preview.you") : t("sessions.preview.agent");
-    lines.push(`${label} ${item.text}`);
-    if (index < items.length - 1) {
-      lines.push("");
-    }
-  });
-
-  const rawMessage = lines.join("\n");
-  return truncateText(rawMessage, TELEGRAM_MESSAGE_LIMIT);
+  const title = prefersAssistant
+    ? t("sessions.resume.assistant_title")
+    : t("sessions.resume.last_turn_title");
+  const text = truncateText(item.text, PREVIEW_ITEM_MAX_LENGTH);
+  return truncateText(`${title}\n\n${formatHistoryLabel(item)} ${text}`, TELEGRAM_MESSAGE_LIMIT);
 }
 
 async function sendSessionPreview(
@@ -674,8 +602,9 @@ async function sendSessionPreview(
   sessionId: string,
   directory: string,
 ): Promise<void> {
-  const previewItems = await loadSessionPreview(sessionId, directory);
-  const finalText = formatSessionPreview(sessionTitle, previewItems);
+  const assistantItem = await loadLastAssistantMessage(sessionId, directory);
+  const fallbackItem = assistantItem ?? (await loadLastVisibleTurn(sessionId, directory));
+  const finalText = formatSessionResume(fallbackItem, Boolean(assistantItem));
 
   if (messageId) {
     try {

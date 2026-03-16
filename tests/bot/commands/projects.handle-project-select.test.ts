@@ -23,9 +23,19 @@ vi.mock("../../../src/interaction/cleanup.js", () => ({
   clearAllInteractionState: mocked.clearAllInteractionStateMock,
 }));
 
-function createCallbackContext(data: string): Context {
+function createCallbackContext(data: string, threadId?: number): Context {
   return {
-    callbackQuery: { data } as Context["callbackQuery"],
+    chat: threadId ? ({ id: 123, type: "supergroup" } as Context["chat"]) : undefined,
+    callbackQuery: {
+      data,
+      ...(threadId
+        ? {
+            message: {
+              message_thread_id: threadId,
+            },
+          }
+        : {}),
+    } as Context["callbackQuery"],
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
     editMessageText: vi.fn().mockResolvedValue(undefined),
     reply: vi.fn().mockResolvedValue(undefined),
@@ -68,9 +78,8 @@ describe("bot/commands/projects handleProjectSelect", () => {
     const handled = await handleProjectSelect(ctx);
 
     expect(handled).toBe(true);
-    expect(mocked.clearAllInteractionStateMock).toHaveBeenCalledWith("project_select_error");
     expect(ctx.answerCallbackQuery).toHaveBeenCalledWith();
-    expect(ctx.reply).toHaveBeenCalledWith(t("projects.select_error"));
+    expect(ctx.reply).toHaveBeenCalledWith(t("projects.select_error"), {});
   });
 
   it("ignores non-project callback data", async () => {
