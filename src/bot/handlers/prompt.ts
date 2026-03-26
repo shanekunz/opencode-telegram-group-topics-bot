@@ -65,6 +65,10 @@ interface QueuedPromptRequest {
 const queuedPromptRequests = new Map<string, QueuedPromptRequest[]>();
 const drainingQueuedSessions = new Set<string>();
 
+// If OpenCode headless/server mode gains a native per-session queue later, prefer that
+// over this bot-side queue so Telegram matches the upstream client behavior more closely.
+const QUEUED_PROMPT_PREVIEW_MAX_LENGTH = 280;
+
 export function getPromptBotInstance(): Bot<Context> | null {
   return botInstance;
 }
@@ -110,6 +114,41 @@ async function sendQueuedPromptNotice(
     .sendMessage(chatId, t("bot.session_queued", { position: String(position) }), {
       ...getThreadSendOptions(threadId),
     })
+    .catch(() => {});
+}
+
+function truncateQueuedPromptPreview(text: string): string {
+  if (text.length <= QUEUED_PROMPT_PREVIEW_MAX_LENGTH) {
+    return text;
+  }
+
+  return `${text.slice(0, QUEUED_PROMPT_PREVIEW_MAX_LENGTH - 3).trimEnd()}...`;
+}
+
+function getQueuedPromptPreview(request: QueuedPromptRequest): string {
+  const textParts = request.promptOptions.parts
+    .filter((part): part is TextPartInput => part.type === "text")
+    .map((part) => part.text.trim())
+    .filter((text) => text.length > 0);
+
+  const firstText = textParts[0] ?? "See attached file";
+  return truncateQueuedPromptPreview(firstText);
+}
+
+async function sendQueuedPromptStartedNotice(
+  bot: Bot<Context>,
+  request: QueuedPromptRequest,
+): Promise<void> {
+  await bot.api
+    .sendMessage(
+      request.chatId,
+      t("bot.session_queue_started", {
+        preview: getQueuedPromptPreview(request),
+      }),
+      {
+        ...getThreadSendOptions(request.threadId),
+      },
+    )
     .catch(() => {});
 }
 
@@ -269,6 +308,7 @@ export async function dispatchNextQueuedPrompt(sessionId: string): Promise<boole
       return false;
     }
 
+    await sendQueuedPromptStartedNotice(botInstance, nextRequest);
     submitPromptRequest(botInstance, {
       ...nextRequest,
       notifyOnQueue: false,

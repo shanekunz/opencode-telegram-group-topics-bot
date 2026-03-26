@@ -15,6 +15,7 @@ import {
   getScheduledTaskTopicByChatAndProject,
   upsertScheduledTaskTopic,
 } from "../../scheduled-task/store.js";
+import { SCHEDULED_TASK_OUTPUT_TOPIC_NAME } from "../../scheduled-task/topic-output.js";
 import {
   createScheduledTaskModel,
   type ScheduledTask,
@@ -32,7 +33,7 @@ function isForumGroupContext(ctx: Context): boolean {
 
 function buildScheduledTopicName(project: { name?: string; worktree: string }): string {
   void project;
-  return "⏰ Scheduled Task Output";
+  return SCHEDULED_TASK_OUTPUT_TOPIC_NAME;
 }
 
 async function resolveScheduledTaskDeliveryTarget(
@@ -54,8 +55,29 @@ async function resolveScheduledTaskDeliveryTarget(
     };
   }
 
+  const topicName = buildScheduledTopicName(project);
   const existingTopic = await getScheduledTaskTopicByChatAndProject(ctx.chat.id, project.id);
   if (existingTopic) {
+    if (existingTopic.topicName !== topicName) {
+      const timestamp = new Date().toISOString();
+      try {
+        await ctx.api.editForumTopic(existingTopic.chatId, existingTopic.threadId, {
+          name: topicName,
+        });
+        await upsertScheduledTaskTopic({
+          ...existingTopic,
+          topicName,
+          updatedAt: timestamp,
+        });
+      } catch (error) {
+        logger.warn("[TaskCommand] Failed to rename existing scheduled output topic", {
+          chatId: existingTopic.chatId,
+          threadId: existingTopic.threadId,
+          error,
+        });
+      }
+    }
+
     return {
       delivery: {
         chatId: existingTopic.chatId,
@@ -65,7 +87,6 @@ async function resolveScheduledTaskDeliveryTarget(
     };
   }
 
-  const topicName = buildScheduledTopicName(project);
   const createdTopic = await ctx.api.createForumTopic(ctx.chat.id, topicName, {
     icon_color: TOPIC_COLORS.BLUE,
   });

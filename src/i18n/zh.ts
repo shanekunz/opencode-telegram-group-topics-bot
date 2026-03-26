@@ -62,6 +62,8 @@ export const zh: I18nDictionary = {
     "⏳ 你上一条请求还在执行，所以这条新请求没有启动。\n\n原因：OpenCode 在同一个会话里一次只允许一个运行中的任务。\n建议：先等待当前回复；如果看起来卡住了，先用 /abort，再重新发送消息。",
   "bot.session_queued":
     "📝 这条消息已加入当前会话的队列。\n\n队列位置：{position}\n接下来会发生什么：当前运行结束后，它会自动开始。",
+  "bot.session_queue_started":
+    "▶️ 正在开始处理这个会话中的下一条排队消息。\n\n排队消息：\n{preview}",
   "bot.session_reset_project_mismatch":
     "⚠️ 活动会话与所选项目不匹配，因此已重置。使用 /sessions 选择一个会话，或 /new 创建新会话。",
   "bot.prompt_send_error":
@@ -166,10 +168,14 @@ export const zh: I18nDictionary = {
   "task.project_not_selected": "🏗 未选择项目。\n\n请先使用 /projects 选择一个项目。",
   "task.output_topic_blocked":
     "⚠️ Scheduled Task Output 中不允许发送提示词。请使用 🎛️ Session Control 管理项目、会话和定时任务。",
-  "task.schedule_prompt": "发送这个任务的计划时间。例如：`每个工作日 09:00` 或 `明天 18:30`。",
+  "task.output_topic_commands_only":
+    "⚠️ Scheduled Task Output 中大多数命令都不可用。请使用 🎛️ Session Control 管理项目、会话和定时任务。",
+  "task.schedule_prompt":
+    "发送这个任务的计划时间。例如：`每个工作日 09:00` 或 `明天 18:30`。\n\n完成创建时，这个任务会使用当前 🎛️ Session Control 中的代理和模型默认值。",
   "task.schedule_parsing": "⏳ 仍在解析计划时间。请等待预览消息。",
   "task.schedule_preview": "计划已解析。\n\n摘要：{summary}\n下次运行：{nextRunAt}",
-  "task.prompt_prompt": "发送这个定时任务的提示词。",
+  "task.prompt_prompt":
+    "发送这个定时任务的提示词。它会保留创建时当前 🎛️ Session Control 中保存的代理和模型默认值。",
   "task.schedule_error": "⚠️ 我无法解析这个计划：{message}\n\n请发送更清晰的时间描述。",
   "task.created": "✅ 定时任务已创建。\n\n计划：{summary}\n下次运行：{nextRunAt}",
   "task.created_topic_link": "🔗 定时运行通知会发送到这里：{url}",

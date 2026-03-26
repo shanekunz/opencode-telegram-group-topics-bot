@@ -7,6 +7,7 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 import { config } from "../config.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { interactionGuardMiddleware } from "./middleware/interaction-guard.js";
+import { scheduledOutputTopicMiddleware } from "./middleware/scheduled-output-topic.js";
 import { unknownCommandMiddleware } from "./middleware/unknown-command.js";
 import { BOT_COMMANDS, getLocalizedDmBotCommands } from "./commands/definitions.js";
 import { startCommand } from "./commands/start.js";
@@ -967,6 +968,7 @@ export function createBot(): Bot<Context> {
   });
   bot.use(ensureCommandsInitialized);
   bot.use(interactionGuardMiddleware);
+  bot.use(scheduledOutputTopicMiddleware);
   bot.use(async (ctx, next) => {
     if (ctx.chat?.type !== CHAT_TYPE.PRIVATE) {
       await next();

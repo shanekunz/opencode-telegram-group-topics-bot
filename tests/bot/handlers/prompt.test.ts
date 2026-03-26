@@ -276,6 +276,11 @@ describe("bot/handlers/prompt", () => {
     const dispatched = await dispatchNextQueuedPrompt("session-1");
 
     expect(dispatched).toBe(true);
+    expect(bot.api.sendMessage).toHaveBeenCalledWith(
+      -100123,
+      t("bot.session_queue_started", { preview: "Test" }),
+      { message_thread_id: 555 },
+    );
     expect(mocked.sessionPromptAsyncMock).toHaveBeenCalledWith({
       sessionID: "session-1",
       directory: "/repo/app",

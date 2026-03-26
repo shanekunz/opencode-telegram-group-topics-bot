@@ -64,6 +64,7 @@ function createContext(text: string, threadId: number): Context {
     reply: vi.fn().mockResolvedValue({ message_id: 1000 + threadId }),
     api: {
       createForumTopic: vi.fn().mockResolvedValue({ message_thread_id: 555 }),
+      editForumTopic: vi.fn().mockResolvedValue(true),
     },
   } as unknown as Context;
 }
@@ -173,6 +174,43 @@ describe("bot/commands/task", () => {
     );
   });
 
+  it("renames legacy scheduled topics when reusing them", async () => {
+    mocked.parseTaskScheduleMock.mockResolvedValue({
+      kind: "once",
+      runAt: "2026-03-26T18:30:00.000Z",
+      timezone: "UTC",
+      summary: "26 Mar 18:30",
+      nextRunAt: "2026-03-26T18:30:00.000Z",
+    });
+    mocked.getScheduledTaskTopicByChatAndProjectMock.mockResolvedValue({
+      chatId: -100123,
+      projectId: "project-1",
+      projectWorktree: "/repo/app",
+      threadId: 333,
+      topicName: "Scheduled - /repo/app",
+      createdAt: "2026-03-25T00:00:00.000Z",
+      updatedAt: "2026-03-25T00:00:00.000Z",
+    });
+
+    await taskCommand(createContext("/task", 77) as never);
+    await handleTaskTextAnswer(createContext("tomorrow at 18:30", 77));
+
+    const promptCtx = createContext("Run the nightly review", 77);
+    await handleTaskTextAnswer(promptCtx);
+
+    expect(promptCtx.api.editForumTopic).toHaveBeenCalledWith(-100123, 333, {
+      name: "⏰ Scheduled Task Output",
+    });
+    expect(mocked.upsertScheduledTaskTopicMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chatId: -100123,
+        projectId: "project-1",
+        threadId: 333,
+        topicName: "⏰ Scheduled Task Output",
+      }),
+    );
+  });
+
   it("sends a concise schedule preview before the separate prompt request", async () => {
     mocked.parseTaskScheduleMock.mockResolvedValue({
       kind: "once",
@@ -199,6 +237,9 @@ describe("bot/commands/task", () => {
 
     const replyMock = scheduleCtx.reply as ReturnType<typeof vi.fn>;
     expect(replyMock).toHaveBeenCalledTimes(2);
+    expect((commandCtx.reply as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toContain(
+      "🎛️ Session Control",
+    );
     expect(replyMock).toHaveBeenNthCalledWith(
       1,
       t("task.schedule_preview", {
@@ -207,5 +248,6 @@ describe("bot/commands/task", () => {
       }),
     );
     expect(replyMock).toHaveBeenNthCalledWith(2, t("task.prompt_prompt"));
+    expect(t("task.prompt_prompt")).toContain("🎛️ Session Control");
   });
 });
