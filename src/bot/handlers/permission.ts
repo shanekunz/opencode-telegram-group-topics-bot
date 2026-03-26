@@ -310,6 +310,30 @@ export async function showPermissionRequest(
 ): Promise<void> {
   logger.debug(`[PermissionHandler] Showing permission request: ${request.permission}`);
 
+  if (permissionManager.hasRequestID(request.id, scopeKey)) {
+    logger.info(
+      `[PermissionHandler] Skipping duplicate permission request by id: requestID=${request.id}, scope=${scopeKey}`,
+    );
+    syncPermissionInteractionState(scopeKey, {
+      requestID: request.id,
+    });
+    summaryAggregator.stopTypingIndicator(request.sessionID);
+    return;
+  }
+
+  const equivalentRequest = permissionManager.findEquivalentRequest(request, scopeKey);
+  if (equivalentRequest) {
+    logger.info(
+      `[PermissionHandler] Skipping equivalent active permission request: requestID=${request.id}, existingRequestID=${equivalentRequest.request.id}, scope=${scopeKey}`,
+    );
+    syncPermissionInteractionState(scopeKey, {
+      requestID: equivalentRequest.request.id,
+      messageId: equivalentRequest.messageId,
+    });
+    summaryAggregator.stopTypingIndicator(request.sessionID);
+    return;
+  }
+
   const text = formatPermissionText(request);
   const keyboard = buildPermissionKeyboard(request.id);
 

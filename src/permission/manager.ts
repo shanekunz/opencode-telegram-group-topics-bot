@@ -4,6 +4,28 @@ import { logger } from "../utils/logger.js";
 class PermissionManager {
   private stateByScope: Map<string, PermissionState> = new Map();
 
+  private isEquivalentRequest(left: PermissionRequest, right: PermissionRequest): boolean {
+    if (!left.tool || !right.tool) {
+      return false;
+    }
+
+    if (
+      left.sessionID !== right.sessionID ||
+      left.permission !== right.permission ||
+      left.patterns.length !== right.patterns.length
+    ) {
+      return false;
+    }
+
+    for (let index = 0; index < left.patterns.length; index += 1) {
+      if (left.patterns[index] !== right.patterns[index]) {
+        return false;
+      }
+    }
+
+    return left.tool.callID === right.tool.callID && left.tool.messageID === right.tool.messageID;
+  }
+
   private getState(scopeKey: string): PermissionState {
     const state = this.stateByScope.get(scopeKey);
     if (state) {
@@ -55,6 +77,24 @@ class PermissionManager {
     for (const [messageId, request] of entries) {
       if (request.id === requestID) {
         return { messageId, request };
+      }
+    }
+
+    return null;
+  }
+
+  hasRequestID(requestID: string, scopeKey: string = "global"): boolean {
+    return this.getRequestByID(requestID, scopeKey) !== null;
+  }
+
+  findEquivalentRequest(
+    request: PermissionRequest,
+    scopeKey: string = "global",
+  ): { messageId: number; request: PermissionRequest } | null {
+    const entries = Array.from(this.getState(scopeKey).requestsByMessageId.entries());
+    for (const [messageId, activeRequest] of entries) {
+      if (this.isEquivalentRequest(activeRequest, request)) {
+        return { messageId, request: activeRequest };
       }
     }
 

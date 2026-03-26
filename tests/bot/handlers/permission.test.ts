@@ -199,6 +199,64 @@ describe("bot/handlers/permission", () => {
     expect(state?.metadata.pendingCount).toBe(2);
   });
 
+  it("ignores duplicate permission events with the same request id", async () => {
+    const botApi = createBotApi(500);
+
+    await showPermissionRequest(botApi, 777, createPermissionRequest("perm-dup"), "global", null);
+    await showPermissionRequest(botApi, 777, createPermissionRequest("perm-dup"), "global", null);
+
+    const sendMessageMock = botApi.sendMessage as unknown as ReturnType<typeof vi.fn>;
+
+    expect(sendMessageMock).toHaveBeenCalledTimes(1);
+    expect(permissionManager.getPendingCount()).toBe(1);
+    expect(permissionManager.getRequestID(500)).toBe("perm-dup");
+
+    const state = interactionManager.getSnapshot();
+    expect(state?.kind).toBe("permission");
+    expect(state?.metadata.requestID).toBe("perm-dup");
+  });
+
+  it("ignores duplicate permission prompts for the same active tool call", async () => {
+    const botApi = createBotApi(500);
+
+    await showPermissionRequest(
+      botApi,
+      777,
+      createPermissionRequest("perm-1", {
+        tool: {
+          callID: "call-1",
+          messageID: "message-1",
+        },
+      }),
+      "global",
+      null,
+    );
+
+    await showPermissionRequest(
+      botApi,
+      777,
+      createPermissionRequest("perm-2", {
+        tool: {
+          callID: "call-1",
+          messageID: "message-1",
+        },
+      }),
+      "global",
+      null,
+    );
+
+    const sendMessageMock = botApi.sendMessage as unknown as ReturnType<typeof vi.fn>;
+
+    expect(sendMessageMock).toHaveBeenCalledTimes(1);
+    expect(permissionManager.getPendingCount()).toBe(1);
+    expect(permissionManager.getRequestID(500)).toBe("perm-1");
+
+    const state = interactionManager.getSnapshot();
+    expect(state?.kind).toBe("permission");
+    expect(state?.metadata.requestID).toBe("perm-1");
+    expect(state?.metadata.messageId).toBe(500);
+  });
+
   it("rejects callback from unknown permission message", async () => {
     const botApi = createBotApi(500);
 
