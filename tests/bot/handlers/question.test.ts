@@ -34,12 +34,18 @@ vi.mock("../../../src/summary/aggregator.js", () => ({
 }));
 
 vi.mock("../../../src/utils/safe-background-task.js", () => ({
-  safeBackgroundTask: ({ task, onSuccess, onError }: {
+  safeBackgroundTask: ({
+    task,
+    onSuccess,
+    onError,
+  }: {
     task: () => Promise<unknown>;
     onSuccess?: (value: unknown) => void;
     onError?: (error: unknown) => void;
   }) => {
-    void task().then((value) => onSuccess?.(value)).catch((error) => onError?.(error));
+    void task()
+      .then((value) => onSuccess?.(value))
+      .catch((error) => onError?.(error));
   },
 }));
 
@@ -211,6 +217,27 @@ describe("bot/handlers/question", () => {
       show_alert: true,
     });
     expect(questionManager.isActive()).toBe(true);
+  });
+
+  it("keeps the callback topic thread when moving to the next question", async () => {
+    const api = createApi([450, 451]);
+    const topicScope = "123:555";
+
+    questionManager.startQuestions([QUESTION_ONE, QUESTION_TWO], "req-6", topicScope);
+    await showCurrentQuestion(api, 123, topicScope, 555);
+
+    const selectCtx = createCallbackContext("question:select:0:0", 450, api, 555);
+    const handled = await handleQuestionCallback(selectCtx);
+
+    expect(handled).toBe(true);
+    expect(api.sendMessage).toHaveBeenNthCalledWith(
+      2,
+      123,
+      expect.stringContaining("Second question"),
+      expect.objectContaining({
+        message_thread_id: 555,
+      }),
+    );
   });
 
   it("sends poll completion summary back into the originating topic", async () => {
