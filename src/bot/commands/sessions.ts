@@ -159,6 +159,7 @@ async function loadSessionPage(
   const { data: sessions, error } = await opencodeClient.session.list({
     directory,
     limit: endExclusive + SESSION_FETCH_EXTRA_COUNT,
+    roots: true,
   });
 
   if (error || !sessions) {
@@ -276,7 +277,10 @@ export async function handleSessionSelect(ctx: Context): Promise<boolean> {
     if (!currentProject) {
       clearInteractionWithScope("session_select_project_missing", scopeKey);
       await ctx.answerCallbackQuery();
-      await ctx.reply(t("sessions.select_project_first"), getThreadSendOptions(scope?.threadId ?? null));
+      await ctx.reply(
+        t("sessions.select_project_first"),
+        getThreadSendOptions(scope?.threadId ?? null),
+      );
       return true;
     }
 

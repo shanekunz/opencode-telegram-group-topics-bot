@@ -7,7 +7,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - Permanent git remote: `upstream` -> `https://github.com/grinev/opencode-telegram-bot.git`
 - Upstream repo: `https://github.com/grinev/opencode-telegram-bot`
 - Upstream branch: `main`
-- Last reviewed upstream head: `aecb975` (`chore(release): v0.13.2`, 2026-03-25)
+- Last reviewed upstream head: `afacade` (`fix(sessions): filter out child sessions from /sessions list (#61)`, 2026-03-28)
 - Original fork point for this threaded fork: `21da71b` (`chore(release): v0.11.0`)
 
 ## Fork Rules
@@ -31,6 +31,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - `6afb300` + `6619532` ported: scoped pinned messages now show cumulative session cost
 - `f3b3fc6` + `a337370` + `54a493d` ported: `/commands` pagination, filtering, and clearer execution UX
 - `fcd2273` + `e4eb83e` + `b414bf3` covered by fork commit `c97baf6`: upstream tool-call streaming/reply formatting changes were already adapted into this fork's topic-aware streaming flow
+- `afacade` ported: `/sessions` now requests root sessions only, avoiding child-session entries in the control-lane picker
 
 ## Upstream Changes Intentionally Adapted
 
