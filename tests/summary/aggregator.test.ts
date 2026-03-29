@@ -312,6 +312,75 @@ describe("summary/aggregator", () => {
     ]);
   });
 
+  it("does not guess unknown child-session ownership when multiple pending subagents exist", () => {
+    const onSubagent = vi.fn();
+    summaryAggregator.setOnSubagent(onSubagent);
+    summaryAggregator.setSession("root-a");
+    summaryAggregator.setSession("root-b");
+
+    summaryAggregator.processEvent({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "subtask-a",
+          sessionID: "root-a",
+          messageID: "message-a",
+          type: "subtask",
+          agent: "explore",
+          description: "Task A",
+          prompt: "Task A",
+        },
+      },
+    } as unknown as Event);
+
+    summaryAggregator.processEvent({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "subtask-b",
+          sessionID: "root-b",
+          messageID: "message-b",
+          type: "subtask",
+          agent: "general",
+          description: "Task B",
+          prompt: "Task B",
+        },
+      },
+    } as unknown as Event);
+
+    summaryAggregator.processEvent({
+      type: "message.updated",
+      properties: {
+        info: {
+          id: "child-message",
+          sessionID: "child-unknown",
+          role: "assistant",
+          providerID: "openai",
+          modelID: "gpt-5",
+          time: { created: Date.now() },
+        },
+      },
+    } as unknown as Event);
+
+    const rootACall = onSubagent.mock.calls.find((call) => call[0] === "root-a");
+    const rootBCall = onSubagent.mock.calls.find((call) => call[0] === "root-b");
+
+    expect(rootACall?.[1]).toEqual([
+      expect.objectContaining({
+        sessionId: null,
+        parentSessionId: "root-a",
+        description: "Task A",
+      }),
+    ]);
+    expect(rootBCall?.[1]).toEqual([
+      expect.objectContaining({
+        sessionId: null,
+        parentSessionId: "root-b",
+        description: "Task B",
+      }),
+    ]);
+  });
+
   it("marks write tool without file attachment when payload is oversized", () => {
     const onTool = vi.fn();
     const onToolFile = vi.fn();

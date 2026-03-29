@@ -153,5 +153,6 @@ describe("bot/commands/tasklist", () => {
     expect(callbackCtx.editMessageText).toHaveBeenCalledWith(
       "📭 No scheduled tasks for this project in this chat.",
     );
+    expect(interactionManager.isActive("-100123:77")).toBe(false);
   });
 });

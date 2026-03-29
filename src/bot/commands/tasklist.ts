@@ -4,6 +4,7 @@ import { t } from "../../i18n/index.js";
 import { getCurrentProject } from "../../settings/manager.js";
 import {
   appendInlineMenuCancelButton,
+  clearActiveInlineMenu,
   ensureActiveInlineMenu,
   replyWithInlineMenu,
 } from "../handlers/inline-menu.js";
@@ -106,6 +107,7 @@ export async function handleTaskListCallback(ctx: Context): Promise<boolean> {
 
     const remainingTasks = getScopedScheduledTasks(ctx);
     if (remainingTasks.length === 0) {
+      clearActiveInlineMenu("tasklist_empty_after_delete", getScopeKeyFromContext(ctx));
       await ctx.editMessageText(t("task.list.empty"));
       return true;
     }

@@ -700,33 +700,6 @@ class SummaryAggregator {
     this.removeFromQueue(this.pendingSubagentCardIdsByParent, state.parentSessionId, cardId);
   }
 
-  private findPendingSubagentWithoutSession(): SubagentState | null {
-    for (const subagent of this.subagentStates.values()) {
-      if (!subagent.sessionId) {
-        return subagent;
-      }
-    }
-
-    return null;
-  }
-
-  private attachUnknownSessionToPendingSubagent(sessionId: string): boolean {
-    const pendingState = this.findPendingSubagentWithoutSession();
-    if (!pendingState) {
-      return false;
-    }
-
-    this.trackedSessionParents.set(sessionId, pendingState.parentSessionId);
-    this.attachSessionToSubagent(pendingState.cardId, sessionId);
-    this.removeFromQueue(
-      this.pendingChildSessionIdsByParent,
-      pendingState.parentSessionId,
-      sessionId,
-    );
-    this.emitSubagentState(pendingState.parentSessionId);
-    return true;
-  }
-
   private findNextSubagentForTaskTool(parentSessionId: string): SubagentState | null {
     const cardIds = this.subagentOrderByParent.get(parentSessionId) ?? [];
     for (const cardId of cardIds) {
@@ -938,15 +911,6 @@ class SummaryAggregator {
   ): void {
     const { info } = event.properties;
 
-    if (
-      info.sessionID !== undefined &&
-      !this.isTrackedSession(info.sessionID) &&
-      !this.isTrackedChildSession(info.sessionID) &&
-      info.role === "assistant"
-    ) {
-      this.attachUnknownSessionToPendingSubagent(info.sessionID);
-    }
-
     if (this.isTrackedChildSession(info.sessionID)) {
       if (info.role === "assistant") {
         this.updateSubagentFromAssistantMessage(
@@ -1032,14 +996,6 @@ class SummaryAggregator {
     },
   ): void {
     const { part } = event.properties;
-
-    if (
-      !this.isTrackedSession(part.sessionID) &&
-      !this.isTrackedChildSession(part.sessionID) &&
-      part.type !== "subtask"
-    ) {
-      this.attachUnknownSessionToPendingSubagent(part.sessionID);
-    }
 
     const isCurrentRootSession = this.isTrackedSession(part.sessionID);
     const isTrackedChildSession = this.isTrackedChildSession(part.sessionID);
