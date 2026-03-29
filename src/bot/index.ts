@@ -51,6 +51,7 @@ import { keyboardManager } from "../keyboard/manager.js";
 import { subscribeToEvents } from "../opencode/events.js";
 import { summaryAggregator } from "../summary/aggregator.js";
 import { formatSummary, formatToolInfo, getAssistantParseMode } from "../summary/formatter.js";
+import { renderSubagentCards } from "../summary/subagent-formatter.js";
 import { ToolMessageBatcher } from "../summary/tool-message-batcher.js";
 import { ingestSessionInfoForCache } from "../session/cache-manager.js";
 import { logger } from "../utils/logger.js";
@@ -227,6 +228,7 @@ function extractSessionTitleUpdate(
 }
 
 const TELEGRAM_DOCUMENT_CAPTION_MAX_LENGTH = 1024;
+const SUBAGENT_STREAM_PREFIX = "🧩";
 const sessionErrorThrottle = new SessionErrorThrottle(3000);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -538,7 +540,11 @@ async function ensureEventSubscription(directory: string): Promise<void> {
       toolInfo.hasFileAttachment &&
       (toolInfo.tool === "write" || toolInfo.tool === "edit" || toolInfo.tool === "apply_patch");
 
-    if (config.bot.hideToolCallMessages || shouldIncludeToolInfoInFileCaption) {
+    if (
+      config.bot.hideToolCallMessages ||
+      shouldIncludeToolInfoInFileCaption ||
+      toolInfo.tool === "task"
+    ) {
       return;
     }
 
@@ -563,6 +569,19 @@ async function ensureEventSubscription(directory: string): Promise<void> {
       }
     } catch (err) {
       logger.error("Failed to send tool notification to Telegram:", err);
+    }
+  });
+
+  summaryAggregator.setOnSubagent((sessionId, subagents) => {
+    if (config.bot.hideToolCallMessages) {
+      return;
+    }
+
+    try {
+      const renderedCards = renderSubagentCards(subagents);
+      toolCallStreamer.replaceByPrefix(sessionId, SUBAGENT_STREAM_PREFIX, renderedCards);
+    } catch (err) {
+      logger.error("Failed to render subagent activity for Telegram:", err);
     }
   });
 

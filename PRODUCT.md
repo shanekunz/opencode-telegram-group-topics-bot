@@ -134,6 +134,7 @@ Model picker behavior:
 - [x] Group-threaded workflow with General control topic plus per-session forum topics
 - [x] Prompt execution through OpenCode with SSE-based event handling
 - [x] Live assistant response streaming with thread-aware Telegram edits and fallback completion delivery
+- [x] Subagent work status cards routed back into the parent topic thread
 - [x] Interactive question and permission flows (buttons + custom text answers)
 - [x] Single-active interaction routing with contextual blocking and cleanup recovery
 - [x] Pinned status updates (session, project, model, context usage, changed files)

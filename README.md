@@ -30,6 +30,7 @@ Fork sync notes: [`FORK_SYNC.md`](./FORK_SYNC.md)
 - The **General** topic is the control lane for `/projects`, `/sessions`, `/new`, and status checks.
 - Each new OpenCode session gets its own forum topic.
 - Each topic keeps its own session, model, agent, and pinned status state.
+- Subagent child-session work is summarized back into the parent topic as live status cards.
 - Multiple topics can run at the same time, and multiple groups can be active at the same time.
 - DMs are for light control/status usage, not the main multi-session workflow.
 
