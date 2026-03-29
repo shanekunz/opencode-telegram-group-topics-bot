@@ -8,6 +8,7 @@ import { logger } from "../utils/logger.js";
 import type { ContextInfo, KeyboardState } from "./types.js";
 import { t } from "../i18n/index.js";
 import { SCOPE_CONTEXT, getScopeFromKey, getThreadIdFromScopeKey } from "../bot/scope.js";
+import { pinnedMessageManager } from "../pinned/manager.js";
 
 class KeyboardManager {
   private stateByScope: Map<string, KeyboardState> = new Map();
@@ -82,8 +83,15 @@ class KeyboardManager {
   private buildKeyboard(scopeKey: string) {
     const state = this.getOrCreateState(scopeKey);
     const scope = getScopeFromKey(scopeKey);
+    const pinnedContextInfo =
+      scope?.context === SCOPE_CONTEXT.GROUP_GENERAL
+        ? null
+        : pinnedMessageManager.getContextInfo(scopeKey);
+    const effectiveStoredContextInfo = state.contextInfo ?? undefined;
     const effectiveContextInfo =
-      scope?.context === SCOPE_CONTEXT.GROUP_GENERAL ? undefined : (state.contextInfo ?? undefined);
+      scope?.context === SCOPE_CONTEXT.GROUP_GENERAL
+        ? undefined
+        : (pinnedContextInfo ?? effectiveStoredContextInfo);
     const keyboardOptions =
       scope?.context === SCOPE_CONTEXT.GROUP_GENERAL
         ? {

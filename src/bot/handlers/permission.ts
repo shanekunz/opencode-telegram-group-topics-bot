@@ -20,7 +20,31 @@ const PERMISSION_CALLBACK = {
   REQUEST_ID_INDEX: 2,
 } as const;
 
+const TELEGRAM_PERMISSION_SEND_RETRY_LIMIT = 3;
+
 type PermissionCallbackAction = PermissionReply;
+
+function getRetryAfterMs(error: unknown): number | null {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const params = Reflect.get(error, "parameters");
+  if (!params || typeof params !== "object") {
+    return null;
+  }
+
+  const retryAfter = Reflect.get(params, "retry_after");
+  if (typeof retryAfter !== "number" || retryAfter <= 0) {
+    return null;
+  }
+
+  return retryAfter * 1000;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 interface ParsedPermissionCallback {
   action: PermissionCallbackAction;
@@ -338,15 +362,38 @@ export async function showPermissionRequest(
   const keyboard = buildPermissionKeyboard(request.id);
 
   try {
-    const message = await sendBotText({
-      api: bot,
-      chatId,
-      text,
-      options: {
-        reply_markup: keyboard,
-        ...getThreadSendOptions(threadId),
-      },
-    });
+    let message: Awaited<ReturnType<typeof sendBotText>> | null = null;
+
+    for (let attempt = 1; attempt <= TELEGRAM_PERMISSION_SEND_RETRY_LIMIT; attempt++) {
+      try {
+        message = await sendBotText({
+          api: bot,
+          chatId,
+          text,
+          options: {
+            reply_markup: keyboard,
+            ...getThreadSendOptions(threadId),
+          },
+        });
+        break;
+      } catch (err) {
+        const retryAfterMs = getRetryAfterMs(err);
+        const shouldRetry = retryAfterMs !== null && attempt < TELEGRAM_PERMISSION_SEND_RETRY_LIMIT;
+
+        if (!shouldRetry) {
+          throw err;
+        }
+
+        logger.warn(
+          `[PermissionHandler] Retrying permission message after Telegram 429: requestID=${request.id}, attempt=${attempt}, retryAfterMs=${retryAfterMs}`,
+        );
+        await delay(retryAfterMs + 100);
+      }
+    }
+
+    if (!message) {
+      throw new Error("Permission message send failed without Telegram response");
+    }
 
     logger.debug(`[PermissionHandler] Message sent, messageId=${message.message_id}`);
     permissionManager.startPermission(request, message.message_id, scopeKey);
