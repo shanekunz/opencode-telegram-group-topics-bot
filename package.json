@@ -1,6 +1,6 @@
 {
   "name": "opencode-telegram-group-topics-bot",
-  "version": "0.13.5",
+  "version": "0.13.6",
   "description": "Telegram bot client for OpenCode with Telegram forum-topic session lanes.",
   "type": "module",
   "main": "./dist/index.js",
