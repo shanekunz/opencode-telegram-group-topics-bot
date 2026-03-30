@@ -7,7 +7,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - Permanent git remote: `upstream` -> `https://github.com/grinev/opencode-telegram-bot.git`
 - Upstream repo: `https://github.com/grinev/opencode-telegram-bot`
 - Upstream branch: `main`
-- Last reviewed upstream head: `84c300d` (`feat(bot): display subagents work status (#62)`, 2026-03-29)
+- Last reviewed upstream head: `78034d4` (`chore(release): v0.14.0`, 2026-03-30)
 - Original fork point for this threaded fork: `21da71b` (`chore(release): v0.11.0`)
 
 ## Fork Rules
@@ -32,6 +32,8 @@ This repository is a product fork of the original single-chat project at `grinev
 - `f3b3fc6` + `a337370` + `54a493d` ported: `/commands` pagination, filtering, and clearer execution UX
 - `fcd2273` + `e4eb83e` + `b414bf3` covered by fork commit `c97baf6`: upstream tool-call streaming/reply formatting changes were already adapted into this fork's topic-aware streaming flow
 - `84c300d` adapted port: subagent work status now renders inside the parent topic's tool stream without breaking topic-scoped delivery
+- `6ff8fa1` ported: Markdown fallback retries now strip stale parse options, and Markdown splitting avoids trailing escape characters at chunk boundaries
+- `b6efc31` ported: todowrite formatter now separates the header from todo items with a blank line
 
 ## Upstream Changes Intentionally Adapted
 
@@ -62,6 +64,8 @@ This repository is a product fork of the original single-chat project at `grinev
 - Upstream docs that frame forum topics / parallel thread workflows as out of scope
 - Repo template churn that does not affect runtime behavior
 - `d392778` upstream concept docs link back to this fork; not needed in fork docs
+- `939ebb7` reviewed; already covered in this fork because streamed interim sends already use `disable_notification: true`
+- `239e512` skipped: this fork still needs its custom final-delivery path for topic-aware ordering, TTS replies, and keyboard refresh behavior
 
 ## Sync Workflow
 

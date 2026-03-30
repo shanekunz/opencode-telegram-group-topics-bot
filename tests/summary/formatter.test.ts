@@ -53,6 +53,13 @@ describe("summary/formatter", () => {
     expect(parts[0].endsWith("\n```")).toBe(false);
   });
 
+  it("does not split escaped markdown characters across parts", () => {
+    const parts = formatSummaryWithMode("a+b", "markdown", 2);
+
+    expect(parts).toEqual(["a", "\\+", "b"]);
+    expect(parts.some((part) => part.endsWith("\\"))).toBe(false);
+  });
+
   it("adapts headings, quotes, tables and horizontal rules for Telegram", () => {
     const text = [
       "# Main heading",
@@ -106,7 +113,7 @@ describe("summary/formatter", () => {
       },
     });
 
-    expect(text).toBe("📝 todowrite (3)\n✅ Done item\n🔄 In progress item\n🔲 Pending item");
+    expect(text).toBe("📝 todowrite (3)\n\n✅ Done item\n🔄 In progress item\n🔲 Pending item");
   });
 
   it("formats write/edit tool details with line counters", () => {

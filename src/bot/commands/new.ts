@@ -158,15 +158,35 @@ export function createNewCommand(deps: NewCommandDeps) {
       });
 
       if (error || !session) {
-        throw error || new Error("No data received from server");
+        await ctx.reply(t("new.create_error"));
+        return;
       }
 
       const initialPrompt = parseNewCommandPrompt(ctx);
       const topicTitle = formatTopicTitle(session.title, session.title);
 
-      const createdTopic = await ctx.api.createForumTopic(ctx.chat!.id, topicTitle, {
-        icon_color: TOPIC_COLORS.BLUE,
-      });
+      const createdTopic = await (async () => {
+        try {
+          return await ctx.api.createForumTopic(ctx.chat!.id, topicTitle, {
+            icon_color: TOPIC_COLORS.BLUE,
+          });
+        } catch (error) {
+          logger.error("[Bot] Error creating forum topic for new session", error);
+          const errorText = getErrorText(error);
+
+          if (errorText.includes(TELEGRAM_ERROR_MARKER.NOT_ENOUGH_RIGHTS_CREATE_TOPIC)) {
+            await ctx.reply(t(BOT_I18N_KEY.NEW_TOPIC_CREATE_NO_RIGHTS));
+            return null;
+          }
+
+          await ctx.reply(t(BOT_I18N_KEY.NEW_TOPIC_CREATE_ERROR));
+          return null;
+        }
+      })();
+
+      if (!createdTopic) {
+        return;
+      }
 
       const topicThreadId = createdTopic.message_thread_id;
       const topicScopeKey = createScopeKeyFromParams({
@@ -252,13 +272,9 @@ export function createNewCommand(deps: NewCommandDeps) {
       await ctx.reply(generalReplyText, getThreadSendOptions(scope?.threadId ?? null));
 
       if (initialPrompt.length > 0) {
-        await ctx.api.sendMessage(
-          ctx.chat!.id,
-          `${t("sessions.preview.you")}\n${initialPrompt}`,
-          {
-            ...getThreadSendOptions(topicThreadId),
-          },
-        );
+        await ctx.api.sendMessage(ctx.chat!.id, `${t("sessions.preview.you")}\n${initialPrompt}`, {
+          ...getThreadSendOptions(topicThreadId),
+        });
 
         const promptModel = getStoredModel(topicScopeKey);
         const promptAgent = getStoredAgent(topicScopeKey);
@@ -339,14 +355,7 @@ export function createNewCommand(deps: NewCommandDeps) {
       }
     } catch (error) {
       logger.error("[Bot] Error creating session/topic", error);
-      const errorText = getErrorText(error);
-
-      if (errorText.includes(TELEGRAM_ERROR_MARKER.NOT_ENOUGH_RIGHTS_CREATE_TOPIC)) {
-        await ctx.reply(t(BOT_I18N_KEY.NEW_TOPIC_CREATE_NO_RIGHTS));
-        return;
-      }
-
-      await ctx.reply(t(BOT_I18N_KEY.NEW_TOPIC_CREATE_ERROR));
+      await ctx.reply(t("new.create_error"));
     }
   };
 }

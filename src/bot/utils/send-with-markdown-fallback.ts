@@ -31,6 +31,26 @@ const MARKDOWN_PARSE_ERROR_MARKERS = [
   "bad request: can't parse",
 ];
 
+function stripMarkdownFormattingOptions<
+  T extends TelegramSendMessageOptions | TelegramEditMessageOptions | undefined,
+>(options: T): T {
+  if (!options) {
+    return options;
+  }
+
+  const rawOptions = {
+    ...options,
+  } as NonNullable<T> & {
+    parse_mode?: unknown;
+    entities?: unknown;
+  };
+
+  delete rawOptions.parse_mode;
+  delete rawOptions.entities;
+
+  return rawOptions as T;
+}
+
 function getErrorText(error: unknown): string {
   const parts: string[] = [];
 
@@ -96,7 +116,7 @@ export async function sendMessageWithMarkdownFallback({
     }
 
     logger.warn("[Bot] Markdown parse failed, retrying assistant message in raw mode", error);
-    return await api.sendMessage(chatId, text, options);
+    return await api.sendMessage(chatId, text, stripMarkdownFormattingOptions(options));
   }
 }
 
@@ -127,6 +147,11 @@ export async function editMessageWithMarkdownFallback({
     }
 
     logger.warn("[Bot] Markdown parse failed, retrying edited message in raw mode", error);
-    return await api.editMessageText(chatId, messageId, text, options);
+    return await api.editMessageText(
+      chatId,
+      messageId,
+      text,
+      stripMarkdownFormattingOptions(options),
+    );
   }
 }
