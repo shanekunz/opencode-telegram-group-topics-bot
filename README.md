@@ -32,6 +32,7 @@ Fork sync notes: [`FORK_SYNC.md`](./FORK_SYNC.md)
 - The **General** topic is the control lane for `/projects`, `/sessions`, `/new`, and status checks.
 - Each new OpenCode session gets its own forum topic.
 - Each topic keeps its own session, model, agent, and pinned status state.
+- Optional TTS replies can be toggled globally with `/tts` and persist across restarts.
 - Subagent child-session work is summarized back into the parent topic as live status cards.
 - Multiple topics can run at the same time, and multiple groups can be active at the same time.
 - DMs are for light control/status usage, not the main multi-session workflow.
@@ -142,6 +143,7 @@ If that works, your group workspace is ready.
 | `/abort`          | Abort the current task                                  |
 | `/sessions`       | Browse and switch between recent sessions               |
 | `/projects`       | Switch between OpenCode projects                        |
+| `/tts`            | Toggle TTS replies globally                             |
 | `/rename`         | Rename the current session                              |
 | `/commands`       | Browse and run custom commands                          |
 | `/task`           | Create a scheduled task for the current project         |
@@ -203,6 +205,10 @@ Installed-mode config paths:
 | `STT_API_KEY`                      | API key for your STT provider                                                        |    No    | -                        |
 | `STT_MODEL`                        | STT model name passed to `/audio/transcriptions`                                     |    No    | `whisper-large-v3-turbo` |
 | `STT_LANGUAGE`                     | Optional language hint                                                               |    No    | -                        |
+| `TTS_API_URL`                      | TTS API base URL; defaults to `STT_API_URL` when unset                               |    No    | -                        |
+| `TTS_API_KEY`                      | TTS API key; defaults to `STT_API_KEY` when unset                                    |    No    | -                        |
+| `TTS_MODEL`                        | TTS model name passed to `/audio/speech`                                             |    No    | `gpt-4o-mini-tts`        |
+| `TTS_VOICE`                        | OpenAI-compatible TTS voice name                                                     |    No    | `alloy`                  |
 | `LOG_LEVEL`                        | Log level (`debug`, `info`, `warn`, `error`)                                         |    No    | `info`                   |
 
 Keep your `.env` private. It contains your bot token.
@@ -210,6 +216,8 @@ Keep your `.env` private. It contains your bot token.
 ### Optional: Voice and Audio Transcription
 
 If `STT_API_URL` and `STT_API_KEY` are set, the bot can transcribe Telegram voice/audio messages before sending them to OpenCode.
+
+If TTS credentials are configured, you can toggle spoken replies globally with `/tts`. The preference is stored in `settings.json` and persists across restarts. By default, TTS reuses the STT/OpenAI credentials unless `TTS_API_URL` or `TTS_API_KEY` are set explicitly.
 
 Whisper-compatible examples:
 

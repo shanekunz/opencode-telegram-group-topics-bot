@@ -52,6 +52,7 @@ No public inbound ports are required for normal usage.
 
 - Send text prompts to OpenCode
 - Accept voice/audio messages, transcribe via Whisper-compatible STT API, and forward recognized text as prompts
+- Optionally send a TTS audio file of the final assistant reply in addition to text when `/tts` is enabled globally
 - Interrupt current task (ESC equivalent)
 - Handle OpenCode questions with inline options and custom text answers
 - Send selected/custom answers back to OpenCode (`question.reply`)
@@ -60,6 +61,7 @@ No public inbound ports are required for normal usage.
 ### Result delivery
 
 - Send each completed assistant response after completion signal from SSE
+- Optionally attach a TTS audio file for completed replies when `/tts` is enabled globally
 - Do not expose raw chain-of-thought; send a lightweight thinking indicator instead
 - Split long responses into multiple Telegram messages
 - Send code updates as files (size-limited)
@@ -87,6 +89,7 @@ No public inbound ports are required for normal usage.
 - Configurable visibility for service messages (thinking/tool calls)
 - Configurable max code file size in KB (default: 100)
 - Optional STT settings for voice transcription (`STT_API_URL`, `STT_API_KEY`, `STT_MODEL`, `STT_LANGUAGE`)
+- Optional TTS credentials for audio replies (`TTS_API_URL`, `TTS_API_KEY`, `TTS_MODEL`, `TTS_VOICE`); reply behavior is toggled globally with `/tts`
 
 ## Current Product Scope
 
@@ -109,7 +112,7 @@ Current command set:
 
 Model, agent, variant, and context actions are available from the persistent bottom keyboard.
 
-Text messages (non-commands) are treated as prompts for OpenCode only when no blocking interaction is active. Voice/audio messages are transcribed and then sent as prompts when STT is configured.
+Text messages (non-commands) are treated as prompts for OpenCode only when no blocking interaction is active. Voice/audio messages are transcribed and then sent as prompts when STT is configured. When `/tts` is enabled globally, completed assistant replies also include a generated audio file.
 
 Interaction routing rules:
 
@@ -146,6 +149,7 @@ Model picker behavior:
 - [x] Configurable batching of service messages (thinking + tool updates): recommended `>=2` sec for Telegram rate limits; `0` = immediate
 - [x] Configurable service message visibility via env flags (`HIDE_THINKING_MESSAGES`, `HIDE_TOOL_CALL_MESSAGES`)
 - [x] Voice/audio transcription via Whisper-compatible APIs (OpenAI/Groq/Together and compatible providers)
+- [x] Optional TTS audio replies with global `/tts` toggle via OpenAI-compatible APIs
 - [x] Single-user security model (allowed Telegram user ID)
 - [x] Persistent bot settings (`settings.json`) between restarts
 - [x] Localization structure via dedicated i18n files

@@ -33,6 +33,7 @@ import {
   handleCommandsCallback,
   handleCommandTextArguments,
 } from "./commands/commands.js";
+import { ttsCommand } from "./commands/tts.js";
 import {
   handleQuestionCallback,
   showCurrentQuestion,
@@ -59,7 +60,11 @@ import { safeBackgroundTask } from "../utils/safe-background-task.js";
 import { pinnedMessageManager } from "../pinned/manager.js";
 import { taskCreationManager } from "../scheduled-task/creation-manager.js";
 import { t } from "../i18n/index.js";
-import { dispatchNextQueuedPrompt, processUserPrompt } from "./handlers/prompt.js";
+import {
+  clearPromptResponseMode,
+  dispatchNextQueuedPrompt,
+  processUserPrompt,
+} from "./handlers/prompt.js";
 import { handleVoiceMessage } from "./handlers/voice.js";
 import { handleDocumentMessage } from "./handlers/document.js";
 import { downloadTelegramFile, toDataUri } from "./utils/file-download.js";
@@ -89,6 +94,8 @@ import { BOT_I18N_KEY, CHAT_TYPE, GENERAL_TOPIC, TELEGRAM_CHAT_FIELD } from "./c
 import { TELEGRAM_CHAT_ACTION } from "./telegram-constants.js";
 import { syncTopicTitleForSession } from "../topic/title-sync.js";
 import { finalizeAssistantResponse } from "./utils/finalize-assistant-response.js";
+import { sendTtsResponseForSession } from "./utils/send-tts-response.js";
+import { pendingAssistantCompletions } from "./utils/pending-assistant-completions.js";
 import { ResponseStreamer } from "./streaming/response-streamer.js";
 import { ToolCallStreamer } from "./streaming/tool-call-streamer.js";
 
@@ -261,6 +268,85 @@ function prepareDocumentCaption(caption: string): string {
   }
 
   return `${normalizedCaption.slice(0, TELEGRAM_DOCUMENT_CAPTION_MAX_LENGTH - 3)}...`;
+}
+
+async function deliverPendingAssistantCompletions(sessionId: string): Promise<void> {
+  const completions = pendingAssistantCompletions.consume(sessionId);
+  if (completions.length === 0) {
+    return;
+  }
+
+  if (!botInstance) {
+    clearPromptResponseMode(sessionId);
+    logger.error("Bot not available for sending message");
+    return;
+  }
+
+  const target = getTargetBySessionId(sessionId);
+  if (!target) {
+    clearPromptResponseMode(sessionId);
+    return;
+  }
+
+  for (const messageText of completions) {
+    try {
+      const activeBot = botInstance;
+      if (!activeBot) {
+        clearPromptResponseMode(sessionId);
+        return;
+      }
+
+      const result = await finalizeAssistantResponse({
+        sessionId,
+        messageText,
+        responseStreamer,
+        sendFallback: async (parts, assistantMessageFormat) => {
+          logger.debug(
+            `[Bot] Sending completed message to Telegram (chatId=${target.chatId}, parts=${parts.length})`,
+          );
+
+          for (let i = 0; i < parts.length; i++) {
+            const isLastPart = i === parts.length - 1;
+            const keyboard =
+              isLastPart && keyboardManager.isInitialized(target.scopeKey)
+                ? keyboardManager.getKeyboard(target.scopeKey)
+                : undefined;
+            const options = keyboard ? { reply_markup: keyboard } : undefined;
+
+            await sendBotText({
+              api: activeBot.api,
+              chatId: target.chatId,
+              text: parts[i],
+              options: {
+                ...(options || {}),
+                ...getThreadSendOptions(target.threadId),
+              },
+              format: assistantMessageFormat,
+            });
+          }
+        },
+      });
+
+      const ttsSent = await sendTtsResponseForSession({
+        api: activeBot.api,
+        sessionId,
+        chatId: target.chatId,
+        threadId: target.threadId,
+        text: messageText,
+      });
+
+      logger.debug("[Bot] Assistant completion finalized", {
+        sessionId,
+        streamed: result.streamed,
+        partCount: result.partCount,
+        ttsSent,
+      });
+    } catch (err) {
+      clearPromptResponseMode(sessionId);
+      logger.error("Failed to send message to Telegram:", err);
+      logger.warn("[Bot] Assistant message delivery failed; keeping event processing active");
+    }
+  }
 }
 
 async function sendSessionTextMessage(
@@ -468,65 +554,7 @@ async function ensureEventSubscription(directory: string): Promise<void> {
 
   summaryAggregator.setOnComplete((sessionId, messageText) => {
     enqueueSessionDelivery(sessionId, async () => {
-      if (!botInstance) {
-        logger.error("Bot not available for sending message");
-        return;
-      }
-
-      const target = getTargetBySessionId(sessionId);
-      if (!target) {
-        return;
-      }
-
-      await toolMessageBatcher.flushSession(sessionId, "assistant_message_completed");
-      await toolCallStreamer.clearSession(sessionId, "assistant_message_completed");
-
-      try {
-        const activeBot = botInstance;
-        if (!activeBot) {
-          return;
-        }
-
-        const result = await finalizeAssistantResponse({
-          sessionId,
-          messageText,
-          responseStreamer,
-          sendFallback: async (parts, assistantMessageFormat) => {
-            logger.debug(
-              `[Bot] Sending completed message to Telegram (chatId=${target.chatId}, parts=${parts.length})`,
-            );
-
-            for (let i = 0; i < parts.length; i++) {
-              const isLastPart = i === parts.length - 1;
-              const keyboard =
-                isLastPart && keyboardManager.isInitialized(target.scopeKey)
-                  ? keyboardManager.getKeyboard(target.scopeKey)
-                  : undefined;
-              const options = keyboard ? { reply_markup: keyboard } : undefined;
-
-              await sendBotText({
-                api: activeBot.api,
-                chatId: target.chatId,
-                text: parts[i],
-                options: {
-                  ...(options || {}),
-                  ...getThreadSendOptions(target.threadId),
-                },
-                format: assistantMessageFormat,
-              });
-            }
-          },
-        });
-
-        logger.debug("[Bot] Assistant completion finalized", {
-          sessionId,
-          streamed: result.streamed,
-          partCount: result.partCount,
-        });
-      } catch (err) {
-        logger.error("Failed to send message to Telegram:", err);
-        logger.warn("[Bot] Assistant message delivery failed; keeping event processing active");
-      }
+      pendingAssistantCompletions.enqueue(sessionId, messageText);
     });
   });
 
@@ -746,13 +774,20 @@ async function ensureEventSubscription(directory: string): Promise<void> {
       // Update keyboardManager SYNCHRONOUSLY before any await
       // This ensures keyboard has correct context when onComplete sends the reply
       const contextSize = tokens.input + tokens.cacheRead;
-      const contextLimit = pinnedMessageManager.getContextLimit(target.scopeKey);
+      let contextLimit = pinnedMessageManager.getContextLimit(target.scopeKey);
       if (contextLimit > 0) {
         keyboardManager.updateContext(contextSize, contextLimit, target.scopeKey);
       }
 
       if (pinnedMessageManager.isInitialized(target.scopeKey)) {
         await pinnedMessageManager.onMessageComplete(tokens, target.scopeKey);
+
+        if (contextLimit <= 0) {
+          contextLimit = pinnedMessageManager.getContextLimit(target.scopeKey);
+          if (contextLimit > 0) {
+            keyboardManager.updateContext(contextSize, contextLimit, target.scopeKey);
+          }
+        }
       }
     } catch (err) {
       logger.error("[Bot] Error updating pinned message with tokens:", err);
@@ -777,6 +812,7 @@ async function ensureEventSubscription(directory: string): Promise<void> {
     enqueueSessionDelivery(sessionId, async () => {
       await toolMessageBatcher.flushSession(sessionId, "session_idle");
       await toolCallStreamer.clearSession(sessionId, "session_idle");
+      await deliverPendingAssistantCompletions(sessionId);
       await dispatchNextQueuedPrompt(sessionId);
     });
   });
@@ -784,16 +820,22 @@ async function ensureEventSubscription(directory: string): Promise<void> {
   summaryAggregator.setOnSessionError(async (sessionId, message) => {
     enqueueSessionDelivery(sessionId, async () => {
       if (!botInstance) {
+        pendingAssistantCompletions.clear(sessionId);
+        clearPromptResponseMode(sessionId);
         return;
       }
 
       const target = getTargetBySessionId(sessionId);
       if (!target) {
+        pendingAssistantCompletions.clear(sessionId);
+        clearPromptResponseMode(sessionId);
         return;
       }
 
       await toolMessageBatcher.flushSession(sessionId, "session_error");
       await toolCallStreamer.clearSession(sessionId, "session_error");
+      pendingAssistantCompletions.clear(sessionId);
+      clearPromptResponseMode(sessionId);
 
       const normalizedMessage = message.trim() || t("common.unknown_error");
 
@@ -1067,6 +1109,7 @@ export function createBot(): Bot<Context> {
   bot.command(BOT_COMMAND.HELP, helpCommand);
   bot.command(BOT_COMMAND.STATUS, statusCommand);
   bot.command(BOT_COMMAND.LAST, lastCommand);
+  bot.command(BOT_COMMAND.TTS, ttsCommand);
   bot.command(BOT_COMMAND.OPENCODE_START, opencodeStartCommand);
   bot.command(BOT_COMMAND.OPENCODE_STOP, opencodeStopCommand);
   bot.command(BOT_COMMAND.PROJECTS, projectsCommand);

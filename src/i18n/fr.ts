@@ -6,6 +6,7 @@ export const fr: I18nDictionary = {
   "cmd.description.new": "Créer une nouvelle session",
   "cmd.description.sessions": "Lister les sessions",
   "cmd.description.last": "Afficher le dernier message de la session",
+  "cmd.description.tts": "Basculer les réponses TTS",
   "cmd.description.projects": "Lister les projets",
   "cmd.description.task": "Créer une tâche planifiée",
   "cmd.description.tasklist": "Lister les tâches planifiées",

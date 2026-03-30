@@ -34,12 +34,18 @@ vi.mock("../../../src/summary/aggregator.js", () => ({
 }));
 
 vi.mock("../../../src/utils/safe-background-task.js", () => ({
-  safeBackgroundTask: ({ task, onSuccess, onError }: {
+  safeBackgroundTask: ({
+    task,
+    onSuccess,
+    onError,
+  }: {
     task: () => Promise<unknown>;
     onSuccess?: (value: unknown) => void;
     onError?: (error: unknown) => void;
   }) => {
-    void task().then((value) => onSuccess?.(value)).catch((error) => onError?.(error));
+    void task()
+      .then((value) => onSuccess?.(value))
+      .catch((error) => onError?.(error));
   },
 }));
 
@@ -191,9 +197,12 @@ describe("bot/handlers/question", () => {
 
     expect(handled).toBe(true);
     expect(cancelCtx.editMessageText).toHaveBeenCalledWith(t("question.cancelled"));
-    expect(questionManager.isActive()).toBe(false);
-    expect(questionManager.getTotalQuestions()).toBe(0);
-    expect(interactionManager.getSnapshot()).toBeNull();
+    expect(questionManager.isActive()).toBe(true);
+    expect(questionManager.getActiveMessageId()).toBeNull();
+    expect(questionManager.getTotalQuestions()).toBe(1);
+    expect(interactionManager.getSnapshot()?.kind).toBe("question");
+    expect(interactionManager.getSnapshot()?.expectedInput).toBe("callback");
+    expect(interactionManager.getSnapshot()?.allowedCommands).toContain("/last");
   });
 
   it("requires at least one selected option on multiple submit", async () => {

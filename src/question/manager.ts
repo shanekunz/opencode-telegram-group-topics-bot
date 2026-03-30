@@ -169,6 +169,10 @@ class QuestionManager {
     this.getState(scopeKey).activeMessageId = messageId;
   }
 
+  clearActiveMessage(scopeKey: string = "global"): void {
+    this.getState(scopeKey).activeMessageId = null;
+  }
+
   getActiveMessageId(scopeKey: string = "global"): number | null {
     return this.getState(scopeKey).activeMessageId;
   }

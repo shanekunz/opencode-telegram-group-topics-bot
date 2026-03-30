@@ -8,6 +8,7 @@ const mocked = vi.hoisted(() => ({
   sessionListMock: vi.fn(),
   getCurrentSessionMock: vi.fn(),
   getCurrentProjectMock: vi.fn(),
+  isTtsEnabledMock: vi.fn(),
   fetchCurrentAgentMock: vi.fn(),
   fetchCurrentModelMock: vi.fn(),
   isRunningMock: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock("../../../src/session/manager.js", () => ({
 
 vi.mock("../../../src/settings/manager.js", () => ({
   getCurrentProject: mocked.getCurrentProjectMock,
+  isTtsEnabled: mocked.isTtsEnabledMock,
 }));
 
 vi.mock("../../../src/agent/manager.js", () => ({
@@ -93,6 +95,7 @@ describe("bot/commands/status", () => {
     mocked.sessionListMock.mockReset();
     mocked.getCurrentSessionMock.mockReset();
     mocked.getCurrentProjectMock.mockReset();
+    mocked.isTtsEnabledMock.mockReset();
     mocked.fetchCurrentAgentMock.mockReset();
     mocked.fetchCurrentModelMock.mockReset();
     mocked.isRunningMock.mockReset();
@@ -114,6 +117,7 @@ describe("bot/commands/status", () => {
     mocked.sessionListMock.mockResolvedValue({ data: [{ id: "s1" }], error: null });
     mocked.getCurrentSessionMock.mockReturnValue({ id: "s1", title: "S", directory: "/repo" });
     mocked.getCurrentProjectMock.mockReturnValue({ id: "p1", worktree: "/repo", name: "Repo" });
+    mocked.isTtsEnabledMock.mockReturnValue(true);
     mocked.fetchCurrentAgentMock.mockResolvedValue("build");
     mocked.fetchCurrentModelMock.mockReturnValue({ providerID: "openai", modelID: "gpt-5" });
     mocked.isRunningMock.mockReturnValue(false);
@@ -161,6 +165,7 @@ describe("bot/commands/status", () => {
     expect(message).toContain("DM");
     expect(message).toContain("Projects");
     expect(message).toContain("Sessions");
+    expect(message).toContain("TTS");
     expect(mocked.sendBotTextMock).not.toHaveBeenCalled();
   });
 });

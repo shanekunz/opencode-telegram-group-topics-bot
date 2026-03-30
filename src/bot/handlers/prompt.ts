@@ -5,6 +5,7 @@ import { classifyPromptSubmitError } from "../../opencode/prompt-submit-error.js
 import { clearSession, getCurrentSession, setCurrentSession } from "../../session/manager.js";
 import { ingestSessionInfoForCache } from "../../session/cache-manager.js";
 import { getCurrentProject } from "../../settings/manager.js";
+import { isTtsEnabled } from "../../settings/manager.js";
 import { getStoredAgent } from "../../agent/manager.js";
 import { getStoredModel } from "../../model/manager.js";
 import { formatVariantForButton } from "../../variant/manager.js";
@@ -42,6 +43,12 @@ type PromptRequestOptions = {
   variant?: string;
 };
 
+export type PromptResponseMode = "text_only" | "text_and_tts";
+
+type ProcessPromptOptions = {
+  responseMode?: PromptResponseMode;
+};
+
 type PromptErrorLogContext = {
   sessionId: string;
   directory: string;
@@ -57,6 +64,7 @@ interface QueuedPromptRequest {
   sessionId: string;
   chatId: number;
   threadId: number | null;
+  responseMode: PromptResponseMode;
   promptOptions: PromptRequestOptions;
   promptErrorLogContext: PromptErrorLogContext;
   notifyOnQueue: boolean;
@@ -64,6 +72,7 @@ interface QueuedPromptRequest {
 
 const queuedPromptRequests = new Map<string, QueuedPromptRequest[]>();
 const drainingQueuedSessions = new Set<string>();
+const activePromptResponseModes = new Map<string, PromptResponseMode>();
 
 // If OpenCode headless/server mode gains a native per-session queue later, prefer that
 // over this bot-side queue so Telegram matches the upstream client behavior more closely.
@@ -206,6 +215,20 @@ function buildPromptRequest(
   };
 }
 
+function setActivePromptResponseMode(sessionId: string, responseMode: PromptResponseMode): void {
+  activePromptResponseModes.set(sessionId, responseMode);
+}
+
+export function clearPromptResponseMode(sessionId: string): void {
+  activePromptResponseModes.delete(sessionId);
+}
+
+export function consumePromptResponseMode(sessionId: string): PromptResponseMode | null {
+  const responseMode = activePromptResponseModes.get(sessionId) ?? null;
+  activePromptResponseModes.delete(sessionId);
+  return responseMode;
+}
+
 function submitPromptRequest(bot: Bot<Context>, request: QueuedPromptRequest): void {
   logger.info(
     `[Bot] Calling session.promptAsync (fire-and-forget) with agent=${request.promptOptions.agent}, fileCount=${request.promptErrorLogContext.fileCount}...`,
@@ -249,6 +272,7 @@ function submitPromptRequest(bot: Bot<Context>, request: QueuedPromptRequest): v
         return;
       }
 
+      setActivePromptResponseMode(request.sessionId, request.responseMode);
       logger.info("[Bot] session.promptAsync accepted");
     },
     onError: (error) => {
@@ -322,6 +346,7 @@ export async function dispatchNextQueuedPrompt(sessionId: string): Promise<boole
 export function __resetQueuedPromptsForTests(): void {
   queuedPromptRequests.clear();
   drainingQueuedSessions.clear();
+  activePromptResponseModes.clear();
 }
 
 async function isSessionBusy(sessionId: string, directory: string): Promise<boolean> {
@@ -371,9 +396,11 @@ export async function processUserPrompt(
   text: string,
   deps: ProcessPromptDeps,
   fileParts: FilePartInput[] = [],
+  options: ProcessPromptOptions = {},
 ): Promise<boolean> {
   const { bot, ensureEventSubscription } = deps;
   const scope = getScopeFromContext(ctx);
+  const responseMode = options.responseMode ?? (isTtsEnabled() ? "text_and_tts" : "text_only");
   const scopeKey = scope?.key ?? GLOBAL_SCOPE_KEY;
   const usePinned = ctx.chat?.type !== CHAT_TYPE.PRIVATE;
 
@@ -520,6 +547,7 @@ export async function processUserPrompt(
       sessionId: currentSession.id,
       chatId: ctx.chat!.id,
       threadId: scope?.threadId ?? null,
+      responseMode,
       promptOptions: queuedRequest.promptOptions,
       promptErrorLogContext: queuedRequest.promptErrorLogContext,
       notifyOnQueue: true,
@@ -541,6 +569,7 @@ export async function processUserPrompt(
       sessionId: currentSession.id,
       chatId: ctx.chat!.id,
       threadId: scope?.threadId ?? null,
+      responseMode,
       promptOptions: request.promptOptions,
       promptErrorLogContext: request.promptErrorLogContext,
       notifyOnQueue: true,

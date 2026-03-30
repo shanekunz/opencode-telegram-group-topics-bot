@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Bot, Context } from "grammy";
 import {
   __resetQueuedPromptsForTests,
+  consumePromptResponseMode,
   dispatchNextQueuedPrompt,
   processUserPrompt,
 } from "../../../src/bot/handlers/prompt.js";
@@ -9,6 +10,7 @@ import { t } from "../../../src/i18n/index.js";
 
 const mocked = vi.hoisted(() => ({
   getCurrentProjectMock: vi.fn(),
+  isTtsEnabledMock: vi.fn(),
   getScheduledTaskTopicByChatAndThreadMock: vi.fn(),
   getCurrentSessionMock: vi.fn(),
   getStoredAgentMock: vi.fn(),
@@ -42,6 +44,7 @@ vi.mock("../../../src/session/cache-manager.js", () => ({
 
 vi.mock("../../../src/settings/manager.js", () => ({
   getCurrentProject: mocked.getCurrentProjectMock,
+  isTtsEnabled: mocked.isTtsEnabledMock,
 }));
 
 vi.mock("../../../src/agent/manager.js", () => ({
@@ -170,6 +173,7 @@ describe("bot/handlers/prompt", () => {
   beforeEach(() => {
     __resetQueuedPromptsForTests();
     mocked.getCurrentProjectMock.mockReset();
+    mocked.isTtsEnabledMock.mockReset();
     mocked.getScheduledTaskTopicByChatAndThreadMock.mockReset();
     mocked.getCurrentSessionMock.mockReset();
     mocked.getStoredAgentMock.mockReset();
@@ -180,6 +184,7 @@ describe("bot/handlers/prompt", () => {
     mocked.sessionPromptAsyncMock.mockReset();
 
     mocked.getCurrentProjectMock.mockReturnValue({ id: "project-1", worktree: "/repo/app" });
+    mocked.isTtsEnabledMock.mockReturnValue(false);
     mocked.getCurrentSessionMock.mockReturnValue({
       id: "session-1",
       title: "Session",
@@ -259,10 +264,16 @@ describe("bot/handlers/prompt", () => {
       },
     } as unknown as Bot<Context>;
 
-    const result = await processUserPrompt(ctx, "Test", {
-      bot,
-      ensureEventSubscription: vi.fn(),
-    });
+    const result = await processUserPrompt(
+      ctx,
+      "Test",
+      {
+        bot,
+        ensureEventSubscription: vi.fn(),
+      },
+      [],
+      { responseMode: "text_and_tts" },
+    );
 
     expect(result).toBe(true);
     expect(ctx.reply).toHaveBeenCalledWith(t("bot.session_queued", { position: "1" }));
@@ -289,5 +300,21 @@ describe("bot/handlers/prompt", () => {
       model: { providerID: "openai", modelID: "gpt-5" },
       variant: "fast",
     });
+    expect(consumePromptResponseMode("session-1")).toBe("text_and_tts");
+  });
+
+  it("uses TTS response mode by default when the scope setting is enabled", async () => {
+    mocked.getScheduledTaskTopicByChatAndThreadMock.mockResolvedValue(null);
+    mocked.isTtsEnabledMock.mockReturnValue(true);
+
+    const ctx = createContext();
+
+    await processUserPrompt(ctx, "Test", {
+      bot: {} as Bot<Context>,
+      ensureEventSubscription: vi.fn(),
+    });
+
+    expect(consumePromptResponseMode("session-1")).toBe("text_and_tts");
+    expect(mocked.isTtsEnabledMock).toHaveBeenCalledWith();
   });
 });

@@ -5,12 +5,14 @@ import { getCurrentProject } from "../../settings/manager.js";
 import { getCurrentSession } from "../../session/manager.js";
 import { summaryAggregator } from "../../summary/aggregator.js";
 import { interactionManager } from "../../interaction/manager.js";
+import { DEFAULT_ALLOWED_INTERACTION_COMMANDS } from "../../interaction/manager.js";
 import { logger } from "../../utils/logger.js";
 import { safeBackgroundTask } from "../../utils/safe-background-task.js";
 import { t } from "../../i18n/index.js";
 import { getScopeKeyFromContext, getThreadIdFromScopeKey, getThreadSendOptions } from "../scope.js";
 
 const MAX_BUTTON_LENGTH = 60;
+const QUESTION_ALLOWED_COMMANDS = [...DEFAULT_ALLOWED_INTERACTION_COMMANDS, "/last"];
 
 function getCallbackMessageId(ctx: Context): number | null {
   const message = ctx.callbackQuery?.message;
@@ -54,6 +56,7 @@ function syncQuestionInteractionState(
     interactionManager.transition(
       {
         expectedInput,
+        allowedCommands: QUESTION_ALLOWED_COMMANDS,
         metadata,
       },
       scopeKey,
@@ -65,6 +68,7 @@ function syncQuestionInteractionState(
     {
       kind: "question",
       expectedInput,
+      allowedCommands: QUESTION_ALLOWED_COMMANDS,
       metadata,
     },
     scopeKey,
@@ -98,11 +102,11 @@ export async function handleQuestionCallback(ctx: Context): Promise<boolean> {
   }
 
   if (action === "cancel") {
-    questionManager.cancel(scopeKey);
-    clearQuestionInteraction("question_cancelled", scopeKey);
+    questionManager.clearCustomInput(scopeKey);
+    questionManager.clearActiveMessage(scopeKey);
+    syncQuestionInteractionState("callback", questionIndex, null, scopeKey);
     await ctx.editMessageText(t("question.cancelled")).catch(() => {});
     await ctx.answerCallbackQuery();
-    questionManager.clear(scopeKey);
     return true;
   }
 

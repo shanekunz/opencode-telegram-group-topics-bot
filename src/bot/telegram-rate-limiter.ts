@@ -20,13 +20,27 @@ const RATE_LIMITED_METHODS = new Set<string>([
 
 interface QueueJob {
   method: string;
+  payload: unknown;
   scopeKey: string | null;
   chatId: number | null;
   isGroupLike: boolean;
   notBefore: number;
   run: () => Promise<unknown>;
-  resolve: (value: unknown) => void;
-  reject: (error: unknown) => void;
+  resolves: Array<(value: unknown) => void>;
+  rejects: Array<(error: unknown) => void>;
+}
+
+function isEditMessageJob(job: QueueJob): boolean {
+  return job.method === "editMessageText";
+}
+
+function parseMessageId(payload: unknown): number | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const value = Reflect.get(payload, "message_id");
+  return typeof value === "number" ? value : null;
 }
 
 function parseChatId(payload: unknown): number | null {
@@ -122,6 +136,27 @@ export class TelegramRateLimiter {
   private readonly groupWindowByChat = new Map<number, number[]>();
   private activeScopeKey: string | null = null;
 
+  private findCoalescibleEditIndex(payload: unknown): number {
+    const scopeKey = scopeKeyFromPayload(payload);
+    const messageId = parseMessageId(payload);
+    if (!scopeKey || messageId === null) {
+      return -1;
+    }
+
+    for (let index = this.queue.length - 1; index >= 0; index--) {
+      const job = this.queue[index];
+      if (!isEditMessageJob(job) || job.scopeKey !== scopeKey) {
+        continue;
+      }
+
+      if (parseMessageId(job.payload) === messageId) {
+        return index;
+      }
+    }
+
+    return -1;
+  }
+
   setActiveScopeKey(scopeKey: string | null): void {
     this.activeScopeKey = scopeKey;
   }
@@ -131,29 +166,39 @@ export class TelegramRateLimiter {
       return run();
     }
 
-    const chatId = parseChatId(payload);
-    const job: QueueJob = {
-      method,
-      scopeKey: scopeKeyFromPayload(payload),
-      chatId,
-      isGroupLike: isGroupLikeChat(chatId),
-      notBefore: 0,
-      run,
-      resolve: () => undefined,
-      reject: () => undefined,
-    };
-
     const promise = new Promise<unknown>((resolve, reject) => {
-      job.resolve = resolve;
-      job.reject = reject;
+      if (method === "editMessageText") {
+        const existingIndex = this.findCoalescibleEditIndex(payload);
+        if (existingIndex >= 0) {
+          const existingJob = this.queue[existingIndex];
+          existingJob.payload = payload;
+          existingJob.run = run as () => Promise<unknown>;
+          existingJob.resolves.push(resolve);
+          existingJob.rejects.push(reject);
+          return;
+        }
+      }
+
+      const chatId = parseChatId(payload);
+      const job: QueueJob = {
+        method,
+        payload,
+        scopeKey: scopeKeyFromPayload(payload),
+        chatId,
+        isGroupLike: isGroupLikeChat(chatId),
+        notBefore: 0,
+        run: run as () => Promise<unknown>,
+        resolves: [resolve],
+        rejects: [reject],
+      };
+
+      this.queue.push(job);
+      if (this.queue.length > 25) {
+        logger.debug(`[RateLimiter] Outbound queue depth=${this.queue.length}`);
+      }
+
+      this.ensureProcessing();
     });
-
-    this.queue.push(job);
-    if (this.queue.length > 25) {
-      logger.debug(`[RateLimiter] Outbound queue depth=${this.queue.length}`);
-    }
-
-    this.ensureProcessing();
     return promise as Promise<T>;
   }
 
@@ -273,12 +318,16 @@ export class TelegramRateLimiter {
     try {
       const result = await job.run();
       this.markSent(job);
-      job.resolve(result);
+      for (const resolve of job.resolves) {
+        resolve(result);
+      }
       return "done";
     } catch (error) {
       const retryAfterMs = getRetryAfterMs(error);
       if (!retryAfterMs) {
-        job.reject(error);
+        for (const reject of job.rejects) {
+          reject(error);
+        }
         return "done";
       }
 
