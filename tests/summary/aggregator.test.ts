@@ -137,8 +137,8 @@ describe("summary/aggregator", () => {
     } as unknown as Event);
 
     expect(onMessageUpdated.mock.calls).toEqual([
-      ["session-1", "Hello"],
-      ["session-1", "Hello world"],
+      ["session-1", "message-stream", "Hello"],
+      ["session-1", "message-stream", "Hello world"],
     ]);
   });
 
@@ -722,7 +722,7 @@ describe("summary/aggregator", () => {
 
     await vi.advanceTimersByTimeAsync(100);
 
-    expect(onComplete).toHaveBeenCalledWith("session-1", "Hello world!");
+    expect(onComplete).toHaveBeenCalledWith("session-1", "message-1", "Hello world!");
 
     vi.useRealTimers();
   });
@@ -789,7 +789,7 @@ describe("summary/aggregator", () => {
 
     await vi.advanceTimersByTimeAsync(100);
 
-    expect(onComplete).toHaveBeenCalledWith("session-1", "First second");
+    expect(onComplete).toHaveBeenCalledWith("session-1", "message-2", "First second");
 
     vi.useRealTimers();
   });
@@ -854,8 +854,8 @@ describe("summary/aggregator", () => {
 
     await vi.advanceTimersByTimeAsync(4000);
 
+    expect(onTyping).toHaveBeenCalledWith("session-1");
     expect(onTyping).toHaveBeenCalledWith("session-2");
-    expect(onTyping).not.toHaveBeenCalledWith("session-1");
 
     vi.runOnlyPendingTimers();
     vi.useRealTimers();

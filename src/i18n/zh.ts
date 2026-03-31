@@ -7,6 +7,7 @@ export const zh: I18nDictionary = {
   "cmd.description.stop": "停止当前操作",
   "cmd.description.sessions": "列出会话",
   "cmd.description.last": "显示会话的最新消息",
+  "cmd.description.tts": "切换 TTS 回复",
   "cmd.description.projects": "列出项目",
   "cmd.description.task": "创建定时任务",
   "cmd.description.tasklist": "列出定时任务",
@@ -95,6 +96,9 @@ export const zh: I18nDictionary = {
   "status.line.uptime_sec": "运行时间：{seconds} 秒",
   "status.line.mode": "模式：{mode}",
   "status.line.model": "模型：{model}",
+  "status.line.tts": "TTS 回复：{tts}",
+  "status.tts.on": "开启",
+  "status.tts.off": "关闭",
   "status.agent_not_set": "未设置",
   "status.project_selected": "🏗 项目：{project}",
   "status.project_not_selected": "🏗 项目：未选择",
@@ -103,6 +107,11 @@ export const zh: I18nDictionary = {
   "status.session_not_selected": "📋 当前会话：未选择",
   "status.session_hint": "使用 /sessions 选择一个会话，或 /new 创建",
   "status.server_unavailable": "🔴 OpenCode 服务器不可用\n\n使用 /opencode_start 启动服务器。",
+
+  "tts.enabled": "🔊 已为当前聊天范围启用 TTS 回复。",
+  "tts.enabled_not_configured":
+    "🔊 已为当前聊天范围启用 TTS 回复。\n\n当前尚未配置 TTS 凭据。请设置 `TTS_API_URL` 和 `TTS_API_KEY`，或让它们回退到 `STT_API_URL` 和 `STT_API_KEY`。",
+  "tts.disabled": "🔇 已为当前聊天范围关闭 TTS 回复。",
 
   "projects.empty":
     "📭 未找到项目。\n\n在 OpenCode 中打开一个目录并至少创建一个会话，然后它会出现在这里。",
@@ -275,6 +284,7 @@ export const zh: I18nDictionary = {
   "context.progress": "⏳ 正在压缩上下文...",
   "context.error": "❌ 上下文压缩失败",
   "context.success": "✅ 上下文压缩成功",
+  "context.after_compaction": "✅ 压缩后的上下文窗口为 {context}",
 
   "permission.inactive_callback": "权限请求已失效",
   "permission.processing_error_callback": "处理错误",

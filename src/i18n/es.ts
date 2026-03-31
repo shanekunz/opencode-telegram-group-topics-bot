@@ -7,6 +7,7 @@ export const es: I18nDictionary = {
   "cmd.description.stop": "Detener la acción actual",
   "cmd.description.sessions": "Listar sesiones",
   "cmd.description.last": "Mostrar el último mensaje de la sesión",
+  "cmd.description.tts": "Alternar respuestas TTS",
   "cmd.description.projects": "Listar proyectos",
   "cmd.description.task": "Crear una tarea programada",
   "cmd.description.tasklist": "Listar tareas programadas",
@@ -109,6 +110,9 @@ export const es: I18nDictionary = {
   "status.line.uptime_sec": "Tiempo activo: {seconds} s",
   "status.line.mode": "Modo: {mode}",
   "status.line.model": "Modelo: {model}",
+  "status.line.tts": "Respuestas TTS: {tts}",
+  "status.tts.on": "Activadas",
+  "status.tts.off": "Desactivadas",
   "status.agent_not_set": "no configurado",
   "status.project_selected": "🏗 Proyecto: {project}",
   "status.project_not_selected": "🏗 Proyecto: no seleccionado",
@@ -118,6 +122,11 @@ export const es: I18nDictionary = {
   "status.session_hint": "Usa /sessions para elegir una o /new para crear una",
   "status.server_unavailable":
     "🔴 OpenCode Server no está disponible\n\nUsa /opencode_start para iniciar el servidor.",
+
+  "tts.enabled": "🔊 Respuestas TTS activadas para este ámbito del chat.",
+  "tts.enabled_not_configured":
+    "🔊 Respuestas TTS activadas para este ámbito del chat.\n\nLas credenciales de TTS todavía no están configuradas. Define `TTS_API_URL` y `TTS_API_KEY`, o deja que usen como respaldo `STT_API_URL` y `STT_API_KEY`.",
+  "tts.disabled": "🔇 Respuestas TTS desactivadas para este ámbito del chat.",
 
   "projects.empty":
     "📭 No se encontraron proyectos.\n\nAbre un directorio en OpenCode y crea al menos una sesión; entonces aparecerá aquí.",
@@ -320,6 +329,7 @@ export const es: I18nDictionary = {
   "context.progress": "⏳ Compactando contexto...",
   "context.error": "❌ La compactación de contexto falló",
   "context.success": "✅ Contexto compactado correctamente",
+  "context.after_compaction": "✅ La ventana de contexto tras la compactación es {context}",
 
   "permission.inactive_callback": "La solicitud de permisos está inactiva",
   "permission.processing_error_callback": "Error de procesamiento",

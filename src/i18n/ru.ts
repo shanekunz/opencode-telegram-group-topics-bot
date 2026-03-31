@@ -7,6 +7,7 @@ export const ru: I18nDictionary = {
   "cmd.description.stop": "Прервать текущее действие",
   "cmd.description.sessions": "Список сессий",
   "cmd.description.last": "Показать последнее сообщение сессии",
+  "cmd.description.tts": "Переключить TTS-ответы",
   "cmd.description.projects": "Список проектов",
   "cmd.description.task": "Создать отложенную задачу",
   "cmd.description.tasklist": "Список отложенных задач",
@@ -103,6 +104,9 @@ export const ru: I18nDictionary = {
   "status.line.uptime_sec": "Uptime: {seconds} сек",
   "status.line.mode": "Режим: {mode}",
   "status.line.model": "Модель: {model}",
+  "status.line.tts": "TTS-ответы: {tts}",
+  "status.tts.on": "Вкл",
+  "status.tts.off": "Выкл",
   "status.agent_not_set": "не установлен",
   "status.project_selected": "🏗 Проект: {project}",
   "status.project_not_selected": "🏗 Проект: не выбран",
@@ -112,6 +116,11 @@ export const ru: I18nDictionary = {
   "status.session_hint": "Используйте /sessions для выбора или /new для создания",
   "status.server_unavailable":
     "🔴 OpenCode Server недоступен\n\nИспользуйте /opencode_start для запуска сервера.",
+
+  "tts.enabled": "🔊 TTS-ответы включены для этой области чата.",
+  "tts.enabled_not_configured":
+    "🔊 TTS-ответы включены для этой области чата.\n\nУчетные данные TTS пока не настроены. Укажите `TTS_API_URL` и `TTS_API_KEY` или используйте `STT_API_URL` и `STT_API_KEY` как резервный вариант.",
+  "tts.disabled": "🔇 TTS-ответы выключены для этой области чата.",
 
   "projects.empty":
     "📭 Проектов нет.\n\nОткройте директорию в OpenCode и создайте хотя бы одну сессию, после этого она появится здесь.",
@@ -312,6 +321,7 @@ export const ru: I18nDictionary = {
   "context.progress": "⏳ Сжимаю контекст...",
   "context.error": "❌ Ошибка при сжатии контекста",
   "context.success": "✅ Контекст успешно сжат",
+  "context.after_compaction": "✅ Окно контекста после сжатия: {context}",
 
   "permission.inactive_callback": "Запрос разрешения неактивен",
   "permission.processing_error_callback": "Ошибка при обработке",

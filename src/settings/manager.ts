@@ -71,6 +71,7 @@ export interface ScopeState {
   agent?: string;
   model?: ModelInfo;
   pinnedMessageId?: number;
+  ttsEnabled?: boolean;
 }
 
 export interface TopicScopeState extends ScopeState {
@@ -116,6 +117,7 @@ interface SettingsIndexes {
   scopedAgents: Record<string, string>;
   scopedModels: Record<string, ModelInfo>;
   scopedPinnedMessageIds: Record<string, number>;
+  scopedTtsEnabled: Record<string, boolean>;
   topicSessionBindings: Record<string, TopicSessionBinding>;
 }
 
@@ -130,6 +132,7 @@ function createEmptyIndexes(): SettingsIndexes {
     scopedAgents: {},
     scopedModels: {},
     scopedPinnedMessageIds: {},
+    scopedTtsEnabled: {},
     topicSessionBindings: {},
   };
 }
@@ -684,8 +687,16 @@ function sanitizeScopeState(value: unknown): ScopeState | undefined {
   const model = sanitizeModelInfo(value.model);
   const pinnedMessageId =
     typeof value.pinnedMessageId === "number" ? value.pinnedMessageId : undefined;
+  const ttsEnabled = typeof value.ttsEnabled === "boolean" ? value.ttsEnabled : undefined;
 
-  if (!project && !session && !agent && !model && pinnedMessageId === undefined) {
+  if (
+    !project &&
+    !session &&
+    !agent &&
+    !model &&
+    pinnedMessageId === undefined &&
+    ttsEnabled === undefined
+  ) {
     return undefined;
   }
 
@@ -695,6 +706,7 @@ function sanitizeScopeState(value: unknown): ScopeState | undefined {
     agent,
     model,
     pinnedMessageId,
+    ttsEnabled,
   };
 }
 
@@ -852,6 +864,7 @@ function isEmptyScopeState(state: ScopeState | TopicScopeState | undefined): boo
     state.agent === undefined &&
     state.model === undefined &&
     state.pinnedMessageId === undefined &&
+    state.ttsEnabled === undefined &&
     (!("binding" in state) || state.binding === undefined)
   );
 }
@@ -979,6 +992,10 @@ function rebuildIndexes(settings: Settings): SettingsIndexes {
 
     if (state.pinnedMessageId !== undefined) {
       indexes.scopedPinnedMessageIds[scopeKey] = state.pinnedMessageId;
+    }
+
+    if (state.ttsEnabled !== undefined) {
+      indexes.scopedTtsEnabled[scopeKey] = state.ttsEnabled;
     }
 
     if ("binding" in state && state.binding) {
@@ -1312,6 +1329,14 @@ export function setScopedPinnedMessageId(scopeKey: string, messageId: number): v
 
 export function clearScopedPinnedMessageId(scopeKey: string): void {
   updateScopeState(scopeKey, "pinnedMessageId", undefined);
+}
+
+export function isTtsEnabled(scopeKey: string = GLOBAL_SCOPE_KEY): boolean {
+  return getScopedMap(currentIndexes.scopedTtsEnabled, normalizeScopeKey(scopeKey)) === true;
+}
+
+export function setTtsEnabled(enabled: boolean, scopeKey: string = GLOBAL_SCOPE_KEY): void {
+  updateScopeState(scopeKey, "ttsEnabled", enabled);
 }
 
 export function getTopicSessionBindings(): Record<string, TopicSessionBinding> {

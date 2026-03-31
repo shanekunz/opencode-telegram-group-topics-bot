@@ -316,9 +316,9 @@ describe("bot/commands/new", () => {
       "sessions.preview.you\nReview pending PRs",
       { message_thread_id: 777 },
     ]);
-    expect((ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.invocationCallOrder[1]).toBeLessThan(
-      mocked.safeBackgroundTaskMock.mock.invocationCallOrder[0],
-    );
+    expect(
+      (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.invocationCallOrder[1],
+    ).toBeLessThan(mocked.safeBackgroundTaskMock.mock.invocationCallOrder[0]);
   });
 
   it("surfaces background prompt API errors in the created topic", async () => {
@@ -340,5 +340,21 @@ describe("bot/commands/new", () => {
       "bot.prompt_send_error",
       { message_thread_id: 777 },
     ]);
+  });
+
+  it("shows a server creation error when session creation fails before topic creation", async () => {
+    const ensureEventSubscription = vi.fn().mockResolvedValue(undefined);
+    const command = createNewCommand({ ensureEventSubscription });
+    const ctx = createContext();
+
+    mocked.sessionCreateMock.mockResolvedValue({
+      data: null,
+      error: new Error("server unavailable"),
+    });
+
+    await command(ctx as never);
+
+    expect(ctx.reply).toHaveBeenCalledWith("new.create_error");
+    expect(ctx.api.createForumTopic).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   editMessageWithMarkdownFallback,
+  getTelegramRetryAfterMs,
   isTelegramMarkdownParseError,
+  isTelegramMessageNotModifiedError,
   sendMessageWithMarkdownFallback,
 } from "../../../src/bot/utils/send-with-markdown-fallback.js";
 
@@ -49,6 +51,37 @@ describe("bot/utils/send-with-markdown-fallback", () => {
     });
   });
 
+  it("drops markdown formatting options on send fallback", async () => {
+    const sendMessage = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error("Bad Request: can't parse entities: Character '+' is reserved"),
+      )
+      .mockResolvedValueOnce(undefined);
+
+    await sendMessageWithMarkdownFallback({
+      api: { sendMessage },
+      chatId: 777,
+      text: "a+b",
+      options: {
+        reply_markup: { keyboard: [] },
+        parse_mode: "MarkdownV2",
+        entities: [],
+      },
+      parseMode: "MarkdownV2",
+    });
+
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage).toHaveBeenNthCalledWith(1, 777, "a+b", {
+      reply_markup: { keyboard: [] },
+      parse_mode: "MarkdownV2",
+      entities: [],
+    });
+    expect(sendMessage).toHaveBeenNthCalledWith(2, 777, "a+b", {
+      reply_markup: { keyboard: [] },
+    });
+  });
+
   it("does not swallow non-markdown Telegram errors", async () => {
     const sendMessage = vi
       .fn()
@@ -73,6 +106,22 @@ describe("bot/utils/send-with-markdown-fallback", () => {
 
     expect(isTelegramMarkdownParseError(error)).toBe(true);
     expect(isTelegramMarkdownParseError(new Error("network timeout"))).toBe(false);
+  });
+
+  it("detects Telegram no-op edit errors", () => {
+    expect(
+      isTelegramMessageNotModifiedError(
+        new Error(
+          "Bad Request: message is not modified: specified new message content and reply markup are exactly the same",
+        ),
+      ),
+    ).toBe(true);
+    expect(isTelegramMessageNotModifiedError(new Error("network timeout"))).toBe(false);
+  });
+
+  it("extracts Telegram retry_after values", () => {
+    expect(getTelegramRetryAfterMs({ parameters: { retry_after: 23 } })).toBe(23000);
+    expect(getTelegramRetryAfterMs(new Error("network timeout"))).toBeNull();
   });
 
   it("supports Markdown parse mode with fallback", async () => {
@@ -137,6 +186,38 @@ describe("bot/utils/send-with-markdown-fallback", () => {
       parse_mode: "MarkdownV2",
     });
     expect(editMessageText).toHaveBeenNthCalledWith(2, 42, 8, "<broken>", {
+      reply_markup: { inline_keyboard: [] },
+    });
+  });
+
+  it("drops markdown formatting options on edit fallback", async () => {
+    const editMessageText = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error("Bad Request: can't parse entities: Character '+' is reserved"),
+      )
+      .mockResolvedValueOnce(undefined);
+
+    await editMessageWithMarkdownFallback({
+      api: { editMessageText },
+      chatId: 501,
+      messageId: 902,
+      text: "a+b",
+      options: {
+        reply_markup: { inline_keyboard: [] },
+        parse_mode: "MarkdownV2",
+        entities: [],
+      },
+      parseMode: "MarkdownV2",
+    });
+
+    expect(editMessageText).toHaveBeenCalledTimes(2);
+    expect(editMessageText).toHaveBeenNthCalledWith(1, 501, 902, "a+b", {
+      reply_markup: { inline_keyboard: [] },
+      parse_mode: "MarkdownV2",
+      entities: [],
+    });
+    expect(editMessageText).toHaveBeenNthCalledWith(2, 501, 902, "a+b", {
       reply_markup: { inline_keyboard: [] },
     });
   });

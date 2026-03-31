@@ -1,6 +1,7 @@
 import { CommandContext, Context } from "grammy";
 import { getCurrentProject } from "../../settings/manager.js";
 import { getCurrentSession } from "../../session/manager.js";
+import { questionManager } from "../../question/manager.js";
 import {
   loadLastAssistantMessage,
   loadLastVisibleTurn,
@@ -9,6 +10,7 @@ import {
 import { logger } from "../../utils/logger.js";
 import { t } from "../../i18n/index.js";
 import { getScopeFromContext, getScopeKeyFromContext, getThreadSendOptions } from "../scope.js";
+import { showCurrentQuestion } from "../handlers/question.js";
 
 const LAST_MESSAGE_MAX_LENGTH = 3500;
 
@@ -23,6 +25,15 @@ export async function lastCommand(ctx: CommandContext<Context>): Promise<void> {
     const scopeKey = getScopeKeyFromContext(ctx);
     const scope = getScopeFromContext(ctx);
     const sendOptions = getThreadSendOptions(scope?.threadId ?? null);
+
+    if (
+      questionManager.isActive(scopeKey) &&
+      questionManager.getActiveMessageId(scopeKey) === null
+    ) {
+      await showCurrentQuestion(ctx.api, ctx.chat!.id, scopeKey, scope?.threadId ?? null);
+      return;
+    }
+
     const currentProject = getCurrentProject(scopeKey);
     if (!currentProject) {
       await ctx.reply(t("bot.project_not_selected"), sendOptions);

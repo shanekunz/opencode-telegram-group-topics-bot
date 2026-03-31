@@ -43,6 +43,11 @@ import {
 import { INTERACTION_CLEAR_REASON } from "../../interaction/constants.js";
 import { buildTopicMessageLink } from "../utils/topic-link.js";
 import type { TextPartInput } from "@opencode-ai/sdk/v2";
+import {
+  activatePromptResponseMode,
+  clearPromptResponseMode,
+  getDefaultPromptResponseMode,
+} from "../handlers/prompt.js";
 
 const NEW_COMMAND_TOPIC_SYNC = {
   TITLE_POLL_ATTEMPTS: 8,
@@ -158,15 +163,35 @@ export function createNewCommand(deps: NewCommandDeps) {
       });
 
       if (error || !session) {
-        throw error || new Error("No data received from server");
+        await ctx.reply(t("new.create_error"));
+        return;
       }
 
       const initialPrompt = parseNewCommandPrompt(ctx);
       const topicTitle = formatTopicTitle(session.title, session.title);
 
-      const createdTopic = await ctx.api.createForumTopic(ctx.chat!.id, topicTitle, {
-        icon_color: TOPIC_COLORS.BLUE,
-      });
+      const createdTopic = await (async () => {
+        try {
+          return await ctx.api.createForumTopic(ctx.chat!.id, topicTitle, {
+            icon_color: TOPIC_COLORS.BLUE,
+          });
+        } catch (error) {
+          logger.error("[Bot] Error creating forum topic for new session", error);
+          const errorText = getErrorText(error);
+
+          if (errorText.includes(TELEGRAM_ERROR_MARKER.NOT_ENOUGH_RIGHTS_CREATE_TOPIC)) {
+            await ctx.reply(t(BOT_I18N_KEY.NEW_TOPIC_CREATE_NO_RIGHTS));
+            return null;
+          }
+
+          await ctx.reply(t(BOT_I18N_KEY.NEW_TOPIC_CREATE_ERROR));
+          return null;
+        }
+      })();
+
+      if (!createdTopic) {
+        return;
+      }
 
       const topicThreadId = createdTopic.message_thread_id;
       const topicScopeKey = createScopeKeyFromParams({
@@ -252,13 +277,9 @@ export function createNewCommand(deps: NewCommandDeps) {
       await ctx.reply(generalReplyText, getThreadSendOptions(scope?.threadId ?? null));
 
       if (initialPrompt.length > 0) {
-        await ctx.api.sendMessage(
-          ctx.chat!.id,
-          `${t("sessions.preview.you")}\n${initialPrompt}`,
-          {
-            ...getThreadSendOptions(topicThreadId),
-          },
-        );
+        await ctx.api.sendMessage(ctx.chat!.id, `${t("sessions.preview.you")}\n${initialPrompt}`, {
+          ...getThreadSendOptions(topicThreadId),
+        });
 
         const promptModel = getStoredModel(topicScopeKey);
         const promptAgent = getStoredAgent(topicScopeKey);
@@ -289,11 +310,16 @@ export function createNewCommand(deps: NewCommandDeps) {
 
         safeBackgroundTask({
           taskName: "new.session.promptAsync",
-          task: () => opencodeClient.session.promptAsync(promptOptions),
+          task: () => {
+            activatePromptResponseMode(session.id, getDefaultPromptResponseMode());
+            return opencodeClient.session.promptAsync(promptOptions);
+          },
           onSuccess: async ({ error: promptError }) => {
             if (!promptError) {
               return;
             }
+
+            clearPromptResponseMode(session.id);
 
             const errorType = classifyPromptSubmitError(promptError);
             const errorMessageKey =
@@ -313,6 +339,8 @@ export function createNewCommand(deps: NewCommandDeps) {
             });
           },
           onError: async (promptError) => {
+            clearPromptResponseMode(session.id);
+
             const errorType = classifyPromptSubmitError(promptError);
             const errorMessageKey =
               errorType === "busy"
@@ -339,14 +367,7 @@ export function createNewCommand(deps: NewCommandDeps) {
       }
     } catch (error) {
       logger.error("[Bot] Error creating session/topic", error);
-      const errorText = getErrorText(error);
-
-      if (errorText.includes(TELEGRAM_ERROR_MARKER.NOT_ENOUGH_RIGHTS_CREATE_TOPIC)) {
-        await ctx.reply(t(BOT_I18N_KEY.NEW_TOPIC_CREATE_NO_RIGHTS));
-        return;
-      }
-
-      await ctx.reply(t(BOT_I18N_KEY.NEW_TOPIC_CREATE_ERROR));
+      await ctx.reply(t("new.create_error"));
     }
   };
 }

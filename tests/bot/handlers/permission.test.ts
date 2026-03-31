@@ -130,6 +130,7 @@ async function flushMicrotasks(): Promise<void> {
 
 describe("bot/handlers/permission", () => {
   beforeEach(() => {
+    vi.useRealTimers();
     permissionManager.clear();
     interactionManager.clear("test_setup");
 
@@ -420,6 +421,37 @@ describe("bot/handlers/permission", () => {
 
     expect(permissionManager.isActive()).toBe(false);
     expect(interactionManager.getSnapshot()).toBeNull();
+  });
+
+  it("retries permission message delivery after Telegram 429", async () => {
+    vi.useFakeTimers();
+
+    const rateLimitError = Object.assign(new Error("Too Many Requests"), {
+      parameters: { retry_after: 1 },
+    });
+    const botApi = {
+      sendMessage: vi
+        .fn()
+        .mockRejectedValueOnce(rateLimitError)
+        .mockResolvedValueOnce({ message_id: 900 }),
+      deleteMessage: vi.fn().mockResolvedValue(true),
+    } as unknown as Context["api"];
+
+    const promise = showPermissionRequest(
+      botApi,
+      777,
+      createPermissionRequest("perm-retry"),
+      "global",
+      null,
+    );
+
+    await vi.advanceTimersByTimeAsync(1100);
+    await promise;
+
+    const sendMessageMock = botApi.sendMessage as unknown as ReturnType<typeof vi.fn>;
+    expect(sendMessageMock).toHaveBeenCalledTimes(2);
+    expect(permissionManager.getRequestID(900)).toBe("perm-retry");
+    expect(interactionManager.getSnapshot()?.kind).toBe("permission");
   });
 
   it("sends permission text in raw mode for underscore-based permission names", async () => {

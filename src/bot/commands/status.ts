@@ -1,7 +1,7 @@
 import { CommandContext, Context } from "grammy";
 import { opencodeClient } from "../../opencode/client.js";
 import { getCurrentSession } from "../../session/manager.js";
-import { getCurrentProject } from "../../settings/manager.js";
+import { getCurrentProject, isTtsEnabled } from "../../settings/manager.js";
 import { fetchCurrentAgent } from "../../agent/manager.js";
 import { getAgentDisplayName } from "../../agent/types.js";
 import { fetchCurrentModel } from "../../model/manager.js";
@@ -11,7 +11,6 @@ import { keyboardManager } from "../../keyboard/manager.js";
 import { pinnedMessageManager } from "../../pinned/manager.js";
 import { logger } from "../../utils/logger.js";
 import { t } from "../../i18n/index.js";
-import { sendBotText } from "../utils/telegram-text.js";
 import { createDmKeyboard } from "../utils/keyboard.js";
 import { getScopeFromContext, getScopeKeyFromContext, getThreadSendOptions } from "../scope.js";
 
@@ -42,6 +41,7 @@ export async function statusCommand(ctx: CommandContext<Context>) {
       if (data.version) {
         dmMessage += `${t("status.line.version", { version: data.version })}\n`;
       }
+      dmMessage += `${t("status.line.tts", { tts: isTtsEnabled() ? t("status.tts.on") : t("status.tts.off") })}\n`;
 
       if (processManager.isRunning()) {
         const uptime = processManager.getUptime();
@@ -68,6 +68,7 @@ export async function statusCommand(ctx: CommandContext<Context>) {
     if (data.version) {
       message += `${t("status.line.version", { version: data.version })}\n`;
     }
+    message += `${t("status.line.tts", { tts: isTtsEnabled() ? t("status.tts.on") : t("status.tts.off") })}\n`;
 
     // Add process management information
     if (processManager.isRunning()) {
@@ -128,14 +129,9 @@ export async function statusCommand(ctx: CommandContext<Context>) {
     }
     const keyboard = keyboardManager.getKeyboard(scopeKey);
     if (ctx.chat) {
-      await sendBotText({
-        api: ctx.api,
-        chatId: ctx.chat.id,
-        text: message,
-        options: {
-          reply_markup: keyboard,
-          ...getThreadSendOptions(scope?.threadId ?? null),
-        },
+      await ctx.reply(message, {
+        reply_markup: keyboard,
+        ...getThreadSendOptions(scope?.threadId ?? null),
       });
     } else {
       await ctx.reply(message, { reply_markup: keyboard });

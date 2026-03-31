@@ -11,6 +11,8 @@ import {
   getCurrentSession,
   setScopedPinnedMessageId,
   getScopedPinnedMessageId,
+  isTtsEnabled,
+  setTtsEnabled,
 } from "../../src/settings/manager.js";
 
 describe("settings scoped values", () => {
@@ -55,6 +57,17 @@ describe("settings scoped values", () => {
     expect(getCurrentSession("-100:22")?.id).toBe("ses-topic");
     expect(getScopedPinnedMessageId("chat:-100")).toBe(10);
     expect(getScopedPinnedMessageId("-100:22")).toBe(20);
+  });
+
+  it("stores TTS preference globally", () => {
+    setTtsEnabled(true);
+
+    expect(isTtsEnabled()).toBe(true);
+    expect(isTtsEnabled("dm:100")).toBe(false);
+
+    setTtsEnabled(false);
+
+    expect(isTtsEnabled("global")).toBe(false);
   });
 
   it("normalizes general-topic aliases to the chat general scope", () => {

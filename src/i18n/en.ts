@@ -5,6 +5,7 @@ export const en = {
   "cmd.description.stop": "Stop current action",
   "cmd.description.sessions": "List sessions",
   "cmd.description.last": "Show latest session message",
+  "cmd.description.tts": "Toggle TTS replies",
   "cmd.description.projects": "List projects",
   "cmd.description.task": "Create a scheduled task",
   "cmd.description.tasklist": "List scheduled tasks",
@@ -105,6 +106,9 @@ export const en = {
   "status.line.uptime_sec": "Uptime: {seconds} sec",
   "status.line.mode": "Mode: {mode}",
   "status.line.model": "Model: {model}",
+  "status.line.tts": "TTS replies: {tts}",
+  "status.tts.on": "On",
+  "status.tts.off": "Off",
   "status.agent_not_set": "not set",
   "status.project_selected": "🏗 Project: {project}",
   "status.project_not_selected": "🏗 Project: not selected",
@@ -117,6 +121,11 @@ export const en = {
   "status.global_sessions": "Sessions: {count}",
   "status.server_unavailable":
     "🔴 OpenCode Server is unavailable\n\nUse /opencode_start to start the server.",
+
+  "tts.enabled": "🔊 TTS replies enabled for this chat scope.",
+  "tts.enabled_not_configured":
+    "🔊 TTS replies enabled for this chat scope.\n\nTTS credentials are not configured yet. Set `TTS_API_URL` and `TTS_API_KEY`, or let them fall back to `STT_API_URL` and `STT_API_KEY`.",
+  "tts.disabled": "🔇 TTS replies disabled for this chat scope.",
 
   "dm.restricted.command":
     "⚠️ Session control commands are disabled in DM. Use a group topic thread for project/session work.",
@@ -326,6 +335,7 @@ export const en = {
   "context.progress": "⏳ Compacting context...",
   "context.error": "❌ Context compaction failed",
   "context.success": "✅ Context compacted successfully",
+  "context.after_compaction": "✅ Context window after compaction is {context}",
 
   "permission.inactive_callback": "Permission request is inactive",
   "permission.processing_error_callback": "Processing error",

@@ -8,6 +8,7 @@ import { logger } from "../utils/logger.js";
 import type { ContextInfo, KeyboardState } from "./types.js";
 import { t } from "../i18n/index.js";
 import { SCOPE_CONTEXT, getScopeFromKey, getThreadIdFromScopeKey } from "../bot/scope.js";
+import { contextStateManager } from "../context/manager.js";
 
 class KeyboardManager {
   private stateByScope: Map<string, KeyboardState> = new Map();
@@ -66,24 +67,24 @@ class KeyboardManager {
   }
 
   public updateContext(tokensUsed: number, tokensLimit: number, scopeKey: string = "global"): void {
-    const state = this.getOrCreateState(scopeKey);
-    state.contextInfo = { tokensUsed, tokensLimit };
+    contextStateManager.update(tokensUsed, tokensLimit, scopeKey);
   }
 
   public clearContext(scopeKey: string = "global"): void {
-    const state = this.getOrCreateState(scopeKey);
-    state.contextInfo = null;
+    contextStateManager.clear(scopeKey);
   }
 
   public getContextInfo(scopeKey: string = "global"): ContextInfo | null {
-    return this.getOrCreateState(scopeKey).contextInfo ?? null;
+    return contextStateManager.get(scopeKey);
   }
 
   private buildKeyboard(scopeKey: string) {
     const state = this.getOrCreateState(scopeKey);
     const scope = getScopeFromKey(scopeKey);
     const effectiveContextInfo =
-      scope?.context === SCOPE_CONTEXT.GROUP_GENERAL ? undefined : (state.contextInfo ?? undefined);
+      scope?.context === SCOPE_CONTEXT.GROUP_GENERAL
+        ? undefined
+        : (contextStateManager.get(scopeKey) ?? undefined);
     const keyboardOptions =
       scope?.context === SCOPE_CONTEXT.GROUP_GENERAL
         ? {
