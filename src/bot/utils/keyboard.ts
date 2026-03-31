@@ -25,7 +25,7 @@ function formatTokenCount(count: number): string {
 /**
  * Format context information for button
  */
-function formatContextForButton(contextInfo: ContextInfo): string {
+export function formatContextForButton(contextInfo: ContextInfo): string {
   const used = formatTokenCount(contextInfo.tokensUsed);
   const limit = formatTokenCount(contextInfo.tokensLimit);
   const percent = Math.round((contextInfo.tokensUsed / contextInfo.tokensLimit) * 100);

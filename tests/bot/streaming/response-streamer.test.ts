@@ -53,4 +53,16 @@ describe("bot/streaming/response-streamer", () => {
     await expect(streamer.finalize("s1", "Final full answer", "raw")).resolves.toBe(false);
     expect(deleteMessage).toHaveBeenCalledWith("s1", 44);
   });
+
+  it("removes the streamed message before final re-delivery", async () => {
+    const sendText = vi.fn().mockResolvedValue(55);
+    const editText = vi.fn().mockResolvedValue(undefined);
+    const deleteMessage = vi.fn().mockResolvedValue(undefined);
+    const streamer = new ResponseStreamer({ sendText, editText, deleteMessage });
+
+    await streamer.update("s1", "Partial", "raw");
+
+    await expect(streamer.resetForFinalDelivery("s1")).resolves.toBe(true);
+    expect(deleteMessage).toHaveBeenCalledWith("s1", 55);
+  });
 });

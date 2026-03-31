@@ -31,6 +31,8 @@ const MARKDOWN_PARSE_ERROR_MARKERS = [
   "bad request: can't parse",
 ];
 
+const MESSAGE_NOT_MODIFIED_MARKER = "message is not modified";
+
 function stripMarkdownFormattingOptions<
   T extends TelegramSendMessageOptions | TelegramEditMessageOptions | undefined,
 >(options: T): T {
@@ -90,6 +92,33 @@ export function isTelegramMarkdownParseError(error: unknown): boolean {
   return MARKDOWN_PARSE_ERROR_MARKERS.some((marker) => errorText.includes(marker));
 }
 
+export function isTelegramMessageNotModifiedError(error: unknown): boolean {
+  const errorText = getErrorText(error);
+  if (!errorText) {
+    return false;
+  }
+
+  return errorText.includes(MESSAGE_NOT_MODIFIED_MARKER);
+}
+
+export function getTelegramRetryAfterMs(error: unknown): number | null {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const params = Reflect.get(error, "parameters");
+  if (!params || typeof params !== "object") {
+    return null;
+  }
+
+  const retryAfter = Reflect.get(params, "retry_after");
+  if (typeof retryAfter !== "number" || retryAfter <= 0) {
+    return null;
+  }
+
+  return retryAfter * 1000;
+}
+
 export async function sendMessageWithMarkdownFallback({
   api,
   chatId,
@@ -115,7 +144,7 @@ export async function sendMessageWithMarkdownFallback({
       throw error;
     }
 
-    logger.warn("[Bot] Markdown parse failed, retrying assistant message in raw mode", error);
+    logger.debug("[Bot] Markdown parse failed, retrying assistant message in raw mode", error);
     return await api.sendMessage(chatId, text, stripMarkdownFormattingOptions(options));
   }
 }
@@ -146,7 +175,7 @@ export async function editMessageWithMarkdownFallback({
       throw error;
     }
 
-    logger.warn("[Bot] Markdown parse failed, retrying edited message in raw mode", error);
+    logger.debug("[Bot] Markdown parse failed, retrying edited message in raw mode", error);
     return await api.editMessageText(
       chatId,
       messageId,

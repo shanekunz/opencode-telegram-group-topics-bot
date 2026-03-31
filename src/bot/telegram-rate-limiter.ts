@@ -2,7 +2,8 @@ import { logger } from "../utils/logger.js";
 import { createScopeKeyFromParams } from "./scope.js";
 
 const GLOBAL_MIN_INTERVAL_MS = 40;
-const PER_CHAT_MIN_INTERVAL_MS = 1100;
+const PER_CHAT_SEND_INTERVAL_MS = 1100;
+const PER_CHAT_EDIT_INTERVAL_MS = 250;
 const GROUP_WINDOW_MS = 60_000;
 const GROUP_LIMIT_PER_WINDOW = 20;
 
@@ -32,6 +33,14 @@ interface QueueJob {
 
 function isEditMessageJob(job: QueueJob): boolean {
   return job.method === "editMessageText";
+}
+
+function getPerChatIntervalMs(job: QueueJob): number {
+  return isEditMessageJob(job) ? PER_CHAT_EDIT_INTERVAL_MS : PER_CHAT_SEND_INTERVAL_MS;
+}
+
+function countsTowardsGroupWindow(job: QueueJob): boolean {
+  return !isEditMessageJob(job);
 }
 
 function parseMessageId(payload: unknown): number | null {
@@ -161,9 +170,26 @@ export class TelegramRateLimiter {
     this.activeScopeKey = scopeKey;
   }
 
+  private async executeWithRetryAfter<T>(method: string, run: () => Promise<T>): Promise<T> {
+    while (true) {
+      try {
+        return await run();
+      } catch (error) {
+        const retryAfterMs = getRetryAfterMs(error);
+        if (!retryAfterMs) {
+          throw error;
+        }
+
+        const delayMs = retryAfterMs + 100;
+        logger.info(`[RateLimiter] Telegram rate limit for ${method}; retry in ${delayMs}ms`);
+        await sleep(delayMs);
+      }
+    }
+  }
+
   enqueue<T>(method: string, payload: unknown, run: () => Promise<T>): Promise<T> {
     if (!RATE_LIMITED_METHODS.has(method)) {
-      return run();
+      return this.executeWithRetryAfter(method, run);
     }
 
     const promise = new Promise<unknown>((resolve, reject) => {
@@ -286,10 +312,10 @@ export class TelegramRateLimiter {
 
     if (job.chatId !== null) {
       const lastPerChat = this.lastSentAtByChat.get(job.chatId) ?? 0;
-      waits.push(lastPerChat + PER_CHAT_MIN_INTERVAL_MS - now);
+      waits.push(lastPerChat + getPerChatIntervalMs(job) - now);
     }
 
-    if (job.isGroupLike && job.chatId !== null) {
+    if (job.isGroupLike && job.chatId !== null && countsTowardsGroupWindow(job)) {
       const timestamps = this.pruneGroupWindow(job.chatId, now);
       if (timestamps.length >= GROUP_LIMIT_PER_WINDOW) {
         waits.push(timestamps[0] + GROUP_WINDOW_MS - now);
@@ -307,7 +333,7 @@ export class TelegramRateLimiter {
       this.lastSentAtByChat.set(job.chatId, now);
     }
 
-    if (job.isGroupLike && job.chatId !== null) {
+    if (job.isGroupLike && job.chatId !== null && countsTowardsGroupWindow(job)) {
       const timestamps = this.pruneGroupWindow(job.chatId, now);
       timestamps.push(now);
       this.groupWindowByChat.set(job.chatId, timestamps);
@@ -331,11 +357,9 @@ export class TelegramRateLimiter {
         return "done";
       }
 
-      const cappedDelay = Math.min(retryAfterMs + 100, 10_000);
-      job.notBefore = Date.now() + cappedDelay;
-      logger.warn(
-        `[RateLimiter] Telegram 429 for ${job.method}; requeue in ${cappedDelay}ms (queue=${this.queue.length + 1})`,
-      );
+      const delayMs = retryAfterMs + 100;
+      job.notBefore = Date.now() + delayMs;
+      logger.info(`[RateLimiter] Telegram rate limit for ${job.method}; retry in ${delayMs}ms`);
       return "retry";
     }
   }

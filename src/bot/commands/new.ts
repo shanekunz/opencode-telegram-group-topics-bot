@@ -43,6 +43,11 @@ import {
 import { INTERACTION_CLEAR_REASON } from "../../interaction/constants.js";
 import { buildTopicMessageLink } from "../utils/topic-link.js";
 import type { TextPartInput } from "@opencode-ai/sdk/v2";
+import {
+  activatePromptResponseMode,
+  clearPromptResponseMode,
+  getDefaultPromptResponseMode,
+} from "../handlers/prompt.js";
 
 const NEW_COMMAND_TOPIC_SYNC = {
   TITLE_POLL_ATTEMPTS: 8,
@@ -305,11 +310,16 @@ export function createNewCommand(deps: NewCommandDeps) {
 
         safeBackgroundTask({
           taskName: "new.session.promptAsync",
-          task: () => opencodeClient.session.promptAsync(promptOptions),
+          task: () => {
+            activatePromptResponseMode(session.id, getDefaultPromptResponseMode());
+            return opencodeClient.session.promptAsync(promptOptions);
+          },
           onSuccess: async ({ error: promptError }) => {
             if (!promptError) {
               return;
             }
+
+            clearPromptResponseMode(session.id);
 
             const errorType = classifyPromptSubmitError(promptError);
             const errorMessageKey =
@@ -329,6 +339,8 @@ export function createNewCommand(deps: NewCommandDeps) {
             });
           },
           onError: async (promptError) => {
+            clearPromptResponseMode(session.id);
+
             const errorType = classifyPromptSubmitError(promptError);
             const errorMessageKey =
               errorType === "busy"

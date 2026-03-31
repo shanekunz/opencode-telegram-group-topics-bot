@@ -188,4 +188,113 @@ describe("bot/telegram-rate-limiter", () => {
 
     vi.useRealTimers();
   });
+
+  it("does not let frequent edits exhaust the group send window", async () => {
+    vi.useFakeTimers();
+
+    const limiter = new TelegramRateLimiter();
+    const executionOrder: string[] = [];
+
+    for (let index = 0; index < 20; index++) {
+      limiter.enqueue(
+        "editMessageText",
+        {
+          chat_id: -1001,
+          message_thread_id: 77,
+          message_id: 10,
+        },
+        async () => {
+          executionOrder.push(`edit-${index}`);
+          return `edit-${index}-ok`;
+        },
+      );
+    }
+
+    const finalSend = limiter.enqueue(
+      "sendMessage",
+      {
+        chat_id: -1001,
+        message_thread_id: 77,
+      },
+      async () => {
+        executionOrder.push("final-send");
+        return "final-ok";
+      },
+    );
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    await finalSend;
+
+    expect(executionOrder).toContain("final-send");
+
+    vi.useRealTimers();
+  });
+
+  it("waits for the full Telegram retry_after duration", async () => {
+    vi.useFakeTimers();
+
+    const limiter = new TelegramRateLimiter();
+    const executionOrder: string[] = [];
+    let attempts = 0;
+
+    const job = limiter.enqueue(
+      "sendDocument",
+      {
+        chat_id: -1001,
+        message_thread_id: 77,
+      },
+      async () => {
+        attempts += 1;
+        executionOrder.push(`attempt-${attempts}`);
+        if (attempts === 1) {
+          throw createRetryAfterError(23);
+        }
+
+        return "ok";
+      },
+    );
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(executionOrder).toEqual(["attempt-1"]);
+
+    await vi.advanceTimersByTimeAsync(13_500);
+    await expect(job).resolves.toBe("ok");
+    expect(executionOrder).toEqual(["attempt-1", "attempt-2"]);
+
+    vi.useRealTimers();
+  });
+
+  it("retries retry_after for non-queued Telegram methods too", async () => {
+    vi.useFakeTimers();
+
+    const limiter = new TelegramRateLimiter();
+    const executionOrder: string[] = [];
+    let attempts = 0;
+
+    const job = limiter.enqueue(
+      "deleteMessage",
+      {
+        chat_id: -1001,
+        message_id: 99,
+      },
+      async () => {
+        attempts += 1;
+        executionOrder.push(`attempt-${attempts}`);
+        if (attempts === 1) {
+          throw createRetryAfterError(2);
+        }
+
+        return "ok";
+      },
+    );
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(executionOrder).toEqual(["attempt-1"]);
+
+    await vi.advanceTimersByTimeAsync(1_500);
+    await expect(job).resolves.toBe("ok");
+    expect(executionOrder).toEqual(["attempt-1", "attempt-2"]);
+
+    vi.useRealTimers();
+  });
 });

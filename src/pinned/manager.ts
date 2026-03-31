@@ -11,6 +11,8 @@ import { getStoredModel } from "../model/manager.js";
 import type { FileChange, PinnedMessageState, TokensInfo } from "./types.js";
 import { t } from "../i18n/index.js";
 import { getThreadIdFromScopeKey, getThreadSendOptions } from "../bot/scope.js";
+import { contextStateManager } from "../context/manager.js";
+import { getTelegramRetryAfterMs } from "../bot/utils/send-with-markdown-fallback.js";
 
 interface ScopeContext {
   api: Api | null;
@@ -20,14 +22,10 @@ interface ScopeContext {
   debounceTimer: ReturnType<typeof setTimeout> | null;
 }
 
+const DEFAULT_CONTEXT_LIMIT = 200_000;
+
 class PinnedMessageManager {
   private contexts = new Map<string, ScopeContext>();
-  private onKeyboardUpdateCallback?: (
-    tokensUsed: number,
-    tokensLimit: number,
-    scopeKey: string,
-  ) => void;
-
   private createDefaultState(scopeKey: string): PinnedMessageState {
     return {
       scopeKey,
@@ -43,6 +41,22 @@ class PinnedMessageManager {
       lastUpdated: 0,
       changedFiles: [],
     };
+  }
+
+  private async retryTelegramCall<T>(label: string, run: () => Promise<T>): Promise<T> {
+    while (true) {
+      try {
+        return await run();
+      } catch (error) {
+        const retryAfterMs = getTelegramRetryAfterMs(error);
+        if (!retryAfterMs) {
+          throw error;
+        }
+
+        logger.info(`[PinnedManager] Telegram rate limit; retrying ${label} in ${retryAfterMs}ms`);
+        await new Promise((resolve) => setTimeout(resolve, retryAfterMs + 100));
+      }
+    }
   }
 
   private getContext(scopeKey: string): ScopeContext {
@@ -106,10 +120,7 @@ class PinnedMessageManager {
       project?.name || this.extractProjectName(project?.worktree) || t("pinned.unknown");
 
     await this.fetchContextLimit(scopeKey);
-
-    if (this.onKeyboardUpdateCallback && state.tokensLimit > 0) {
-      this.onKeyboardUpdateCallback(state.tokensUsed, state.tokensLimit, scopeKey);
-    }
+    this.syncSharedContext(scopeKey);
 
     state.changedFiles = [];
     await this.unpinOldMessage(scopeKey);
@@ -132,6 +143,7 @@ class PinnedMessageManager {
     sessionId: string,
     directory: string,
     scopeKey: string = "global",
+    options: { includeSummaries?: boolean } = {},
   ): Promise<void> {
     const context = this.getContext(scopeKey);
     try {
@@ -144,6 +156,7 @@ class PinnedMessageManager {
       }
 
       let maxContextSize = 0;
+      let totalAssistantCost = 0;
       messagesData.forEach(({ info }) => {
         if (info.role !== "assistant") {
           return;
@@ -154,7 +167,7 @@ class PinnedMessageManager {
           cost?: number;
           tokens?: { input: number; cache?: { read: number } };
         };
-        if (assistantInfo.summary) {
+        if (assistantInfo.summary && !options.includeSummaries) {
           return;
         }
 
@@ -164,11 +177,13 @@ class PinnedMessageManager {
           maxContextSize = contextSize;
         }
 
-        context.state.assistantCost += assistantInfo.cost || 0;
+        totalAssistantCost += assistantInfo.cost || 0;
       });
 
       context.state.tokensUsed = maxContextSize;
+      context.state.assistantCost = totalAssistantCost;
       context.state.sessionId = sessionId;
+      this.syncSharedContext(scopeKey);
       await this.updatePinnedMessage(scopeKey);
     } catch (err) {
       logger.error("[PinnedManager] Error loading context from history:", err);
@@ -180,7 +195,9 @@ class PinnedMessageManager {
     directory: string,
     scopeKey: string = "global",
   ): Promise<void> {
-    await this.loadContextFromHistory(sessionId, directory, scopeKey);
+    await this.loadContextFromHistory(sessionId, directory, scopeKey, {
+      includeSummaries: true,
+    });
   }
 
   async onMessageComplete(tokens: TokensInfo, scopeKey: string = "global"): Promise<void> {
@@ -192,13 +209,7 @@ class PinnedMessageManager {
     context.state.tokensUsed = tokens.input + tokens.cacheRead;
     context.state.assistantCost += tokens.cost;
     await this.refreshSessionTitle(scopeKey);
-    this.scheduleDebouncedUpdate(scopeKey, 1200);
-  }
-
-  setOnKeyboardUpdate(
-    callback: (tokensUsed: number, tokensLimit: number, scopeKey: string) => void,
-  ): void {
-    this.onKeyboardUpdateCallback = callback;
+    this.syncSharedContext(scopeKey);
   }
 
   getContextInfo(scopeKey: string = "global"): { tokensUsed: number; tokensLimit: number } | null {
@@ -219,6 +230,7 @@ class PinnedMessageManager {
 
   async refreshContextLimit(scopeKey: string = "global"): Promise<void> {
     await this.fetchContextLimit(scopeKey);
+    this.syncSharedContext(scopeKey);
   }
 
   async onSessionDiff(diffs: FileChange[], scopeKey: string = "global"): Promise<void> {
@@ -228,7 +240,6 @@ class PinnedMessageManager {
     }
 
     context.state.changedFiles = diffs;
-    this.scheduleDebouncedUpdate(scopeKey, 1200);
   }
 
   addFileChange(change: FileChange, scopeKey: string = "global"): void {
@@ -240,8 +251,20 @@ class PinnedMessageManager {
     } else {
       context.state.changedFiles.push(change);
     }
+  }
 
-    this.scheduleDebouncedUpdate(scopeKey);
+  async flush(scopeKey: string = "global"): Promise<void> {
+    await this.updatePinnedMessage(scopeKey);
+  }
+
+  private syncSharedContext(scopeKey: string): void {
+    const contextInfo = this.getContextInfo(scopeKey);
+    if (!contextInfo) {
+      contextStateManager.clear(scopeKey);
+      return;
+    }
+
+    contextStateManager.update(contextInfo.tokensUsed, contextInfo.tokensLimit, scopeKey);
   }
 
   private scheduleDebouncedUpdate(scopeKey: string, delayMs: number = 1500): void {
@@ -342,15 +365,17 @@ class PinnedMessageManager {
     try {
       const model = getStoredModel(scopeKey);
       if (!model.providerID || !model.modelID) {
-        context.contextLimit = 200000;
+        context.contextLimit = DEFAULT_CONTEXT_LIMIT;
         context.state.tokensLimit = context.contextLimit;
+        this.syncSharedContext(scopeKey);
         return;
       }
 
       const { data: providersData, error } = await opencodeClient.config.providers();
       if (error || !providersData) {
-        context.contextLimit = 200000;
+        context.contextLimit = DEFAULT_CONTEXT_LIMIT;
         context.state.tokensLimit = context.contextLimit;
+        this.syncSharedContext(scopeKey);
         return;
       }
 
@@ -363,15 +388,18 @@ class PinnedMessageManager {
         if (modelInfo?.limit?.context) {
           context.contextLimit = modelInfo.limit.context;
           context.state.tokensLimit = context.contextLimit;
+          this.syncSharedContext(scopeKey);
           return;
         }
       }
 
-      context.contextLimit = 200000;
+      context.contextLimit = DEFAULT_CONTEXT_LIMIT;
       context.state.tokensLimit = context.contextLimit;
+      this.syncSharedContext(scopeKey);
     } catch {
-      context.contextLimit = 200000;
+      context.contextLimit = DEFAULT_CONTEXT_LIMIT;
       context.state.tokensLimit = context.contextLimit;
+      this.syncSharedContext(scopeKey);
     }
   }
 
@@ -453,17 +481,25 @@ class PinnedMessageManager {
 
     const threadId = context.state.threadId ?? getThreadIdFromScopeKey(scopeKey);
 
-    const sent = await context.api.sendMessage(context.chatId, this.formatMessage(scopeKey), {
-      ...getThreadSendOptions(threadId),
-    });
+    const sent = await this.retryTelegramCall(
+      "pinned message send",
+      async () =>
+        await context.api!.sendMessage(context.chatId!, this.formatMessage(scopeKey), {
+          ...getThreadSendOptions(threadId),
+        }),
+    );
 
     context.state.messageId = sent.message_id;
     context.state.lastUpdated = Date.now();
     this.persistPinnedId(scopeKey, sent.message_id);
 
-    await context.api.pinChatMessage(context.chatId, sent.message_id, {
-      disable_notification: true,
-    });
+    await this.retryTelegramCall(
+      "pin chat message",
+      async () =>
+        await context.api!.pinChatMessage(context.chatId!, sent.message_id, {
+          disable_notification: true,
+        }),
+    );
   }
 
   private async updatePinnedMessage(scopeKey: string): Promise<void> {
@@ -473,20 +509,16 @@ class PinnedMessageManager {
     }
 
     try {
-      await context.api.editMessageText(
-        context.chatId,
-        context.state.messageId,
-        this.formatMessage(scopeKey),
+      await this.retryTelegramCall(
+        "pinned message edit",
+        async () =>
+          await context.api!.editMessageText(
+            context.chatId!,
+            context.state.messageId!,
+            this.formatMessage(scopeKey),
+          ),
       );
       context.state.lastUpdated = Date.now();
-
-      if (this.onKeyboardUpdateCallback && context.state.tokensLimit > 0) {
-        this.onKeyboardUpdateCallback(
-          context.state.tokensUsed,
-          context.state.tokensLimit,
-          scopeKey,
-        );
-      }
     } catch (err) {
       if (err instanceof Error && err.message.includes("message is not modified")) {
         return;
@@ -511,7 +543,11 @@ class PinnedMessageManager {
 
     try {
       if (context.state.messageId) {
-        await context.api.unpinChatMessage(context.chatId, context.state.messageId).catch(() => {});
+        await this.retryTelegramCall(
+          "unpin chat message",
+          async () =>
+            await context.api!.unpinChatMessage(context.chatId!, context.state.messageId!),
+        ).catch(() => {});
       }
     } finally {
       context.state.messageId = null;
@@ -530,9 +566,18 @@ class PinnedMessageManager {
 
   async clear(scopeKey: string = "global"): Promise<void> {
     const context = this.getContext(scopeKey);
+    const preservedThreadId = context.state.threadId;
+    const preservedChatId = context.state.chatId;
+
     if (context.api && context.chatId && context.state.messageId) {
-      await context.api.unpinChatMessage(context.chatId, context.state.messageId).catch(() => {});
-      await context.api.deleteMessage(context.chatId, context.state.messageId).catch(() => {});
+      await this.retryTelegramCall(
+        "clear pinned unpin",
+        async () => await context.api!.unpinChatMessage(context.chatId!, context.state.messageId!),
+      ).catch(() => {});
+      await this.retryTelegramCall(
+        "clear pinned delete",
+        async () => await context.api!.deleteMessage(context.chatId!, context.state.messageId!),
+      ).catch(() => {});
     }
 
     if (context.debounceTimer) {
@@ -540,7 +585,13 @@ class PinnedMessageManager {
       context.debounceTimer = null;
     }
 
-    context.state = this.createDefaultState(scopeKey);
+    context.state = {
+      ...this.createDefaultState(scopeKey),
+      chatId: preservedChatId,
+      threadId: preservedThreadId,
+    };
+    context.contextLimit = null;
+    contextStateManager.clear(scopeKey);
     this.clearPersistedPinnedId(scopeKey);
   }
 }

@@ -79,4 +79,39 @@ describe("bot/utils/send-tts-response", () => {
     expect(synthesizeSpeechMock).not.toHaveBeenCalled();
     expect(sendAudioMock).not.toHaveBeenCalled();
   });
+
+  it("retries audio send when Telegram returns retry_after", async () => {
+    vi.useFakeTimers();
+
+    let attempts = 0;
+    const sendAudioMock = vi.fn().mockImplementation(async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw { parameters: { retry_after: 2 } };
+      }
+      return undefined;
+    });
+    const synthesizeSpeechMock = vi.fn().mockResolvedValue({
+      buffer: Buffer.from("mp3"),
+      filename: "assistant-reply.mp3",
+      mimeType: "audio/mpeg",
+    });
+
+    const resultPromise = sendTtsResponseForSession({
+      api: { sendAudio: sendAudioMock },
+      sessionId: "session-1",
+      chatId: 123,
+      threadId: 55,
+      text: "Hello from audio",
+      consumeResponseMode: () => "text_and_tts",
+      isTtsConfigured: () => true,
+      synthesizeSpeech: synthesizeSpeechMock,
+    });
+
+    await vi.advanceTimersByTimeAsync(2100);
+    await expect(resultPromise).resolves.toBe(true);
+    expect(sendAudioMock).toHaveBeenCalledTimes(2);
+
+    vi.useRealTimers();
+  });
 });

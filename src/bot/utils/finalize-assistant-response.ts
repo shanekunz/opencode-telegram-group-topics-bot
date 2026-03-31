@@ -18,16 +18,13 @@ export async function finalizeAssistantResponse({
   const assistantParseMode = getAssistantParseMode();
   const format: TelegramTextFormat = assistantParseMode === "MarkdownV2" ? "markdown_v2" : "raw";
 
-  const handledByStreamer = await responseStreamer.finalize(sessionId, messageText, format);
-  if (handledByStreamer) {
-    return { streamed: true, partCount: 1 };
-  }
+  const replacedStreamedMessage = await responseStreamer.resetForFinalDelivery(sessionId);
 
   const parts = formatSummary(messageText);
   if (parts.length === 0) {
-    return { streamed: false, partCount: 0 };
+    return { streamed: replacedStreamedMessage, partCount: 0 };
   }
 
   await sendFallback(parts, format);
-  return { streamed: false, partCount: parts.length };
+  return { streamed: replacedStreamedMessage, partCount: parts.length };
 }

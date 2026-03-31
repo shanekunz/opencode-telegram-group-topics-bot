@@ -219,6 +219,17 @@ function setActivePromptResponseMode(sessionId: string, responseMode: PromptResp
   activePromptResponseModes.set(sessionId, responseMode);
 }
 
+export function getDefaultPromptResponseMode(): PromptResponseMode {
+  return isTtsEnabled() ? "text_and_tts" : "text_only";
+}
+
+export function activatePromptResponseMode(
+  sessionId: string,
+  responseMode: PromptResponseMode,
+): void {
+  setActivePromptResponseMode(sessionId, responseMode);
+}
+
 export function clearPromptResponseMode(sessionId: string): void {
   activePromptResponseModes.delete(sessionId);
 }
@@ -230,6 +241,8 @@ export function consumePromptResponseMode(sessionId: string): PromptResponseMode
 }
 
 function submitPromptRequest(bot: Bot<Context>, request: QueuedPromptRequest): void {
+  setActivePromptResponseMode(request.sessionId, request.responseMode);
+
   logger.info(
     `[Bot] Calling session.promptAsync (fire-and-forget) with agent=${request.promptOptions.agent}, fileCount=${request.promptErrorLogContext.fileCount}...`,
   );
@@ -272,7 +285,6 @@ function submitPromptRequest(bot: Bot<Context>, request: QueuedPromptRequest): v
         return;
       }
 
-      setActivePromptResponseMode(request.sessionId, request.responseMode);
       logger.info("[Bot] session.promptAsync accepted");
     },
     onError: (error) => {
@@ -286,6 +298,7 @@ function submitPromptRequest(bot: Bot<Context>, request: QueuedPromptRequest): v
       logger.error("[Bot] session.promptAsync raw background error object:", error);
 
       if (errorType === "busy") {
+        clearPromptResponseMode(request.sessionId);
         const position = enqueuePromptRequest({
           ...request,
           notifyOnQueue: false,
@@ -300,6 +313,8 @@ function submitPromptRequest(bot: Bot<Context>, request: QueuedPromptRequest): v
         errorType === "session_not_found"
           ? "bot.prompt_send_error_session_not_found"
           : "bot.prompt_send_error";
+
+      clearPromptResponseMode(request.sessionId);
 
       void bot.api
         .sendMessage(request.chatId, t(errorMessageKey), {
@@ -400,7 +415,7 @@ export async function processUserPrompt(
 ): Promise<boolean> {
   const { bot, ensureEventSubscription } = deps;
   const scope = getScopeFromContext(ctx);
-  const responseMode = options.responseMode ?? (isTtsEnabled() ? "text_and_tts" : "text_only");
+  const responseMode = options.responseMode ?? getDefaultPromptResponseMode();
   const scopeKey = scope?.key ?? GLOBAL_SCOPE_KEY;
   const usePinned = ctx.chat?.type !== CHAT_TYPE.PRIVATE;
 

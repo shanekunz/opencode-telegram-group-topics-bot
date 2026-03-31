@@ -11,7 +11,6 @@ import { keyboardManager } from "../../keyboard/manager.js";
 import { pinnedMessageManager } from "../../pinned/manager.js";
 import { logger } from "../../utils/logger.js";
 import { t } from "../../i18n/index.js";
-import { sendBotText } from "../utils/telegram-text.js";
 import { createDmKeyboard } from "../utils/keyboard.js";
 import { getScopeFromContext, getScopeKeyFromContext, getThreadSendOptions } from "../scope.js";
 
@@ -130,14 +129,9 @@ export async function statusCommand(ctx: CommandContext<Context>) {
     }
     const keyboard = keyboardManager.getKeyboard(scopeKey);
     if (ctx.chat) {
-      await sendBotText({
-        api: ctx.api,
-        chatId: ctx.chat.id,
-        text: message,
-        options: {
-          reply_markup: keyboard,
-          ...getThreadSendOptions(scope?.threadId ?? null),
-        },
+      await ctx.reply(message, {
+        reply_markup: keyboard,
+        ...getThreadSendOptions(scope?.threadId ?? null),
       });
     } else {
       await ctx.reply(message, { reply_markup: keyboard });

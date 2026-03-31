@@ -329,6 +329,7 @@ export const es: I18nDictionary = {
   "context.progress": "⏳ Compactando contexto...",
   "context.error": "❌ La compactación de contexto falló",
   "context.success": "✅ Contexto compactado correctamente",
+  "context.after_compaction": "✅ La ventana de contexto tras la compactación es {context}",
 
   "permission.inactive_callback": "La solicitud de permisos está inactiva",
   "permission.processing_error_callback": "Error de procesamiento",

@@ -335,6 +335,7 @@ export const en = {
   "context.progress": "⏳ Compacting context...",
   "context.error": "❌ Context compaction failed",
   "context.success": "✅ Context compacted successfully",
+  "context.after_compaction": "✅ Context window after compaction is {context}",
 
   "permission.inactive_callback": "Permission request is inactive",
   "permission.processing_error_callback": "Processing error",

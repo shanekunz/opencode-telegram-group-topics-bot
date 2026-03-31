@@ -3,6 +3,7 @@ import { getThreadSendOptions } from "../scope.js";
 import { consumePromptResponseMode } from "../handlers/prompt.js";
 import { isTtsConfigured, synthesizeSpeech, type TtsResult } from "../../tts/client.js";
 import { logger } from "../../utils/logger.js";
+import { getTelegramRetryAfterMs } from "./send-with-markdown-fallback.js";
 
 const MAX_TTS_INPUT_CHARS = 4_000;
 
@@ -59,9 +60,26 @@ export async function sendTtsResponseForSession({
 
   try {
     const speech = await synthesizeSpeechImpl(normalizedText);
-    await api.sendAudio(chatId, new InputFile(speech.buffer, speech.filename), {
-      ...getThreadSendOptions(threadId),
-    });
+
+    while (true) {
+      try {
+        await api.sendAudio(chatId, new InputFile(speech.buffer, speech.filename), {
+          ...getThreadSendOptions(threadId),
+        });
+        break;
+      } catch (error) {
+        const retryAfterMs = getTelegramRetryAfterMs(error);
+        if (!retryAfterMs) {
+          throw error;
+        }
+
+        logger.info(`[TTS] Telegram rate limit; retrying audio reply in ${retryAfterMs}ms`, {
+          sessionId,
+        });
+        await new Promise((resolve) => setTimeout(resolve, retryAfterMs + 100));
+      }
+    }
+
     logger.info(`[TTS] Sent audio reply for session ${sessionId}`);
     return true;
   } catch (error) {

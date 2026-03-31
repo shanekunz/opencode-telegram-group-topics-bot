@@ -16,5 +16,10 @@ export async function ttsCommand(ctx: CommandContext<Context>): Promise<void> {
       : t("tts.enabled_not_configured")
     : t("tts.disabled");
 
-  await ctx.reply(message, getThreadSendOptions(scope?.threadId ?? null));
+  if (!ctx.chat) {
+    await ctx.reply(message);
+    return;
+  }
+
+  await ctx.api.sendMessage(ctx.chat.id, message, getThreadSendOptions(scope?.threadId ?? null));
 }

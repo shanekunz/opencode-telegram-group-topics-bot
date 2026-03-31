@@ -23,7 +23,6 @@ const mocked = vi.hoisted(() => ({
   pinnedGetContextLimitMock: vi.fn(),
   pinnedRefreshContextLimitMock: vi.fn(),
   pinnedGetContextInfoMock: vi.fn(),
-  sendBotTextMock: vi.fn(),
 }));
 
 vi.mock("../../../src/opencode/client.js", () => ({
@@ -84,10 +83,6 @@ vi.mock("../../../src/pinned/manager.js", () => ({
   },
 }));
 
-vi.mock("../../../src/bot/utils/telegram-text.js", () => ({
-  sendBotText: mocked.sendBotTextMock,
-}));
-
 describe("bot/commands/status", () => {
   beforeEach(() => {
     mocked.healthMock.mockReset();
@@ -110,7 +105,6 @@ describe("bot/commands/status", () => {
     mocked.pinnedGetContextLimitMock.mockReset();
     mocked.pinnedRefreshContextLimitMock.mockReset();
     mocked.pinnedGetContextInfoMock.mockReset();
-    mocked.sendBotTextMock.mockReset();
 
     mocked.healthMock.mockResolvedValue({ data: { healthy: true, version: "1.0.0" }, error: null });
     mocked.projectListMock.mockResolvedValue({ data: [{ id: "p1" }], error: null });
@@ -129,24 +123,21 @@ describe("bot/commands/status", () => {
     mocked.pinnedGetContextLimitMock.mockReturnValue(200000);
     mocked.pinnedRefreshContextLimitMock.mockResolvedValue(undefined);
     mocked.pinnedGetContextInfoMock.mockReturnValue(null);
-    mocked.sendBotTextMock.mockResolvedValue(undefined);
   });
 
   it("routes group-thread status response to message thread", async () => {
+    const replyMock = vi.fn().mockResolvedValue(undefined);
     const ctx = {
       chat: { id: -100, type: "supergroup" },
       message: { text: "/status", message_thread_id: 55 },
       api: {},
-      reply: vi.fn(),
+      reply: replyMock,
     } as unknown as Context;
 
     await statusCommand(ctx as never);
 
-    expect(mocked.sendBotTextMock).toHaveBeenCalledTimes(1);
-    const call = mocked.sendBotTextMock.mock.calls[0]?.[0] as {
-      options: { message_thread_id?: number };
-    };
-    expect(call.options).toMatchObject({ message_thread_id: 55 });
+    expect(replyMock).toHaveBeenCalledTimes(1);
+    expect(replyMock.mock.calls[0]?.[1]).toMatchObject({ message_thread_id: 55 });
   });
 
   it("shows DM global overview via direct reply", async () => {
@@ -166,6 +157,5 @@ describe("bot/commands/status", () => {
     expect(message).toContain("Projects");
     expect(message).toContain("Sessions");
     expect(message).toContain("TTS");
-    expect(mocked.sendBotTextMock).not.toHaveBeenCalled();
   });
 });

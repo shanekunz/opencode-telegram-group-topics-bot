@@ -331,6 +331,7 @@ export const de: I18nDictionary = {
   "context.progress": "⏳ Komprimiere Kontext...",
   "context.error": "❌ Kontext-Komprimierung fehlgeschlagen",
   "context.success": "✅ Kontext erfolgreich komprimiert",
+  "context.after_compaction": "✅ Kontextfenster nach der Komprimierung: {context}",
 
   "permission.inactive_callback": "Berechtigungsanfrage ist inaktiv",
   "permission.processing_error_callback": "Verarbeitungsfehler",

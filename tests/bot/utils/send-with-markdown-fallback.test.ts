@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   editMessageWithMarkdownFallback,
+  getTelegramRetryAfterMs,
   isTelegramMarkdownParseError,
+  isTelegramMessageNotModifiedError,
   sendMessageWithMarkdownFallback,
 } from "../../../src/bot/utils/send-with-markdown-fallback.js";
 
@@ -104,6 +106,22 @@ describe("bot/utils/send-with-markdown-fallback", () => {
 
     expect(isTelegramMarkdownParseError(error)).toBe(true);
     expect(isTelegramMarkdownParseError(new Error("network timeout"))).toBe(false);
+  });
+
+  it("detects Telegram no-op edit errors", () => {
+    expect(
+      isTelegramMessageNotModifiedError(
+        new Error(
+          "Bad Request: message is not modified: specified new message content and reply markup are exactly the same",
+        ),
+      ),
+    ).toBe(true);
+    expect(isTelegramMessageNotModifiedError(new Error("network timeout"))).toBe(false);
+  });
+
+  it("extracts Telegram retry_after values", () => {
+    expect(getTelegramRetryAfterMs({ parameters: { retry_after: 23 } })).toBe(23000);
+    expect(getTelegramRetryAfterMs(new Error("network timeout"))).toBeNull();
   });
 
   it("supports Markdown parse mode with fallback", async () => {

@@ -19,6 +19,7 @@ import {
 } from "../scope.js";
 import { TELEGRAM_CHAT_ACTION } from "../telegram-constants.js";
 import { CHAT_TYPE, TELEGRAM_CHAT_FIELD } from "../constants.js";
+import { markPendingCompactionNotice } from "../utils/pending-compaction-notices.js";
 
 function isGeneralForumScope(ctx: Context): boolean {
   const scope = getScopeFromContext(ctx);
@@ -164,6 +165,8 @@ export async function handleCompactConfirm(ctx: Context): Promise<boolean> {
     }
 
     logger.info(`[ContextHandler] Session compacted: ${session.id}`);
+    markPendingCompactionNotice(session.id);
+
     // Update progress message to show success
     await ctx.api
       .editMessageText(ctx.chat!.id, progressMessage.message_id, t("context.success"))

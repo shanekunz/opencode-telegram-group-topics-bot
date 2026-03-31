@@ -321,6 +321,7 @@ export const ru: I18nDictionary = {
   "context.progress": "⏳ Сжимаю контекст...",
   "context.error": "❌ Ошибка при сжатии контекста",
   "context.success": "✅ Контекст успешно сжат",
+  "context.after_compaction": "✅ Окно контекста после сжатия: {context}",
 
   "permission.inactive_callback": "Запрос разрешения неактивен",
   "permission.processing_error_callback": "Ошибка при обработке",

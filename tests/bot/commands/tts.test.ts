@@ -28,31 +28,35 @@ describe("bot/commands/tts", () => {
   it("enables TTS replies for the current scope", async () => {
     mocked.isTtsEnabledMock.mockReturnValue(false);
     mocked.isTtsConfiguredMock.mockReturnValue(true);
-    const replyMock = vi.fn().mockResolvedValue(undefined);
+    const sendMessageMock = vi.fn().mockResolvedValue(undefined);
     const ctx = {
       chat: { id: -100, type: "supergroup" },
       message: { text: "/tts", message_thread_id: 22 },
-      reply: replyMock,
+      reply: vi.fn().mockResolvedValue(undefined),
+      api: { sendMessage: sendMessageMock },
     } as unknown as Context;
 
     await ttsCommand(ctx as never);
 
     expect(mocked.setTtsEnabledMock).toHaveBeenCalledWith(true);
-    expect(replyMock).toHaveBeenCalledWith(t("tts.enabled"), { message_thread_id: 22 });
+    expect(sendMessageMock).toHaveBeenCalledWith(-100, t("tts.enabled"), { message_thread_id: 22 });
   });
 
   it("disables TTS replies for the current scope", async () => {
     mocked.isTtsEnabledMock.mockReturnValue(true);
-    const replyMock = vi.fn().mockResolvedValue(undefined);
+    const sendMessageMock = vi.fn().mockResolvedValue(undefined);
     const ctx = {
       chat: { id: -100, type: "supergroup" },
       message: { text: "/tts", message_thread_id: 22 },
-      reply: replyMock,
+      reply: vi.fn().mockResolvedValue(undefined),
+      api: { sendMessage: sendMessageMock },
     } as unknown as Context;
 
     await ttsCommand(ctx as never);
 
     expect(mocked.setTtsEnabledMock).toHaveBeenCalledWith(false);
-    expect(replyMock).toHaveBeenCalledWith(t("tts.disabled"), { message_thread_id: 22 });
+    expect(sendMessageMock).toHaveBeenCalledWith(-100, t("tts.disabled"), {
+      message_thread_id: 22,
+    });
   });
 });

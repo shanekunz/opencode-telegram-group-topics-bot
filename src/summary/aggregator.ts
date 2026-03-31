@@ -14,8 +14,8 @@ export interface SummaryInfo {
   lastUpdated: number;
 }
 
-type MessageCompleteCallback = (sessionId: string, messageText: string) => void;
-type MessageUpdatedCallback = (sessionId: string, messageText: string) => void;
+type MessageCompleteCallback = (sessionId: string, messageId: string, messageText: string) => void;
+type MessageUpdatedCallback = (sessionId: string, messageId: string, messageText: string) => void;
 
 export interface ToolInfo {
   sessionId: string;
@@ -1381,9 +1381,6 @@ class SummaryAggregator {
 
     this.flushPendingCompletionsForSession(sessionID);
 
-    // Stop typing indicator when session goes idle
-    this.stopTypingIndicator(sessionID);
-
     if (this.onSessionIdleCallback) {
       const callback = this.onSessionIdleCallback;
       setImmediate(() => {
@@ -1564,7 +1561,12 @@ class SummaryAggregator {
     }
 
     this.lastStreamedMessageText.set(messageKey, messageText);
-    this.onMessageUpdatedCallback(sessionId, messageText);
+    if (!this.messages.has(messageKey)) {
+      return;
+    }
+
+    const messageId = messageKey.slice(sessionId.length + 1);
+    this.onMessageUpdatedCallback(sessionId, messageId, messageText);
   }
 
   private scheduleMessageCompletion(messageKey: string, sessionId: string): void {
@@ -1598,7 +1600,8 @@ class SummaryAggregator {
     );
 
     if (this.onCompleteCallback && messageText.length > 0) {
-      this.onCompleteCallback(sessionId, messageText);
+      const messageId = messageKey.slice(sessionId.length + 1);
+      this.onCompleteCallback(sessionId, messageId, messageText);
     }
 
     this.currentMessageParts.delete(messageKey);
@@ -1612,13 +1615,6 @@ class SummaryAggregator {
     logger.debug(
       `[Aggregator] Message completed cleanup: remaining messages=${this.currentMessageParts.size}`,
     );
-
-    if (!this.hasActiveMessageForSession(sessionId)) {
-      logger.debug(
-        `[Aggregator] No more active messages for session ${sessionId}, stopping typing indicator`,
-      );
-      this.stopTypingIndicator(sessionId);
-    }
   }
 }
 

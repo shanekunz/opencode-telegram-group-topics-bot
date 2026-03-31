@@ -104,6 +104,21 @@ export class ResponseStreamer {
     return handled;
   }
 
+  async resetForFinalDelivery(sessionId: string): Promise<boolean> {
+    const state = this.states.get(sessionId);
+    if (!state) {
+      return false;
+    }
+
+    this.clearTimer(sessionId);
+    await this.enqueueTask(sessionId, async () => {
+      await this.deleteStreamedMessage(sessionId, state.messageId);
+      return false;
+    });
+    this.states.delete(sessionId);
+    return state.messageId !== null;
+  }
+
   async clearSession(sessionId: string, reason: string): Promise<void> {
     const state = this.states.get(sessionId);
     if (!state) {

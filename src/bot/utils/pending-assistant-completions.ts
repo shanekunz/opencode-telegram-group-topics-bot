@@ -7,15 +7,19 @@ export class PendingAssistantCompletions {
       return;
     }
 
-    const queue = this.completions.get(sessionId) ?? [];
-    queue.push(normalizedText);
-    this.completions.set(sessionId, queue);
+    const existing = this.completions.get(sessionId) ?? [];
+    existing.push(normalizedText);
+    this.completions.set(sessionId, existing);
   }
 
   consume(sessionId: string): string[] {
-    const queue = this.completions.get(sessionId) ?? [];
+    const pending = this.completions.get(sessionId);
+    if (!pending || pending.length === 0) {
+      return [];
+    }
+
     this.completions.delete(sessionId);
-    return [...queue];
+    return [...pending];
   }
 
   clear(sessionId: string): void {

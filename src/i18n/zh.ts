@@ -284,6 +284,7 @@ export const zh: I18nDictionary = {
   "context.progress": "⏳ 正在压缩上下文...",
   "context.error": "❌ 上下文压缩失败",
   "context.success": "✅ 上下文压缩成功",
+  "context.after_compaction": "✅ 压缩后的上下文窗口为 {context}",
 
   "permission.inactive_callback": "权限请求已失效",
   "permission.processing_error_callback": "处理错误",
