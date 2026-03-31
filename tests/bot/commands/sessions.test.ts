@@ -218,6 +218,7 @@ describe("bot/commands/sessions", () => {
     expect(mocked.sessionListMock).toHaveBeenCalledWith({
       directory: "/repo",
       limit: 11,
+      roots: true,
     });
 
     const keyboardRows = getKeyboardButtons(ctx);
@@ -240,6 +241,7 @@ describe("bot/commands/sessions", () => {
     expect(mocked.sessionListMock).toHaveBeenCalledWith({
       directory: "/repo",
       limit: 21,
+      roots: true,
     });
     expect(ctx.editMessageText).toHaveBeenCalledTimes(1);
 
@@ -406,7 +408,9 @@ describe("bot/commands/sessions", () => {
 
     startActiveSessionInlineMenu();
     const ctx = createCallbackContext("session:session-1", 456);
-    (ctx.deleteMessage as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("delete failed"));
+    (ctx.deleteMessage as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("delete failed"),
+    );
 
     const handled = await handleSessionSelect(ctx);
 

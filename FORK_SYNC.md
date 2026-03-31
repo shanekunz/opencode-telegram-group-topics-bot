@@ -32,6 +32,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - `f3b3fc6` + `a337370` + `54a493d` ported: `/commands` pagination, filtering, and clearer execution UX
 - `fcd2273` + `e4eb83e` + `b414bf3` covered by fork commit `c97baf6`: upstream tool-call streaming/reply formatting changes were already adapted into this fork's topic-aware streaming flow
 - `84c300d` adapted port: subagent work status now renders inside the parent topic's tool stream without breaking topic-scoped delivery
+- `afacade` ported: `/sessions` now requests root sessions only, avoiding child-session entries in the control-lane picker
 - `6ff8fa1` ported: Markdown fallback retries now strip stale parse options, and Markdown splitting avoids trailing escape characters at chunk boundaries
 - `b6efc31` ported: todowrite formatter now separates the header from todo items with a blank line
 

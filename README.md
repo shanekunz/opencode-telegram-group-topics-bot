@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org)
 
-中文说明：[`README.zh-CN.md`](./README.zh-CN.md)
+Languages: English (`en`), Deutsch (`de`), Espanol (`es`), Francais (`fr`), Russkiy (`ru`), [Jian ti Zhong wen (`zh-CN` 中文说明)](./README.zh-CN.md)
 
 A Telegram bot for [OpenCode](https://opencode.ai) that turns one Telegram supergroup into a multi-session mobile workspace.
 
@@ -17,8 +17,6 @@ No open ports, no exposed web UI. The bot talks only to your local OpenCode serv
 You can run many session topics in parallel inside one group, and many groups in parallel across different projects.
 
 Platforms: macOS, Windows, Linux
-
-Languages: English (`en`), Deutsch (`de`), Espanol (`es`), Francais (`fr`), Russkiy (`ru`), Jian ti Zhong wen (`zh`)
 
 Fork sync notes: [`FORK_SYNC.md`](./FORK_SYNC.md)
 
