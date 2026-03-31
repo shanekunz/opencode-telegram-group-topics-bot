@@ -208,6 +208,179 @@ describe("summary/aggregator", () => {
     );
   });
 
+  it("tracks subagent lifecycle for child sessions", () => {
+    const onSubagent = vi.fn();
+    summaryAggregator.setOnSubagent(onSubagent);
+    summaryAggregator.setSession("root-session");
+
+    summaryAggregator.processEvent({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "subtask-1",
+          sessionID: "root-session",
+          messageID: "message-1",
+          type: "subtask",
+          agent: "explore",
+          description: "Inspect sync conflicts",
+          prompt: "Inspect sync conflicts",
+          command: "/fork-sync",
+        },
+      },
+    } as unknown as Event);
+
+    summaryAggregator.processEvent({
+      type: "session.created",
+      properties: {
+        info: {
+          id: "child-session",
+          parentID: "root-session",
+          title: "Inspect sync conflicts (@explore subagent)",
+        },
+      },
+    } as unknown as Event);
+
+    summaryAggregator.processEvent({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "child-tool-1",
+          sessionID: "child-session",
+          messageID: "child-message-1",
+          type: "tool",
+          callID: "child-call-1",
+          tool: "read",
+          state: {
+            status: "running",
+            input: { filePath: "src/summary/aggregator.ts" },
+            metadata: {},
+          },
+        },
+      },
+    } as unknown as Event);
+
+    summaryAggregator.processEvent({
+      type: "session.idle",
+      properties: {
+        sessionID: "child-session",
+      },
+    } as unknown as Event);
+
+    const lastCall = onSubagent.mock.calls[onSubagent.mock.calls.length - 1]?.[1];
+    expect(lastCall).toEqual([
+      expect.objectContaining({
+        sessionId: "child-session",
+        parentSessionId: "root-session",
+        agent: "explore",
+        description: "Inspect sync conflicts",
+        status: "completed",
+      }),
+    ]);
+  });
+
+  it("marks child session subagents as failed on session.error", () => {
+    const onSubagent = vi.fn();
+    summaryAggregator.setOnSubagent(onSubagent);
+    summaryAggregator.setSession("root-session");
+
+    summaryAggregator.processEvent({
+      type: "session.created",
+      properties: {
+        info: {
+          id: "child-session",
+          parentID: "root-session",
+          title: "Investigate (@general subagent)",
+        },
+      },
+    } as unknown as Event);
+
+    summaryAggregator.processEvent({
+      type: "session.error",
+      properties: {
+        sessionID: "child-session",
+        error: { message: "subagent crashed" },
+      },
+    } as unknown as Event);
+
+    const lastCall = onSubagent.mock.calls[onSubagent.mock.calls.length - 1]?.[1];
+    expect(lastCall).toEqual([
+      expect.objectContaining({
+        sessionId: "child-session",
+        status: "error",
+        terminalMessage: "subagent crashed",
+      }),
+    ]);
+  });
+
+  it("does not guess unknown child-session ownership when multiple pending subagents exist", () => {
+    const onSubagent = vi.fn();
+    summaryAggregator.setOnSubagent(onSubagent);
+    summaryAggregator.setSession("root-a");
+    summaryAggregator.setSession("root-b");
+
+    summaryAggregator.processEvent({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "subtask-a",
+          sessionID: "root-a",
+          messageID: "message-a",
+          type: "subtask",
+          agent: "explore",
+          description: "Task A",
+          prompt: "Task A",
+        },
+      },
+    } as unknown as Event);
+
+    summaryAggregator.processEvent({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "subtask-b",
+          sessionID: "root-b",
+          messageID: "message-b",
+          type: "subtask",
+          agent: "general",
+          description: "Task B",
+          prompt: "Task B",
+        },
+      },
+    } as unknown as Event);
+
+    summaryAggregator.processEvent({
+      type: "message.updated",
+      properties: {
+        info: {
+          id: "child-message",
+          sessionID: "child-unknown",
+          role: "assistant",
+          providerID: "openai",
+          modelID: "gpt-5",
+          time: { created: Date.now() },
+        },
+      },
+    } as unknown as Event);
+
+    const rootACall = onSubagent.mock.calls.find((call) => call[0] === "root-a");
+    const rootBCall = onSubagent.mock.calls.find((call) => call[0] === "root-b");
+
+    expect(rootACall?.[1]).toEqual([
+      expect.objectContaining({
+        sessionId: null,
+        parentSessionId: "root-a",
+        description: "Task A",
+      }),
+    ]);
+    expect(rootBCall?.[1]).toEqual([
+      expect.objectContaining({
+        sessionId: null,
+        parentSessionId: "root-b",
+        description: "Task B",
+      }),
+    ]);
+  });
+
   it("marks write tool without file attachment when payload is oversized", () => {
     const onTool = vi.fn();
     const onToolFile = vi.fn();

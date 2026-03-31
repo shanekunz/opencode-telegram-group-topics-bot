@@ -67,4 +67,9 @@ export const fr: I18nDictionary = {
     "🔴 Impossible de récupérer la liste des modèles. Vérifiez l'état du serveur avec /status.",
   "legacy.models.empty": "📋 Aucun modèle disponible. Configurez les fournisseurs dans OpenCode.",
   "pinned.line.cost": "Coût : {cost}",
+  "subagent.completed": "Terminé",
+  "subagent.failed": "Échec",
+  "subagent.working": "En cours",
+  "subagent.line.task": "Tâche : {task}",
+  "subagent.line.agent": "Agent : {agent}",
 };

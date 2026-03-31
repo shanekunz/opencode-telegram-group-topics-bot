@@ -486,6 +486,26 @@ export function formatToolInfo(toolInfo: ToolInfo, projectWorktree?: string): st
   return `${toolIcon} ${description}${tool}${detailsStr}${lineInfo}`;
 }
 
+export function formatCompactToolInfo(
+  toolInfo: ToolInfo,
+  maxLength = 64,
+  fallback = "-",
+  projectWorktree?: string,
+): string {
+  const formatted = formatToolInfo(toolInfo, projectWorktree);
+  const normalized = formatted?.replace(/\s*\n+\s*/g, " ").trim() ?? "";
+
+  if (!normalized) {
+    return fallback;
+  }
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
 function countLines(text: string): number {
   return text.split("\n").length;
 }

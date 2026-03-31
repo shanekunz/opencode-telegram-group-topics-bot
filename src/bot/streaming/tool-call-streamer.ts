@@ -58,6 +58,23 @@ export class ToolCallStreamer {
     this.scheduleFlush(sessionId);
   }
 
+  replaceByPrefix(sessionId: string, prefix: string, text: string): void {
+    const normalizedPrefix = prefix.trim();
+    if (!sessionId || !normalizedPrefix) {
+      return;
+    }
+
+    const normalizedText = text.trim();
+    const state = this.getOrCreateState(sessionId);
+    state.updates = state.updates.filter((update) => !update.startsWith(normalizedPrefix));
+
+    if (normalizedText) {
+      state.updates.push(normalizedText);
+    }
+
+    this.scheduleFlush(sessionId);
+  }
+
   dismissThinking(sessionId: string): void {
     const state = this.states.get(sessionId);
     if (!state || !state.thinkingText) {

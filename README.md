@@ -3,6 +3,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org)
 
+中文说明：[`README.zh-CN.md`](./README.zh-CN.md)
+
 A Telegram bot for [OpenCode](https://opencode.ai) that turns one Telegram supergroup into a multi-session mobile workspace.
 
 This project is a fork of the original single-chat bot: [grinev/opencode-telegram-bot](https://github.com/grinev/opencode-telegram-bot) by Ruslan Grinev.
@@ -30,6 +32,7 @@ Fork sync notes: [`FORK_SYNC.md`](./FORK_SYNC.md)
 - The **General** topic is the control lane for `/projects`, `/sessions`, `/new`, and status checks.
 - Each new OpenCode session gets its own forum topic.
 - Each topic keeps its own session, model, agent, and pinned status state.
+- Subagent child-session work is summarized back into the parent topic as live status cards.
 - Multiple topics can run at the same time, and multiple groups can be active at the same time.
 - DMs are for light control/status usage, not the main multi-session workflow.
 
