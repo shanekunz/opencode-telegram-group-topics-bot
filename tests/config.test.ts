@@ -118,6 +118,30 @@ describe("config boolean env parsing", () => {
     expect(config.bot.scheduledTasksPollIntervalSec).toBe(30);
   });
 
+  it("uses 1000ms as default response stream throttle", async () => {
+    vi.stubEnv("RESPONSE_STREAM_THROTTLE_MS", "");
+
+    const config = await loadConfig();
+
+    expect(config.bot.responseStreamThrottleMs).toBe(1000);
+  });
+
+  it("parses response stream throttle", async () => {
+    vi.stubEnv("RESPONSE_STREAM_THROTTLE_MS", "750");
+
+    const config = await loadConfig();
+
+    expect(config.bot.responseStreamThrottleMs).toBe(750);
+  });
+
+  it("falls back to default response stream throttle on invalid value", async () => {
+    vi.stubEnv("RESPONSE_STREAM_THROTTLE_MS", "zero");
+
+    const config = await loadConfig();
+
+    expect(config.bot.responseStreamThrottleMs).toBe(1000);
+  });
+
   it("parses scheduled task poll interval", async () => {
     vi.stubEnv("SCHEDULED_TASK_POLL_INTERVAL_SEC", "45");
 

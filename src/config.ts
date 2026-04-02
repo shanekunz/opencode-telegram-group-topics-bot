@@ -115,6 +115,7 @@ export const config = {
     sessionsListLimit: getOptionalPositiveIntEnvVar("SESSIONS_LIST_LIMIT", 10),
     projectsListLimit: getOptionalPositiveIntEnvVar("PROJECTS_LIST_LIMIT", 10),
     commandsListLimit: getOptionalPositiveIntEnvVar("COMMANDS_LIST_LIMIT", 10),
+    responseStreamThrottleMs: getOptionalPositiveIntEnvVar("RESPONSE_STREAM_THROTTLE_MS", 1000),
     scheduledTasksPollIntervalSec: getOptionalPositiveIntEnvVar(
       "SCHEDULED_TASK_POLL_INTERVAL_SEC",
       30,

@@ -16,6 +16,7 @@ interface SendBotTextParams {
   api: SendMessageApi;
   chatId: Parameters<SendMessageApi["sendMessage"]>[0];
   text: string;
+  rawFallbackText?: string;
   options?: TelegramSendMessageOptions;
   format?: TelegramTextFormat;
 }
@@ -25,6 +26,7 @@ interface EditBotTextParams {
   chatId: Parameters<EditMessageApi["editMessageText"]>[0];
   messageId: Parameters<EditMessageApi["editMessageText"]>[1];
   text: string;
+  rawFallbackText?: string;
   options?: TelegramEditMessageOptions;
   format?: TelegramTextFormat;
 }
@@ -41,6 +43,7 @@ export async function sendBotText({
   api,
   chatId,
   text,
+  rawFallbackText,
   options,
   format = "raw",
 }: SendBotTextParams): Promise<Awaited<ReturnType<SendMessageApi["sendMessage"]>>> {
@@ -48,6 +51,7 @@ export async function sendBotText({
     api,
     chatId,
     text,
+    rawFallbackText,
     options,
     parseMode: resolveParseMode(format),
   });
@@ -58,6 +62,7 @@ export async function editBotText({
   chatId,
   messageId,
   text,
+  rawFallbackText,
   options,
   format = "raw",
 }: EditBotTextParams): Promise<Awaited<ReturnType<EditMessageApi["editMessageText"]>>> {
@@ -66,6 +71,7 @@ export async function editBotText({
     chatId,
     messageId,
     text,
+    rawFallbackText,
     options,
     parseMode: resolveParseMode(format),
   });

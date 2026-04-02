@@ -48,7 +48,11 @@ import { clearAllInteractionState } from "../interaction/cleanup.js";
 import { keyboardManager } from "../keyboard/manager.js";
 import { subscribeToEvents } from "../opencode/events.js";
 import { summaryAggregator } from "../summary/aggregator.js";
-import { formatSummary, formatToolInfo, getAssistantParseMode } from "../summary/formatter.js";
+import {
+  formatSummaryWithRawFallback,
+  formatToolInfo,
+  getAssistantParseMode,
+} from "../summary/formatter.js";
 import { renderSubagentCards } from "../summary/subagent-formatter.js";
 import { ingestSessionInfoForCache } from "../session/cache-manager.js";
 import { logger } from "../utils/logger.js";
@@ -299,7 +303,8 @@ async function deliverAssistantCompletion(sessionId: string, messageText: string
 
     const assistantParseMode = getAssistantParseMode();
     const format = assistantParseMode === "MarkdownV2" ? "markdown_v2" : "raw";
-    const parts = formatSummary(normalizedMessageText);
+    const formattedParts = formatSummaryWithRawFallback(normalizedMessageText);
+    const parts = formattedParts.map((part) => part.text);
 
     for (let index = 0; index < parts.length; index++) {
       const isLastPart = index === parts.length - 1;
@@ -310,6 +315,7 @@ async function deliverAssistantCompletion(sessionId: string, messageText: string
             api: activeBot.api,
             chatId: target.chatId,
             text: parts[index],
+            rawFallbackText: formattedParts[index]?.rawFallbackText,
             options: {
               ...(isLastPart && keyboardManager.isInitialized(target.scopeKey)
                 ? { reply_markup: keyboardManager.getKeyboard(target.scopeKey) }
@@ -514,6 +520,7 @@ async function sendSessionDocumentMessage(
 }
 
 const liveStream = new LiveStream({
+  throttleMs: config.bot.responseStreamThrottleMs,
   sendText: async (
     sessionId: string,
     text: string,

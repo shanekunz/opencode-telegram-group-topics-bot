@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   formatSummary,
+  formatSummaryWithRawFallback,
   formatSummaryWithMode,
   formatToolInfo,
   prepareCodeFile,
@@ -58,6 +59,17 @@ describe("summary/formatter", () => {
 
     expect(parts).toEqual(["a", "\\+", "b"]);
     expect(parts.some((part) => part.endsWith("\\"))).toBe(false);
+  });
+
+  it("keeps markdown parts aligned with raw fallback text", () => {
+    const text = "a+".repeat(2050);
+
+    const parts = formatSummaryWithRawFallback(text, 4096);
+
+    expect(parts).toHaveLength(2);
+    expect(parts.map((part) => part.text.length <= 4096)).toEqual([true, true]);
+    expect(parts.map((part) => part.rawFallbackText.length <= 4096)).toEqual([true, true]);
+    expect(parts.map((part) => part.rawFallbackText).join("")).toBe(text);
   });
 
   it("adapts headings, quotes, tables and horizontal rules for Telegram", () => {

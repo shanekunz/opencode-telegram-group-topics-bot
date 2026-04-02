@@ -32,6 +32,27 @@ describe("bot/utils/telegram-text", () => {
     });
   });
 
+  it("uses raw fallback text when markdown parse fails", async () => {
+    const sendMessage = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error("Bad Request: can't parse entities: Character '.' is reserved"),
+      )
+      .mockRejectedValueOnce(new Error("Bad Request: can't parse entities: unsupported start tag"))
+      .mockResolvedValueOnce(undefined);
+
+    await sendBotText({
+      api: { sendMessage },
+      chatId: 100,
+      text: "Build succeeded.",
+      rawFallbackText: "Build succeeded.",
+      format: "markdown_v2",
+    });
+
+    expect(sendMessage).toHaveBeenCalledTimes(3);
+    expect(sendMessage).toHaveBeenNthCalledWith(3, 100, "Build succeeded.", undefined);
+  });
+
   it("edits raw text by default", async () => {
     const editMessageText = vi.fn().mockResolvedValue(undefined);
 

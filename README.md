@@ -198,6 +198,7 @@ Installed-mode config paths:
 | `HIDE_THINKING_MESSAGES`           | Hide `Thinking...` service messages                                                  |    No    | `false`                  |
 | `HIDE_TOOL_CALL_MESSAGES`          | Hide tool-call service messages                                                      |    No    | `false`                  |
 | `MESSAGE_FORMAT_MODE`              | Assistant reply formatting mode: `markdown` or `raw`                                 |    No    | `markdown`               |
+| `RESPONSE_STREAM_THROTTLE_MS`      | Delay between streamed assistant updates in ms                                       |    No    | `1000`                   |
 | `CODE_FILE_MAX_SIZE_KB`            | Max file size (KB) to send as a document                                             |    No    | `100`                    |
 | `STT_API_URL`                      | Whisper-compatible API base URL                                                      |    No    | -                        |
 | `STT_API_KEY`                      | API key for your STT provider                                                        |    No    | -                        |
