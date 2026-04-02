@@ -7,7 +7,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - Permanent git remote: `upstream` -> `https://github.com/grinev/opencode-telegram-bot.git`
 - Upstream repo: `https://github.com/grinev/opencode-telegram-bot`
 - Upstream branch: `main`
-- Last reviewed upstream head: `f64c077` (`chore(release): v0.14.1`, 2026-04-01)
+- Last reviewed upstream head: `70a327b` (`feat(bot): add configurable TTS replies (#65)`, 2026-04-02)
 - Original fork point for this threaded fork: `21da71b` (`chore(release): v0.11.0`)
 
 ## Fork Rules
@@ -37,6 +37,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - `b6efc31` ported: todowrite formatter now separates the header from todo items with a blank line
 - `5632f2f` + `d888b16` adapted port: MarkdownV2 retries now attempt reserved-character escaping first and final assistant sends preserve raw-text fallback content instead of leaking converted Telegram markdown
 - `dae0f82` partial port: assistant stream pacing is now configurable via `RESPONSE_STREAM_THROTTLE_MS`
+- `70a327b` reviewed; already covered by fork commit `6bb80ed`, which shipped configurable TTS replies with this fork's topic-aware delivery behavior
 
 ## Upstream Changes Intentionally Adapted
 
