@@ -242,6 +242,15 @@ export function formatSummary(text: string): string[] {
   return formatSummaryWithMode(text, config.bot.messageFormatMode);
 }
 
+export interface FormattedSummaryPart {
+  text: string;
+  rawFallbackText: string;
+}
+
+interface FittedMarkdownSummaryPart extends FormattedSummaryPart {
+  endIndex: number;
+}
+
 export function getAssistantParseMode(): "MarkdownV2" | undefined {
   if (config.bot.messageFormatMode === "markdown") {
     return "MarkdownV2";
@@ -271,6 +280,107 @@ function formatMarkdownForTelegram(text: string): string {
     logger.warn("[Formatter] Failed to convert markdown summary, falling back to raw text", error);
     return text;
   }
+}
+
+function fitMarkdownSummaryPart(
+  text: string,
+  currentIndex: number,
+  maxLength: number,
+): FittedMarkdownSummaryPart | null {
+  let low = 1;
+  let high = Math.min(text.length - currentIndex, maxLength);
+  let bestPart: FittedMarkdownSummaryPart | null = null;
+  let bestEndIndex = currentIndex;
+
+  while (low <= high) {
+    const candidateLength = Math.floor((low + high) / 2);
+    const candidateEndIndex = resolveSplitEndIndex(text, currentIndex, candidateLength);
+    const rawFallbackText = text.slice(currentIndex, candidateEndIndex).trim();
+
+    if (!rawFallbackText) {
+      low = candidateLength + 1;
+      continue;
+    }
+
+    const formattedText = formatMarkdownForTelegram(rawFallbackText);
+    const formattedParts = splitText(formattedText, maxLength, {
+      avoidTrailingMarkdownEscape: true,
+    })
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
+
+    if (formattedParts.length === 1) {
+      bestPart = {
+        text: formattedParts[0],
+        rawFallbackText,
+        endIndex: candidateEndIndex,
+      };
+      bestEndIndex = candidateEndIndex;
+      low = candidateLength + 1;
+      continue;
+    }
+
+    high = candidateLength - 1;
+  }
+
+  if (!bestPart) {
+    const candidateEndIndex = Math.min(text.length, currentIndex + 1);
+    const rawFallbackText = text.slice(currentIndex, candidateEndIndex).trim();
+    if (!rawFallbackText) {
+      return null;
+    }
+
+    return {
+      text: formatMarkdownForTelegram(rawFallbackText),
+      rawFallbackText,
+      endIndex: candidateEndIndex,
+    };
+  }
+
+  return {
+    ...bestPart,
+    rawFallbackText: text.slice(currentIndex, bestEndIndex).trim(),
+    endIndex: bestEndIndex,
+  };
+}
+
+export function formatSummaryWithRawFallback(
+  text: string,
+  maxLength: number = TELEGRAM_MESSAGE_LIMIT,
+): FormattedSummaryPart[] {
+  if (!text || text.trim().length === 0) {
+    return [];
+  }
+
+  const normalizedMaxLength = maxLength > 0 ? maxLength : TELEGRAM_MESSAGE_LIMIT;
+
+  if (config.bot.messageFormatMode !== "markdown") {
+    return formatSummaryWithMode(text, config.bot.messageFormatMode, normalizedMaxLength).map(
+      (part) => ({
+        text: part,
+        rawFallbackText: part,
+      }),
+    );
+  }
+
+  const parts: FormattedSummaryPart[] = [];
+  let currentIndex = 0;
+
+  while (currentIndex < text.length) {
+    const part = fitMarkdownSummaryPart(text, currentIndex, normalizedMaxLength);
+    if (!part) {
+      currentIndex += 1;
+      continue;
+    }
+
+    parts.push({
+      text: part.text,
+      rawFallbackText: part.rawFallbackText,
+    });
+    currentIndex = part.endIndex;
+  }
+
+  return parts;
 }
 
 export function formatSummaryWithMode(

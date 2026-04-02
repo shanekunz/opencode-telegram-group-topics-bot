@@ -49,8 +49,7 @@ import { keyboardManager } from "../keyboard/manager.js";
 import { subscribeToEvents } from "../opencode/events.js";
 import { summaryAggregator } from "../summary/aggregator.js";
 import {
-  formatSummary,
-  formatSummaryWithMode,
+  formatSummaryWithRawFallback,
   formatToolInfo,
   getAssistantParseMode,
 } from "../summary/formatter.js";
@@ -304,8 +303,8 @@ async function deliverAssistantCompletion(sessionId: string, messageText: string
 
     const assistantParseMode = getAssistantParseMode();
     const format = assistantParseMode === "MarkdownV2" ? "markdown_v2" : "raw";
-    const parts = formatSummary(normalizedMessageText);
-    const rawParts = formatSummaryWithMode(normalizedMessageText, "raw");
+    const formattedParts = formatSummaryWithRawFallback(normalizedMessageText);
+    const parts = formattedParts.map((part) => part.text);
 
     for (let index = 0; index < parts.length; index++) {
       const isLastPart = index === parts.length - 1;
@@ -316,7 +315,7 @@ async function deliverAssistantCompletion(sessionId: string, messageText: string
             api: activeBot.api,
             chatId: target.chatId,
             text: parts[index],
-            rawFallbackText: rawParts[index],
+            rawFallbackText: formattedParts[index]?.rawFallbackText,
             options: {
               ...(isLastPart && keyboardManager.isInitialized(target.scopeKey)
                 ? { reply_markup: keyboardManager.getKeyboard(target.scopeKey) }
