@@ -97,6 +97,7 @@ vi.mock("../../../src/summary/aggregator.js", () => ({
 
 vi.mock("../../../src/agent/manager.js", () => ({
   getStoredAgent: vi.fn(() => "build"),
+  resolveProjectAgent: vi.fn(async (agent: string) => agent),
 }));
 
 vi.mock("../../../src/model/manager.js", () => ({

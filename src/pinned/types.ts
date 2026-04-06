@@ -30,6 +30,7 @@ export interface PinnedMessageState {
   sessionId: string | null;
   sessionTitle: string;
   projectName: string;
+  projectBranch: string | null;
   tokensUsed: number;
   tokensLimit: number;
   assistantCost: number;

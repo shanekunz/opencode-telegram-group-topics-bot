@@ -7,7 +7,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - Permanent git remote: `upstream` -> `https://github.com/grinev/opencode-telegram-bot.git`
 - Upstream repo: `https://github.com/grinev/opencode-telegram-bot`
 - Upstream branch: `main`
-- Last reviewed upstream head: `f64c077` (`chore(release): v0.14.1`, 2026-04-01)
+- Last reviewed upstream head: `b9e9651` (`chore(release): v0.15.0`, 2026-04-04)
 - Original fork point for this threaded fork: `21da71b` (`chore(release): v0.11.0`)
 
 ## Fork Rules
@@ -37,6 +37,11 @@ This repository is a product fork of the original single-chat project at `grinev
 - `b6efc31` ported: todowrite formatter now separates the header from todo items with a blank line
 - `5632f2f` + `d888b16` adapted port: MarkdownV2 retries now attempt reserved-character escaping first and final assistant sends preserve raw-text fallback content instead of leaking converted Telegram markdown
 - `dae0f82` partial port: assistant stream pacing is now configurable via `RESPONSE_STREAM_THROTTLE_MS`
+- `bd4504d` ported: scoped pinned messages now show the current git branch for the active project, including linked worktrees
+- `b0e96ee` adapted port: `todowrite` service messages are replaced in-place so todo streams stay isolated alongside the fork's scoped live stream and subagent cards
+- `0efb80c` ported: long `bash` tool commands in Telegram summaries now truncate via `BASH_TOOL_DISPLAY_MAX_LENGTH`
+- `13a8948` adapted port: scoped agent selection now falls back to an available project agent before prompts, commands, topic creation, and scheduled tasks
+- `a25af98` ported: bot UI now labels the selector as `agent` instead of `mode`
 
 ## Upstream Changes Intentionally Adapted
 
@@ -71,6 +76,8 @@ This repository is a product fork of the original single-chat project at `grinev
 - `939ebb7` reviewed; already covered in this fork because streamed interim sends already use `disable_notification: true`
 - `239e512` skipped: this fork still needs its custom final-delivery path for topic-aware ordering, TTS replies, and keyboard refresh behavior
 - `dae0f82` generic Telegram API retry wrapper skipped: this fork already routes outbound calls through a topic-aware rate limiter with `retry_after` handling, plus scoped live-stream retry scheduling
+- `c91f137` test-only upstream change skipped: this fork added equivalent linked-worktree coverage inside its scoped pinned manager tests
+- Release-only bump (`v0.15.0`) reviewed; runtime/UI changes were selectively ported/adapted above
 
 ## Sync Workflow
 

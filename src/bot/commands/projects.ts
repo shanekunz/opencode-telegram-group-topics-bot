@@ -6,7 +6,7 @@ import { syncSessionDirectoryCache } from "../../session/cache-manager.js";
 import { clearSession } from "../../session/manager.js";
 import { pinnedMessageManager } from "../../pinned/manager.js";
 import { keyboardManager } from "../../keyboard/manager.js";
-import { getStoredAgent } from "../../agent/manager.js";
+import { getStoredAgent, resolveProjectAgent } from "../../agent/manager.js";
 import { getStoredModel } from "../../model/manager.js";
 import { formatVariantForButton } from "../../variant/manager.js";
 import { clearAllInteractionState } from "../../interaction/cleanup.js";
@@ -306,12 +306,12 @@ export async function handleProjectSelect(ctx: Context): Promise<boolean> {
     }
 
     try {
-        const projects = await getProjects();
-        if (projects.length === 0) {
-          await ctx.answerCallbackQuery();
-          await ctx.reply(t("projects.empty"), getThreadSendOptions(scope?.threadId ?? null));
-          return true;
-        }
+      const projects = await getProjects();
+      if (projects.length === 0) {
+        await ctx.answerCallbackQuery();
+        await ctx.reply(t("projects.empty"), getThreadSendOptions(scope?.threadId ?? null));
+        return true;
+      }
 
       const { text, keyboard } = buildProjectsMenuView(projects, page, scopeKey);
       await ctx.answerCallbackQuery();
@@ -390,10 +390,11 @@ export async function handleProjectSelect(ctx: Context): Promise<boolean> {
     }
 
     // Get current state for keyboard (with context = 0)
-    const currentAgent = getStoredAgent(scopeKey);
+    const currentAgent = await resolveProjectAgent(getStoredAgent(scopeKey), scopeKey);
     const currentModel = getStoredModel(scopeKey);
     const contextInfo = { tokensUsed: 0, tokensLimit: contextLimit };
     const variantName = formatVariantForButton(currentModel.variant || "default");
+    keyboardManager.updateAgent(currentAgent, scopeKey);
     const scopeFromKey = getScopeFromKey(scopeKey);
     const scopedKeyboard = createMainKeyboard(
       currentAgent,

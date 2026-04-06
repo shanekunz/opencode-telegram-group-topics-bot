@@ -81,7 +81,7 @@ export async function statusCommand(ctx: CommandContext<Context>) {
       message += `${t("status.line.managed_no")}\n`;
     }
 
-    // Add agent mode information
+    // Add agent information
     const currentAgent = await fetchCurrentAgent(scopeKey);
     const agentDisplay = currentAgent
       ? getAgentDisplayName(currentAgent)

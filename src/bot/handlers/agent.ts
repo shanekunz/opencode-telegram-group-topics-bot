@@ -1,6 +1,6 @@
 import { Context, InlineKeyboard } from "grammy";
 import { selectAgent, getAvailableAgents, fetchCurrentAgent } from "../../agent/manager.js";
-import { getAgentDisplayName, getAgentEmoji } from "../../agent/types.js";
+import { getAgentDisplayName } from "../../agent/types.js";
 import { getStoredModel } from "../../model/manager.js";
 import { formatVariantForButton } from "../../variant/manager.js";
 import { logger } from "../../utils/logger.js";
@@ -130,11 +130,10 @@ export async function buildAgentSelectionMenu(
 
   // Add button for each agent
   agents.forEach((agent) => {
-    const emoji = getAgentEmoji(agent.name);
     const isActive = agent.name === currentAgent;
     const label = isActive
-      ? `✅ ${emoji} ${agent.name.toUpperCase()}`
-      : `${emoji} ${agent.name.charAt(0).toUpperCase() + agent.name.slice(1)}`;
+      ? `✅ ${getAgentDisplayName(agent.name)}`
+      : getAgentDisplayName(agent.name);
 
     keyboard.text(label, `agent:${agent.name}`).row();
   });
@@ -169,6 +168,9 @@ export async function showAgentSelectionMenu(ctx: Context): Promise<void> {
     });
   } catch (err) {
     logger.error("[AgentHandler] Error showing agent menu:", err);
-    await ctx.reply(t("agent.menu.error"), getThreadSendOptions(getScopeFromContext(ctx)?.threadId ?? null));
+    await ctx.reply(
+      t("agent.menu.error"),
+      getThreadSendOptions(getScopeFromContext(ctx)?.threadId ?? null),
+    );
   }
 }

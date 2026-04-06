@@ -179,6 +179,26 @@ describe("summary/formatter", () => {
     expect(text).toBe("💻 Run tests\nbash npm test");
   });
 
+  it("truncates long bash commands in tool summaries", () => {
+    const longCommand = `npm test ${"--flag ".repeat(30).trim()}`;
+
+    const text = formatToolInfo({
+      sessionId: "s1",
+      messageId: "m4",
+      callId: "c4",
+      tool: "bash",
+      state: { status: "completed" } as never,
+      input: {
+        description: "Run tests",
+        command: longCommand,
+      },
+    });
+
+    expect(text).toContain("💻 Run tests\nbash ");
+    expect(text).toContain("...");
+    expect(text!.length).toBeLessThan(longCommand.length + 16);
+  });
+
   it("formats apply_patch tool details without dumping full patch", () => {
     const text = formatToolInfo({
       sessionId: "s1",

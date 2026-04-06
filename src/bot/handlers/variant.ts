@@ -7,7 +7,7 @@ import {
   formatVariantForButton,
 } from "../../variant/manager.js";
 import { getStoredModel } from "../../model/manager.js";
-import { getStoredAgent } from "../../agent/manager.js";
+import { getStoredAgent, resolveProjectAgent } from "../../agent/manager.js";
 import { logger } from "../../utils/logger.js";
 import { keyboardManager } from "../../keyboard/manager.js";
 import { pinnedMessageManager } from "../../pinned/manager.js";
@@ -78,7 +78,7 @@ export async function handleVariantSelect(ctx: Context): Promise<boolean> {
     keyboardManager.updateVariant(variantId, scopeKey);
 
     // Build keyboard with correct context info
-    const currentAgent = getStoredAgent(scopeKey);
+    const currentAgent = await resolveProjectAgent(getStoredAgent(scopeKey), scopeKey);
     const contextInfo =
       pinnedMessageManager.getContextInfo(scopeKey) ??
       (pinnedMessageManager.getContextLimit(scopeKey) > 0
@@ -88,6 +88,7 @@ export async function handleVariantSelect(ctx: Context): Promise<boolean> {
     if (contextInfo) {
       keyboardManager.updateContext(contextInfo.tokensUsed, contextInfo.tokensLimit, scopeKey);
     }
+    keyboardManager.updateAgent(currentAgent, scopeKey);
 
     const variantName = formatVariantForButton(variantId);
     const scope = getScopeFromKey(scopeKey);
@@ -207,6 +208,9 @@ export async function showVariantSelectionMenu(ctx: Context): Promise<void> {
     });
   } catch (err) {
     logger.error("[VariantHandler] Error showing variant menu:", err);
-    await ctx.reply(t("variant.menu.error"), getThreadSendOptions(getScopeFromContext(ctx)?.threadId ?? null));
+    await ctx.reply(
+      t("variant.menu.error"),
+      getThreadSendOptions(getScopeFromContext(ctx)?.threadId ?? null),
+    );
   }
 }

@@ -14,7 +14,7 @@ import { clearAllInteractionState } from "../../interaction/cleanup.js";
 import { summaryAggregator } from "../../summary/aggregator.js";
 import { pinnedMessageManager } from "../../pinned/manager.js";
 import { keyboardManager } from "../../keyboard/manager.js";
-import { getStoredAgent } from "../../agent/manager.js";
+import { getStoredAgent, resolveProjectAgent } from "../../agent/manager.js";
 import { getStoredModel } from "../../model/manager.js";
 import { formatVariantForButton } from "../../variant/manager.js";
 import { createMainKeyboard } from "../utils/keyboard.js";
@@ -208,7 +208,7 @@ export function createNewCommand(deps: NewCommandDeps) {
 
       setCurrentProject(currentProject, topicScopeKey);
       setCurrentSession(sessionInfo, topicScopeKey);
-      setCurrentAgent(getStoredAgent(scopeKey), topicScopeKey);
+      setCurrentAgent(await resolveProjectAgent(getStoredAgent(scopeKey), scopeKey), topicScopeKey);
       setCurrentModel(getStoredModel(scopeKey), topicScopeKey);
 
       registerTopicSessionBinding({
@@ -244,7 +244,7 @@ export function createNewCommand(deps: NewCommandDeps) {
         await pinnedMessageManager.refreshContextLimit(topicScopeKey);
       }
 
-      const currentAgent = getStoredAgent(topicScopeKey);
+      const currentAgent = await resolveProjectAgent(getStoredAgent(topicScopeKey), topicScopeKey);
       const currentModel = getStoredModel(topicScopeKey);
       const contextInfo =
         pinnedMessageManager.getContextInfo(topicScopeKey) ??
@@ -282,7 +282,7 @@ export function createNewCommand(deps: NewCommandDeps) {
         });
 
         const promptModel = getStoredModel(topicScopeKey);
-        const promptAgent = getStoredAgent(topicScopeKey);
+        const promptAgent = await resolveProjectAgent(getStoredAgent(topicScopeKey), topicScopeKey);
         const promptOptions: {
           sessionID: string;
           directory: string;

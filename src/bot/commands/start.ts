@@ -1,6 +1,6 @@
 import { Context } from "grammy";
 import { createDmKeyboard, createMainKeyboard } from "../utils/keyboard.js";
-import { getStoredAgent } from "../../agent/manager.js";
+import { getStoredAgent, resolveProjectAgent } from "../../agent/manager.js";
 import { getStoredModel } from "../../model/manager.js";
 import { formatVariantForButton } from "../../variant/manager.js";
 import { pinnedMessageManager } from "../../pinned/manager.js";
@@ -53,7 +53,7 @@ export async function startCommand(ctx: Context): Promise<void> {
   }
 
   // Get current agent, model, and context
-  const currentAgent = getStoredAgent(scopeKey);
+  const currentAgent = await resolveProjectAgent(getStoredAgent(scopeKey), scopeKey);
   const currentModel = getStoredModel(scopeKey);
   const variantName = formatVariantForButton(currentModel.variant || "default");
   const contextInfo =

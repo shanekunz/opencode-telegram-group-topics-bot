@@ -142,6 +142,22 @@ describe("config boolean env parsing", () => {
     expect(config.bot.responseStreamThrottleMs).toBe(1000);
   });
 
+  it("uses 128 as default bash tool display length", async () => {
+    vi.stubEnv("BASH_TOOL_DISPLAY_MAX_LENGTH", "");
+
+    const config = await loadConfig();
+
+    expect(config.bot.bashToolDisplayMaxLength).toBe(128);
+  });
+
+  it("parses bash tool display length", async () => {
+    vi.stubEnv("BASH_TOOL_DISPLAY_MAX_LENGTH", "42");
+
+    const config = await loadConfig();
+
+    expect(config.bot.bashToolDisplayMaxLength).toBe(42);
+  });
+
   it("parses scheduled task poll interval", async () => {
     vi.stubEnv("SCHEDULED_TASK_POLL_INTERVAL_SEC", "45");
 

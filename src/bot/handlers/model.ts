@@ -5,7 +5,7 @@ import type { FavoriteModel, ModelInfo, ModelSelectionLists } from "../../model/
 import { formatVariantForButton } from "../../variant/manager.js";
 import { logger } from "../../utils/logger.js";
 import { createMainKeyboard } from "../utils/keyboard.js";
-import { getStoredAgent } from "../../agent/manager.js";
+import { getStoredAgent, resolveProjectAgent } from "../../agent/manager.js";
 import { pinnedMessageManager } from "../../pinned/manager.js";
 import { keyboardManager } from "../../keyboard/manager.js";
 import {
@@ -91,7 +91,7 @@ export async function handleModelSelect(ctx: Context): Promise<boolean> {
     await pinnedMessageManager.refreshContextLimit(scopeKey);
 
     // Update Reply Keyboard with new model and context
-    const currentAgent = getStoredAgent(scopeKey);
+    const currentAgent = await resolveProjectAgent(getStoredAgent(scopeKey), scopeKey);
     const contextInfo =
       pinnedMessageManager.getContextInfo(scopeKey) ??
       (pinnedMessageManager.getContextLimit(scopeKey) > 0
@@ -101,6 +101,7 @@ export async function handleModelSelect(ctx: Context): Promise<boolean> {
     if (contextInfo) {
       keyboardManager.updateContext(contextInfo.tokensUsed, contextInfo.tokensLimit, scopeKey);
     }
+    keyboardManager.updateAgent(currentAgent, scopeKey);
 
     const variantName = formatVariantForButton(modelInfo.variant || "default");
     const scope = getScopeFromKey(scopeKey);
@@ -204,6 +205,9 @@ export async function showModelSelectionMenu(ctx: Context): Promise<void> {
     });
   } catch (err) {
     logger.error("[ModelHandler] Error showing model menu:", err);
-    await ctx.reply(t("model.menu.error"), getThreadSendOptions(getScopeFromContext(ctx)?.threadId ?? null));
+    await ctx.reply(
+      t("model.menu.error"),
+      getThreadSendOptions(getScopeFromContext(ctx)?.threadId ?? null),
+    );
   }
 }

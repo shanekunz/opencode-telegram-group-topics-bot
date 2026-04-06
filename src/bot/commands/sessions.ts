@@ -1,6 +1,7 @@
 import { CommandContext, Context } from "grammy";
 import { InlineKeyboard } from "grammy";
 import { opencodeClient } from "../../opencode/client.js";
+import { resolveProjectAgent } from "../../agent/manager.js";
 import { setCurrentSession, SessionInfo } from "../../session/manager.js";
 import {
   TOPIC_SESSION_STATUS,
@@ -365,7 +366,7 @@ export async function handleSessionSelect(ctx: Context): Promise<boolean> {
 
       setCurrentProject(currentProject, topicScopeKey);
       setCurrentSession(sessionInfo, topicScopeKey);
-      setCurrentAgent(getStoredAgent(scopeKey), topicScopeKey);
+      setCurrentAgent(await resolveProjectAgent(getStoredAgent(scopeKey), scopeKey), topicScopeKey);
       setCurrentModel(getStoredModel(scopeKey), topicScopeKey);
 
       registerTopicSessionBinding({
@@ -407,7 +408,7 @@ export async function handleSessionSelect(ctx: Context): Promise<boolean> {
           ? { tokensUsed: 0, tokensLimit: pinnedMessageManager.getContextLimit(topicScopeKey) }
           : null);
       const topicModel = getStoredModel(topicScopeKey);
-      const topicAgent = getStoredAgent(topicScopeKey);
+      const topicAgent = await resolveProjectAgent(getStoredAgent(topicScopeKey), topicScopeKey);
       const variantName = formatVariantForButton(topicModel.variant || "default");
       const topicKeyboard = createMainKeyboard(
         topicAgent,

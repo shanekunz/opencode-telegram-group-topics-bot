@@ -10,6 +10,18 @@ import { getCurrentProject } from "../settings/manager.js";
 const TELEGRAM_MESSAGE_LIMIT = 4096;
 const MARKDOWN_V2_RESERVED_CHARS = /([_\*\[\]\(\)~`>#+\-=|{}.!\\])/g;
 
+function truncateWithEllipsis(text: string, maxLength: number): string {
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  if (maxLength <= 3) {
+    return ".".repeat(Math.max(0, maxLength));
+  }
+
+  return `${text.slice(0, maxLength - 3).trimEnd()}...`;
+}
+
 interface SplitTextOptions {
   avoidTrailingMarkdownEscape?: boolean;
 }
@@ -598,7 +610,7 @@ export function formatToolInfo(toolInfo: ToolInfo, projectWorktree?: string): st
   }
 
   if (tool === "bash" && input && typeof input.command === "string") {
-    details = input.command;
+    details = truncateWithEllipsis(input.command, config.bot.bashToolDisplayMaxLength);
   }
 
   if (tool === "apply_patch") {

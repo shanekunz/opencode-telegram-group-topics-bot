@@ -11,7 +11,7 @@ export const en = {
   "cmd.description.tasklist": "List scheduled tasks",
   "cmd.description.commands": "Custom commands",
   "cmd.description.model": "Select model",
-  "cmd.description.agent": "Select agent mode",
+  "cmd.description.agent": "Select agent",
   "cmd.description.cleanup": "Close stale topic threads",
   "cmd.description.opencode_start": "Start OpenCode server",
   "cmd.description.opencode_stop": "Stop OpenCode server",
@@ -53,11 +53,11 @@ export const en = {
   "common.unknown_error": "unknown error",
 
   "start.welcome":
-    "👋 Welcome to OpenCode Telegram Group Topics Bot!\n\nUse commands:\n/projects — select project\n/sessions — session list\n/new — new session\n/status — status\n/help — help\n\nUse the bottom buttons to select agent mode, model, and variant.",
+    "👋 Welcome to OpenCode Telegram Group Topics Bot!\n\nUse commands:\n/projects — select project\n/sessions — session list\n/new — new session\n/status — status\n/help — help\n\nUse the bottom buttons to select the agent, model, and variant.",
   "start.welcome_dm":
     "👋 DM mode is limited to bot/server status and control commands.\n\nUse a group topic thread for project/session work.",
   "help.keyboard_hint":
-    "💡 Use the bottom keyboard buttons for agent mode, model, variant, and context actions.",
+    "💡 Use the bottom keyboard buttons for the agent, model, variant, and context actions.",
   "help.text":
     "📖 **Help**\n\n/status - Check server status\n/sessions - Session list\n/new - Create new session\n/help - Help",
 
@@ -104,7 +104,7 @@ export const en = {
   "status.line.managed_no": "Started by this bot: No (external process)",
   "status.line.pid": "PID: {pid}",
   "status.line.uptime_sec": "Uptime: {seconds} sec",
-  "status.line.mode": "Mode: {mode}",
+  "status.line.mode": "Agent: {mode}",
   "status.line.model": "Model: {model}",
   "status.line.tts": "TTS replies: {tts}",
   "status.tts.on": "On",
@@ -293,11 +293,11 @@ export const en = {
   "opencode_stop.error":
     "🔴 An error occurred while stopping server.\n\nCheck application logs for details.",
 
-  "agent.changed_callback": "Mode changed: {name}",
-  "agent.changed_message": "✅ Mode changed to: {name}",
-  "agent.change_error_callback": "Failed to change mode",
-  "agent.menu.current": "Current mode: {name}\n\nSelect mode:",
-  "agent.menu.select": "Select work mode:",
+  "agent.changed_callback": "Agent changed: {name}",
+  "agent.changed_message": "✅ Agent changed to: {name}",
+  "agent.change_error_callback": "Failed to change agent",
+  "agent.menu.current": "Current agent: {name}\n\nSelect agent:",
+  "agent.menu.select": "Select agent:",
   "agent.menu.empty": "⚠️ No available agents",
   "agent.menu.error": "🔴 Failed to get agents list",
 
@@ -386,7 +386,7 @@ export const en = {
   "question.summary.question": "Question {index}:\n{question}\n\n",
   "question.summary.answer": "Answer:\n{answer}\n\n",
 
-  "keyboard.agent_mode": "{emoji} {name} Mode",
+  "keyboard.agent_mode": "{emoji} {name} Agent",
   "keyboard.context": "📊 {used} / {limit} ({percent}%)",
   "keyboard.context_empty": "📊 Controls",
   "keyboard.general_defaults": "New Session Defaults:",

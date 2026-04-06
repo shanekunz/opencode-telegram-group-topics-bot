@@ -102,7 +102,7 @@ export const ru: I18nDictionary = {
   "status.line.managed_no": "Управляется ботом: Нет",
   "status.line.pid": "PID: {pid}",
   "status.line.uptime_sec": "Uptime: {seconds} сек",
-  "status.line.mode": "Режим: {mode}",
+  "status.line.mode": "Агент: {mode}",
   "status.line.model": "Модель: {model}",
   "status.line.tts": "TTS-ответы: {tts}",
   "status.tts.on": "Вкл",
@@ -280,9 +280,9 @@ export const ru: I18nDictionary = {
 
   "agent.changed_callback": "Режим изменен: {name}",
   "agent.changed_message": "✅ Режим изменен на: {name}",
-  "agent.change_error_callback": "Ошибка при смене режима",
-  "agent.menu.current": "Текущий режим: {name}\n\nВыберите режим:",
-  "agent.menu.select": "Выберите режим работы:",
+  "agent.change_error_callback": "Ошибка при смене агента",
+  "agent.menu.current": "Текущий агент: {name}\n\nВыберите агента:",
+  "agent.menu.select": "Выберите агента:",
   "agent.menu.empty": "⚠️ Нет доступных агентов",
   "agent.menu.error": "🔴 Не удалось получить список агентов",
 
@@ -370,7 +370,7 @@ export const ru: I18nDictionary = {
   "question.summary.question": "Вопрос {index}:\n{question}\n\n",
   "question.summary.answer": "Ответ:\n{answer}\n\n",
 
-  "keyboard.agent_mode": "{emoji} {name} Mode",
+  "keyboard.agent_mode": "{emoji} {name} Agent",
   "keyboard.context": "📊 {used} / {limit} ({percent}%)",
   "keyboard.context_empty": "📊 Управление",
   "keyboard.general_defaults": "Параметры новой сессии:",

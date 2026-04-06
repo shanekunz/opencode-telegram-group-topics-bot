@@ -241,6 +241,7 @@ function extractSessionTitleUpdate(
 
 const TELEGRAM_DOCUMENT_CAPTION_MAX_LENGTH = 1024;
 const SUBAGENT_STREAM_PREFIX = "🧩";
+const TODO_STREAM_PREFIX = "__todo__";
 const SESSION_ERROR_MESSAGE_MAX_LENGTH = 3500;
 const FILE_MUTATION_TOOLS = new Set(["write", "edit", "apply_patch"]);
 const sessionErrorThrottle = new SessionErrorThrottle(3000);
@@ -630,12 +631,39 @@ async function ensureEventSubscription(directory: string): Promise<void> {
         const status = "status" in toolInfo.state ? toolInfo.state.status : undefined;
 
         if (status === "running") {
+          if (toolInfo.tool === "todowrite") {
+            liveStream.replaceServiceByPrefix(
+              toolInfo.sessionId,
+              TODO_STREAM_PREFIX,
+              `⏳ ${message}`,
+            );
+            return;
+          }
+
           liveStream.pushServiceUpdate(toolInfo.sessionId, `⏳ ${message}`);
           return;
         }
 
         if (status === "error") {
+          if (toolInfo.tool === "todowrite") {
+            liveStream.replaceServiceByPrefix(
+              toolInfo.sessionId,
+              TODO_STREAM_PREFIX,
+              `❌ ${message}`,
+            );
+            return;
+          }
+
           liveStream.pushServiceUpdate(toolInfo.sessionId, `❌ ${message}`);
+          return;
+        }
+
+        if (toolInfo.tool === "todowrite") {
+          liveStream.replaceServiceByPrefix(
+            toolInfo.sessionId,
+            TODO_STREAM_PREFIX,
+            `✅ ${message}`,
+          );
           return;
         }
 
@@ -1249,7 +1277,7 @@ export function createBot(): Bot<Context> {
     }
   });
 
-  // Handle Reply Keyboard button press (agent mode indicator)
+  // Handle Reply Keyboard button press (agent indicator)
   bot.hears(AGENT_MODE_BUTTON_TEXT_PATTERN, async (ctx) => {
     logger.debug(`[Bot] Agent mode button pressed: ${ctx.message?.text}`);
 

@@ -49,6 +49,7 @@ vi.mock("../../../src/settings/manager.js", () => ({
 
 vi.mock("../../../src/agent/manager.js", () => ({
   getStoredAgent: mocked.getStoredAgentMock,
+  resolveProjectAgent: vi.fn(async (agent: string) => agent),
 }));
 
 vi.mock("../../../src/model/manager.js", () => ({

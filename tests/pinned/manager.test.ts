@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pinnedMessageManager } from "../../src/pinned/manager.js";
 import {
   __resetSettingsForTests,
@@ -38,6 +41,14 @@ function createApi() {
 }
 
 describe("pinned manager scoped state", () => {
+  const tempDirs: string[] = [];
+
+  afterEach(async () => {
+    await Promise.all(
+      tempDirs.splice(0).map(async (dir) => rm(dir, { recursive: true, force: true })),
+    );
+  });
+
   beforeEach(() => {
     __resetSettingsForTests();
     (pinnedMessageManager as unknown as { contexts: Map<string, unknown> }).contexts = new Map();
@@ -248,6 +259,34 @@ describe("pinned manager scoped state", () => {
         tokensUsed: 920,
         assistantCost: expect.closeTo(0.005, 5),
       }),
+    );
+  });
+
+  it("shows the git branch for linked worktree projects", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "pinned-manager-"));
+    tempDirs.push(tempRoot);
+
+    const repoDir = path.join(tempRoot, "repo");
+    const gitDir = path.join(tempRoot, "git-meta", "worktrees", "repo");
+    await mkdir(repoDir, { recursive: true });
+    await mkdir(gitDir, { recursive: true });
+    await writeFile(path.join(repoDir, ".git"), `gitdir: ${gitDir}`);
+    await writeFile(path.join(gitDir, "HEAD"), "ref: refs/heads/feature/sync-test\n");
+
+    const api = createApi();
+    setCurrentProject({ id: "p1", worktree: repoDir }, "chat:-1:10");
+    setCurrentModel({ providerID: "openai", modelID: "gpt-5", variant: "default" }, "chat:-1:10");
+
+    pinnedMessageManager.initialize(api as never, -1, "chat:-1:10", 10);
+    await pinnedMessageManager.onSessionChange("s1", "thread 10", "chat:-1:10");
+
+    expect(api.sendMessage).toHaveBeenCalledWith(
+      -1,
+      expect.stringContaining("feature/sync-test"),
+      expect.objectContaining({ message_thread_id: 10 }),
+    );
+    expect(pinnedMessageManager.getState("chat:-1:10")).toEqual(
+      expect.objectContaining({ projectBranch: "feature/sync-test" }),
     );
   });
 });

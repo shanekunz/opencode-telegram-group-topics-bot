@@ -6,7 +6,7 @@ import { clearSession, getCurrentSession, setCurrentSession } from "../../sessio
 import { ingestSessionInfoForCache } from "../../session/cache-manager.js";
 import { getCurrentProject } from "../../settings/manager.js";
 import { isTtsEnabled } from "../../settings/manager.js";
-import { getStoredAgent } from "../../agent/manager.js";
+import { getStoredAgent, resolveProjectAgent } from "../../agent/manager.js";
 import { getStoredModel } from "../../model/manager.js";
 import { formatVariantForButton } from "../../variant/manager.js";
 import { createMainKeyboard } from "../utils/keyboard.js";
@@ -505,7 +505,7 @@ export async function processUserPrompt(
       await pinnedMessageManager.refreshContextLimit(scopeKey);
     }
 
-    const currentAgent = getStoredAgent(scopeKey);
+    const currentAgent = await resolveProjectAgent(getStoredAgent(scopeKey), scopeKey);
     const currentModel = getStoredModel(scopeKey);
     const contextInfo =
       (usePinned ? pinnedMessageManager.getContextInfo(scopeKey) : null) ??
@@ -549,7 +549,7 @@ export async function processUserPrompt(
 
   const sessionIsBusy = await isSessionBusy(currentSession.id, currentSession.directory);
   if (sessionIsBusy) {
-    const currentAgent = getStoredAgent(scopeKey);
+    const currentAgent = await resolveProjectAgent(getStoredAgent(scopeKey), scopeKey);
     const storedModel = getStoredModel(scopeKey);
     const queuedRequest = buildPromptRequest(
       currentSession,
@@ -576,7 +576,7 @@ export async function processUserPrompt(
   }
 
   try {
-    const currentAgent = getStoredAgent(scopeKey);
+    const currentAgent = await resolveProjectAgent(getStoredAgent(scopeKey), scopeKey);
     const storedModel = getStoredModel(scopeKey);
 
     const request = buildPromptRequest(currentSession, currentAgent, storedModel, text, fileParts);

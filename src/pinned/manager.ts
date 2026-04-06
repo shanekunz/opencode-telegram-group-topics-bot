@@ -1,4 +1,6 @@
 import type { Api } from "grammy";
+import { readFile, stat } from "node:fs/promises";
+import path from "node:path";
 import { logger } from "../utils/logger.js";
 import { opencodeClient } from "../opencode/client.js";
 import {
@@ -33,6 +35,7 @@ class PinnedMessageManager {
       sessionId: null,
       sessionTitle: t("pinned.default_session_title"),
       projectName: "",
+      projectBranch: null,
       tokensUsed: 0,
       tokensLimit: 0,
       assistantCost: 0,
@@ -114,8 +117,7 @@ class PinnedMessageManager {
     state.sessionTitle = sessionTitle || t("pinned.default_session_title");
 
     const project = getCurrentProject(scopeKey);
-    state.projectName =
-      project?.name || this.extractProjectName(project?.worktree) || t("pinned.unknown");
+    await this.refreshProjectMetadata(scopeKey);
 
     await this.fetchContextLimit(scopeKey);
     this.syncSharedContext(scopeKey);
@@ -252,6 +254,7 @@ class PinnedMessageManager {
   }
 
   async flush(scopeKey: string = "global"): Promise<void> {
+    await this.refreshProjectMetadata(scopeKey);
     await this.updatePinnedMessage(scopeKey);
   }
 
@@ -322,6 +325,60 @@ class PinnedMessageManager {
       }
     } catch {
       // Ignore refresh failures.
+    }
+  }
+
+  private async refreshProjectMetadata(scopeKey: string): Promise<void> {
+    const context = this.getContext(scopeKey);
+    const project = getCurrentProject(scopeKey);
+    context.state.projectName =
+      project?.name || this.extractProjectName(project?.worktree) || t("pinned.unknown");
+    context.state.projectBranch = await this.getGitBranchName(project?.worktree);
+  }
+
+  private async getGitBranchName(worktree: string | undefined): Promise<string | null> {
+    if (!worktree) {
+      return null;
+    }
+
+    try {
+      const gitDir = await this.resolveGitDir(worktree);
+      if (!gitDir) {
+        return null;
+      }
+
+      const headPath = path.join(gitDir, "HEAD");
+      const headContent = (await readFile(headPath, "utf-8")).trim();
+      const match = headContent.match(/^ref:\s+refs\/heads\/(.+)$/);
+      return match?.[1] ?? null;
+    } catch (err) {
+      logger.debug("[PinnedManager] Could not resolve git branch:", err);
+      return null;
+    }
+  }
+
+  private async resolveGitDir(worktree: string): Promise<string | null> {
+    const gitPath = path.join(worktree, ".git");
+
+    try {
+      const gitStat = await stat(gitPath);
+      if (gitStat.isDirectory()) {
+        return gitPath;
+      }
+
+      if (!gitStat.isFile()) {
+        return null;
+      }
+
+      const gitPointer = (await readFile(gitPath, "utf-8")).trim();
+      const match = gitPointer.match(/^gitdir:\s*(.+)$/i);
+      if (!match) {
+        return null;
+      }
+
+      return path.resolve(worktree, match[1].trim());
+    } catch {
+      return null;
     }
   }
 
@@ -434,10 +491,13 @@ class PinnedMessageManager {
       currentModel.providerID && currentModel.modelID
         ? `${currentModel.providerID}/${currentModel.modelID}`
         : t("pinned.unknown");
+    const projectDisplayName = state.projectBranch
+      ? `${state.projectName}: ${state.projectBranch}`
+      : state.projectName;
 
     const lines = [
       `${state.sessionTitle}`,
-      t("pinned.line.project", { project: state.projectName }),
+      t("pinned.line.project", { project: projectDisplayName }),
       t("pinned.line.model", { model: modelName }),
       t("pinned.line.context", {
         used: this.formatTokenCount(state.tokensUsed),

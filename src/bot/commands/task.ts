@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { CommandContext, Context } from "grammy";
-import { getStoredAgent } from "../../agent/manager.js";
+import { getStoredAgent, resolveProjectAgent } from "../../agent/manager.js";
 import { getStoredModel } from "../../model/manager.js";
 import { getScopeFromContext, getScopeKeyFromContext } from "../scope.js";
 import { CHAT_TYPE, TELEGRAM_CHAT_FIELD } from "../constants.js";
@@ -126,7 +126,7 @@ export async function taskCommand(ctx: CommandContext<Context>): Promise<void> {
   }
 
   const storedModel = getStoredModel(scopeKey);
-  const storedAgent = getStoredAgent(scopeKey);
+  const storedAgent = await resolveProjectAgent(getStoredAgent(scopeKey), scopeKey);
 
   taskCreationManager.start(
     currentProject.id,
@@ -235,7 +235,7 @@ export async function handleTaskTextAnswer(ctx: Context): Promise<boolean> {
       return true;
     }
 
-    const currentAgent = getStoredAgent(scopeKey);
+    const currentAgent = await resolveProjectAgent(getStoredAgent(scopeKey), scopeKey);
     const currentModel = createScheduledTaskModel(getStoredModel(scopeKey));
 
     const { delivery, createdTopicLink } = await resolveScheduledTaskDeliveryTarget(
