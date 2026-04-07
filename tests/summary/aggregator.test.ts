@@ -1020,4 +1020,77 @@ describe("summary/aggregator", () => {
     expect(filePayload.fileData.filename).toBe("edit_README.md.txt");
     expect(filePayload.fileData.buffer.toString("utf8")).toContain("Edit File/Path: README.md");
   });
+
+  it("limits apply_patch fallback attachment content to the matched file section", () => {
+    const onToolFile = vi.fn();
+    summaryAggregator.setOnToolFile(onToolFile);
+    summaryAggregator.setSession("session-1");
+
+    summaryAggregator.processEvent({
+      type: "message.updated",
+      properties: {
+        info: {
+          id: "message-3",
+          sessionID: "session-1",
+          role: "assistant",
+          time: { created: Date.now() },
+        },
+      },
+    } as unknown as Event);
+
+    summaryAggregator.processEvent({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "part-3",
+          sessionID: "session-1",
+          messageID: "message-3",
+          type: "tool",
+          callID: "call-apply-patch-multifile",
+          tool: "apply_patch",
+          state: {
+            status: "completed",
+            title: "Success. Updated the following files:\nM README.md\nM src/one.ts",
+            input: {
+              patchText: [
+                "*** Begin Patch",
+                "*** Update File: README.md",
+                "@@",
+                "-old readme",
+                "+new readme",
+                "*** Update File: src/one.ts",
+                "@@",
+                "-old code",
+                "+new code",
+                "*** End Patch",
+              ].join("\n"),
+            },
+            metadata: {
+              filediff: {
+                file: "README.md",
+                additions: 1,
+                deletions: 1,
+              },
+            },
+          },
+        },
+      },
+    } as unknown as Event);
+
+    expect(onToolFile).toHaveBeenCalledTimes(1);
+
+    const filePayload = onToolFile.mock.calls[0][0] as {
+      fileData: {
+        filename: string;
+        buffer: Buffer;
+      };
+    };
+
+    const content = filePayload.fileData.buffer.toString("utf8");
+    expect(filePayload.fileData.filename).toBe("edit_README.md.txt");
+    expect(content).toContain("Edit File/Path: README.md");
+    expect(content).toContain("new readme");
+    expect(content).not.toContain("src/one.ts");
+    expect(content).not.toContain("new code");
+  });
 });

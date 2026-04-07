@@ -106,6 +106,11 @@ interface PreparedToolFileContext {
   fileChange: FileChange | null;
 }
 
+interface ApplyPatchSection {
+  filePath: string;
+  patchText: string;
+}
+
 interface SubagentState extends SubagentInfo {
   hasSubtaskMetadata: boolean;
   hasTaskToolMetadata: boolean;
@@ -139,6 +144,48 @@ function countDiffChangesFromText(text: string): { additions: number; deletions:
   }
 
   return { additions, deletions };
+}
+
+function parseApplyPatchSections(patchText: string): ApplyPatchSection[] {
+  const lines = patchText.split("\n");
+  const sections: ApplyPatchSection[] = [];
+  let currentSection: { filePath: string; lines: string[] } | null = null;
+
+  const flushCurrentSection = (): void => {
+    if (!currentSection) {
+      return;
+    }
+
+    sections.push({
+      filePath: currentSection.filePath,
+      patchText: currentSection.lines.join("\n").trim(),
+    });
+    currentSection = null;
+  };
+
+  for (const line of lines) {
+    const match = line.match(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/);
+    if (match) {
+      flushCurrentSection();
+      currentSection = {
+        filePath: normalizePathForDisplay(match[1]!.trim()),
+        lines: [line],
+      };
+      continue;
+    }
+
+    if (line.startsWith("*** End Patch")) {
+      flushCurrentSection();
+      break;
+    }
+
+    if (currentSection) {
+      currentSection.lines.push(line);
+    }
+  }
+
+  flushCurrentSection();
+  return sections.filter((section) => section.filePath.length > 0 && section.patchText.length > 0);
 }
 
 function extractEventSessionId(event: Event): string | null {
@@ -1273,12 +1320,20 @@ class SummaryAggregator {
         (patchMetadata?.filediff?.file && normalizePathForDisplay(patchMetadata.filediff.file)) ||
         filePathFromInput ||
         normalizePathForDisplay(filePathFromTitle);
-      const diffText =
+      const rawDiffText =
         typeof patchMetadata?.diff === "string"
           ? patchMetadata.diff
           : input && typeof input.patchText === "string"
             ? input.patchText
             : "";
+
+      const applyPatchSections = rawDiffText ? parseApplyPatchSections(rawDiffText) : [];
+      const matchedApplyPatchSection = filePath
+        ? applyPatchSections.find((section) => section.filePath === filePath)
+        : applyPatchSections.length === 1
+          ? applyPatchSections[0]
+          : undefined;
+      const diffText = matchedApplyPatchSection?.patchText || rawDiffText;
 
       if (!filePath) {
         return { fileData: null, fileChange: null };
