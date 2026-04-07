@@ -118,6 +118,22 @@ interface SubagentState extends SubagentInfo {
   createdAt: number;
 }
 
+function invokeCallback(
+  callback: (() => void) | (() => Promise<void>),
+  errorMessage: string,
+): void {
+  try {
+    const result = callback();
+    if (result && typeof result.then === "function") {
+      void result.catch((err) => {
+        logger.error(errorMessage, err);
+      });
+    }
+  } catch (err) {
+    logger.error(errorMessage, err);
+  }
+}
+
 function extractFirstUpdatedFileFromTitle(title: string): string {
   for (const rawLine of title.split("\n")) {
     const line = rawLine.trim();
@@ -1091,11 +1107,7 @@ class SummaryAggregator {
         this.thinkingFiredForMessages.add(messageKey);
         const callback = this.onThinkingCallback;
         const sessionID = part.sessionID;
-        setImmediate(() => {
-          if (typeof callback === "function") {
-            callback(sessionID);
-          }
-        });
+        callback(sessionID);
       }
     } else if (part.type === "text" && "text" in part && part.text) {
       const partHash = this.hashString(part.text);
@@ -1157,9 +1169,7 @@ class SummaryAggregator {
             `[Aggregator] Question tool failed with error, clearing active poll. callID=${part.callID}`,
           );
           if (this.onQuestionErrorCallback) {
-            setImmediate(() => {
-              this.onQuestionErrorCallback!();
-            });
+            this.onQuestionErrorCallback();
           }
           return;
         }
@@ -1405,13 +1415,11 @@ class SummaryAggregator {
       `[Aggregator] Session retry: session=${sessionID}, attempt=${status.attempt ?? "n/a"}, message=${message}`,
     );
 
-    setImmediate(() => {
-      callback({
-        sessionId: sessionID,
-        attempt: status.attempt,
-        message,
-        next: status.next,
-      });
+    callback({
+      sessionId: sessionID,
+      attempt: status.attempt,
+      message,
+      next: status.next,
     });
   }
 
@@ -1438,9 +1446,7 @@ class SummaryAggregator {
 
     if (this.onSessionIdleCallback) {
       const callback = this.onSessionIdleCallback;
-      setImmediate(() => {
-        callback(sessionID);
-      });
+      callback(sessionID);
     }
   }
 
@@ -1460,12 +1466,12 @@ class SummaryAggregator {
 
     // Reload context from history after compaction
     if (this.onSessionCompactedCallback) {
-      setImmediate(() => {
+      invokeCallback(async () => {
         const session = getSessionById(sessionID);
         if (session?.directory) {
-          this.onSessionCompactedCallback!(sessionID, session.directory);
+          await this.onSessionCompactedCallback!(sessionID, session.directory);
         }
-      });
+      }, "[Aggregator] Error in session compacted callback:");
     }
   }
 
@@ -1502,9 +1508,7 @@ class SummaryAggregator {
 
     if (this.onSessionErrorCallback) {
       const callback = this.onSessionErrorCallback;
-      setImmediate(() => {
-        callback(sessionID, message);
-      });
+      callback(sessionID, message);
     }
   }
 
@@ -1524,13 +1528,10 @@ class SummaryAggregator {
 
     if (this.onQuestionCallback) {
       const callback = this.onQuestionCallback;
-      setImmediate(async () => {
-        try {
-          await callback(sessionID, questions as Question[], id);
-        } catch (err) {
-          logger.error("[Aggregator] Error in question callback:", err);
-        }
-      });
+      invokeCallback(
+        async () => await callback(sessionID, questions as Question[], id),
+        "[Aggregator] Error in question callback:",
+      );
     }
   }
 
@@ -1554,9 +1555,7 @@ class SummaryAggregator {
       }));
 
       const callback = this.onSessionDiffCallback;
-      setImmediate(() => {
-        callback(properties.sessionID, diffs);
-      });
+      callback(properties.sessionID, diffs);
     }
   }
 
@@ -1580,13 +1579,10 @@ class SummaryAggregator {
 
     if (this.onPermissionCallback) {
       const callback = this.onPermissionCallback;
-      setImmediate(async () => {
-        try {
-          await callback(request as PermissionRequest);
-        } catch (err) {
-          logger.error("[Aggregator] Error in permission callback:", err);
-        }
-      });
+      invokeCallback(
+        async () => await callback(request as PermissionRequest),
+        "[Aggregator] Error in permission callback:",
+      );
     }
   }
 

@@ -1086,6 +1086,10 @@ async function ensureEventSubscription(directory: string): Promise<void> {
   });
 }
 
+async function prepareSessionForPrompt(sessionId: string): Promise<void> {
+  await liveStream.sealCurrentMessage(sessionId, true);
+}
+
 export function createBot(): Bot<Context> {
   clearAllInteractionState(INTERACTION_CLEAR_REASON.BOT_STARTUP);
 
@@ -1411,7 +1415,7 @@ export function createBot(): Bot<Context> {
   });
 
   // Voice and audio message handlers (STT transcription -> prompt)
-  const voicePromptDeps = { bot, ensureEventSubscription };
+  const voicePromptDeps = { bot, ensureEventSubscription, prepareSessionForPrompt };
 
   bot.on("message:voice", async (ctx) => {
     logger.debug(`[Bot] Received voice message, chatId=${ctx.chat.id}`);
@@ -1474,7 +1478,7 @@ export function createBot(): Bot<Context> {
         if (caption.trim().length > 0) {
           botInstance = bot;
           rememberScopeTarget(ctx);
-          const promptDeps = { bot, ensureEventSubscription };
+          const promptDeps = { bot, ensureEventSubscription, prepareSessionForPrompt };
           await processUserPrompt(ctx, caption, promptDeps);
         }
         return;
@@ -1501,7 +1505,7 @@ export function createBot(): Bot<Context> {
       rememberScopeTarget(ctx);
 
       // Send via processUserPrompt with file part
-      const promptDeps = { bot, ensureEventSubscription };
+      const promptDeps = { bot, ensureEventSubscription, prepareSessionForPrompt };
       await processUserPrompt(ctx, caption, promptDeps, [filePart]);
     } catch (err) {
       logger.error("[Bot] Error handling photo message:", err);
@@ -1520,7 +1524,7 @@ export function createBot(): Bot<Context> {
       return;
     }
 
-    const deps = { bot, ensureEventSubscription };
+    const deps = { bot, ensureEventSubscription, prepareSessionForPrompt };
     await handleDocumentMessage(ctx, deps);
   });
 
@@ -1559,7 +1563,7 @@ export function createBot(): Bot<Context> {
       return;
     }
 
-    const promptDeps = { bot, ensureEventSubscription };
+    const promptDeps = { bot, ensureEventSubscription, prepareSessionForPrompt };
     const handledCommandArgs = await handleCommandTextArguments(ctx, promptDeps);
     if (handledCommandArgs) {
       return;

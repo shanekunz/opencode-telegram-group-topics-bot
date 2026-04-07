@@ -394,6 +394,7 @@ function resetMismatchedSessionContextForScope(scopeKey: string): void {
 export interface ProcessPromptDeps {
   bot: Bot<Context>;
   ensureEventSubscription: (directory: string) => Promise<void>;
+  prepareSessionForPrompt?: (sessionId: string) => Promise<void>;
 }
 
 /**
@@ -413,7 +414,7 @@ export async function processUserPrompt(
   fileParts: FilePartInput[] = [],
   options: ProcessPromptOptions = {},
 ): Promise<boolean> {
-  const { bot, ensureEventSubscription } = deps;
+  const { bot, ensureEventSubscription, prepareSessionForPrompt } = deps;
   const scope = getScopeFromContext(ctx);
   const responseMode = options.responseMode ?? getDefaultPromptResponseMode();
   const scopeKey = scope?.key ?? GLOBAL_SCOPE_KEY;
@@ -578,6 +579,9 @@ export async function processUserPrompt(
   try {
     const currentAgent = await resolveProjectAgent(getStoredAgent(scopeKey), scopeKey);
     const storedModel = getStoredModel(scopeKey);
+    if (prepareSessionForPrompt) {
+      await prepareSessionForPrompt(currentSession.id);
+    }
 
     const request = buildPromptRequest(currentSession, currentAgent, storedModel, text, fileParts);
     submitPromptRequest(bot, {
