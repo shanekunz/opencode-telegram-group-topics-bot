@@ -937,6 +937,8 @@ async function ensureEventSubscription(directory: string): Promise<void> {
           return;
         }
 
+        await liveStream.cleanupAfterFinalDelivery(sessionId);
+
         const target = getTargetBySessionId(sessionId);
         if (target && pinnedMessageManager.isInitialized(target.scopeKey)) {
           syncKeyboardContextFromPinnedState(target.scopeKey);

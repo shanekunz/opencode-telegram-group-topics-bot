@@ -417,6 +417,54 @@ export class LiveStream {
     });
   }
 
+  async cleanupAfterFinalDelivery(sessionId: string): Promise<void> {
+    const state = this.states.get(sessionId);
+    if (!state) {
+      return;
+    }
+
+    this.clearTimer(sessionId);
+    await this.enqueueTask(sessionId, async () => {
+      await this.flushSessionState(sessionId);
+
+      const latestState = this.states.get(sessionId);
+      if (!latestState || latestState.messageId === null) {
+        return;
+      }
+
+      const hasAssistantEntry = latestState.entries.some((entry) => entry.kind === "assistant");
+      if (!hasAssistantEntry) {
+        return;
+      }
+
+      const remainingEntries = latestState.entries.filter((entry) => entry.kind !== "assistant");
+      const remainingText = renderEntries(remainingEntries);
+
+      if (!remainingText) {
+        if (this.deleteText) {
+          await this.deleteText(sessionId, latestState.messageId);
+        }
+        latestState.messageId = null;
+        latestState.lastSentText = "";
+        latestState.entries = [];
+        return;
+      }
+
+      if (latestState.lastSentText !== remainingText) {
+        await this.editText(sessionId, latestState.messageId, remainingText, "raw", false);
+        latestState.lastSentText = remainingText;
+      }
+
+      latestState.entries = remainingEntries;
+      latestState.assistant = {
+        messageId: null,
+        fullText: "",
+        committedLength: 0,
+        replaySuppressionPrefix: latestState.assistant.replaySuppressionPrefix,
+      };
+    });
+  }
+
   async clearSession(sessionId: string, reason: string): Promise<void> {
     if (!this.states.has(sessionId)) {
       return;

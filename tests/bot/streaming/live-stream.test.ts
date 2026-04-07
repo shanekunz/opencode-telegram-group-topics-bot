@@ -190,4 +190,39 @@ describe("bot/streaming/live-stream", () => {
     expect(renderedParts[1]).toBe("B");
     expect(editText).toHaveBeenLastCalledWith("s1", 62, "BCCCC", "raw", false);
   });
+
+  it("removes duplicate assistant text after final delivery while keeping service history", async () => {
+    vi.useFakeTimers();
+
+    const sendText = vi.fn().mockResolvedValue(71);
+    const editText = vi.fn().mockResolvedValue(undefined);
+    const deleteText = vi.fn().mockResolvedValue(undefined);
+    const stream = new LiveStream({ sendText, editText, deleteText, throttleMs: 50 });
+
+    stream.showThinking("s1", "Thinking");
+    await stream.updateAssistant("s1", "m1", "Final answer");
+    await vi.advanceTimersByTimeAsync(50);
+
+    await stream.cleanupAfterFinalDelivery("s1");
+
+    expect(editText).toHaveBeenLastCalledWith("s1", 71, "Thinking", "raw", false);
+    expect(deleteText).not.toHaveBeenCalled();
+  });
+
+  it("deletes the transient stream message when it only contained assistant text", async () => {
+    vi.useFakeTimers();
+
+    const sendText = vi.fn().mockResolvedValue(81);
+    const editText = vi.fn().mockResolvedValue(undefined);
+    const deleteText = vi.fn().mockResolvedValue(undefined);
+    const stream = new LiveStream({ sendText, editText, deleteText, throttleMs: 50 });
+
+    await stream.updateAssistant("s1", "m1", "Final answer");
+    await vi.advanceTimersByTimeAsync(50);
+
+    await stream.cleanupAfterFinalDelivery("s1");
+
+    expect(deleteText).toHaveBeenCalledWith("s1", 81);
+    expect(editText).not.toHaveBeenCalled();
+  });
 });
