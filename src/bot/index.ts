@@ -370,18 +370,27 @@ async function deliverPendingAssistantCompletions(sessionId: string): Promise<bo
     return true;
   }
 
-  for (let index = 0; index < pendingCompletions.length; index++) {
-    try {
-      await deliverAssistantCompletion(sessionId, pendingCompletions[index]!);
-    } catch (error) {
-      pendingAssistantCompletions.prepend(sessionId, pendingCompletions.slice(index));
-      logger.error("[Bot] Failed to deliver all pending assistant completions", {
-        sessionId,
-        remainingCount: pendingCompletions.length - index,
-        error,
-      });
-      return false;
-    }
+  const latestCompletion = pendingCompletions[pendingCompletions.length - 1];
+  if (!latestCompletion) {
+    return true;
+  }
+
+  if (pendingCompletions.length > 1) {
+    logger.debug("[Bot] Collapsing multiple assistant completions to the latest final message", {
+      sessionId,
+      completionCount: pendingCompletions.length,
+    });
+  }
+
+  try {
+    await deliverAssistantCompletion(sessionId, latestCompletion);
+  } catch (error) {
+    pendingAssistantCompletions.prepend(sessionId, [latestCompletion]);
+    logger.error("[Bot] Failed to deliver pending assistant completion", {
+      sessionId,
+      error,
+    });
+    return false;
   }
 
   return true;
