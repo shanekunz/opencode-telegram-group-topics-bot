@@ -312,6 +312,10 @@ function buildErrorMessage(task: ScheduledTask, finishedAt: string, errorMessage
 async function deliverResult(bot: Bot<Context>, task: ScheduledTask, text: string): Promise<void> {
   const parts = splitMessage(text);
 
+  logger.info(
+    `[ScheduledTaskRuntime] Delivering scheduled task result: taskId=${task.id}, chatId=${task.delivery.chatId}, threadId=${task.delivery.threadId ?? "none"}, parts=${parts.length}`,
+  );
+
   for (const part of parts) {
     await sendBotText({
       api: bot.api,
@@ -329,38 +333,73 @@ async function finalizeTaskRun(bot: Bot<Context>, task: ScheduledTask): Promise<
     return;
   }
 
-  const execution = await executeScheduledTask(currentTask);
-  const nextRunAt =
-    currentTask.kind === "cron"
-      ? getNextCronRunAt(currentTask.cron, currentTask.timezone, execution.startedAt)
-      : null;
+  logger.info(`[ScheduledTaskRuntime] Finalizing scheduled task: taskId=${task.id}`);
 
-  const updatedTask = await updateScheduledTask(currentTask.id, (existingTask) => ({
-    ...existingTask,
-    lastRunAt: execution.finishedAt,
-    nextRunAt,
-    runCount: existingTask.runCount + 1,
-    lastStatus: execution.status,
-    lastError: execution.errorMessage,
-  }));
+  try {
+    const execution = await executeScheduledTask(currentTask);
+    const nextRunAt =
+      currentTask.kind === "cron"
+        ? getNextCronRunAt(currentTask.cron, currentTask.timezone, execution.startedAt)
+        : null;
 
-  if (!updatedTask) {
-    return;
-  }
+    const updatedTask = await updateScheduledTask(currentTask.id, (existingTask) => ({
+      ...existingTask,
+      lastRunAt: execution.finishedAt,
+      nextRunAt,
+      runCount: existingTask.runCount + 1,
+      lastStatus: execution.status,
+      lastError: execution.errorMessage,
+    }));
 
-  const message =
-    execution.status === "success"
-      ? buildSuccessMessage(updatedTask, execution.finishedAt, execution.resultText ?? "")
-      : buildErrorMessage(
-          updatedTask,
-          execution.finishedAt,
-          execution.errorMessage ?? "Unknown scheduled task execution error",
-        );
+    if (!updatedTask) {
+      return;
+    }
 
-  await deliverResult(bot, updatedTask, message);
+    logger.info(
+      `[ScheduledTaskRuntime] Scheduled task execution persisted: taskId=${task.id}, status=${execution.status}`,
+    );
 
-  if (updatedTask.kind === "once" && updatedTask.nextRunAt === null) {
-    await removeScheduledTask(updatedTask.id);
+    const message =
+      execution.status === "success"
+        ? buildSuccessMessage(updatedTask, execution.finishedAt, execution.resultText ?? "")
+        : buildErrorMessage(
+            updatedTask,
+            execution.finishedAt,
+            execution.errorMessage ?? "Unknown scheduled task execution error",
+          );
+
+    await deliverResult(bot, updatedTask, message);
+    logger.info(`[ScheduledTaskRuntime] Scheduled task delivery completed: taskId=${task.id}`);
+
+    if (updatedTask.kind === "once" && updatedTask.nextRunAt === null) {
+      await removeScheduledTask(updatedTask.id);
+    }
+  } catch (error) {
+    const fallbackFinishedAt = new Date().toISOString();
+    const fallbackErrorMessage =
+      error instanceof Error && error.message.trim()
+        ? error.message.trim()
+        : "Scheduled task finalization failed";
+
+    await updateScheduledTask(task.id, (existingTask) => ({
+      ...existingTask,
+      lastRunAt: existingTask.lastRunAt ?? fallbackFinishedAt,
+      nextRunAt:
+        existingTask.kind === "cron"
+          ? (existingTask.nextRunAt ??
+            getNextCronRunAt(existingTask.cron, existingTask.timezone, fallbackFinishedAt))
+          : null,
+      runCount:
+        existingTask.lastStatus === "running" ? existingTask.runCount + 1 : existingTask.runCount,
+      lastStatus: "error",
+      lastError: fallbackErrorMessage,
+    }));
+
+    logger.error(
+      "[ScheduledTaskRuntime] Scheduled task finalization failed",
+      { taskId: task.id, errorMessage: fallbackErrorMessage },
+      error,
+    );
   }
 }
 
@@ -374,7 +413,33 @@ export function createScheduledTaskRuntime(bot: Bot<Context>): ScheduledTaskRunt
   const runningTaskIds = new Set<string>();
   let timer: NodeJS.Timeout | null = null;
 
+  const recoverStaleRunningTasks = async (): Promise<void> => {
+    const staleTasks = listScheduledTasks().filter(
+      (task) => task.lastStatus === "running" && !runningTaskIds.has(task.id),
+    );
+
+    if (staleTasks.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      staleTasks.map((task) =>
+        updateScheduledTask(task.id, (existingTask) => ({
+          ...existingTask,
+          lastStatus: "error",
+          lastError: "Recovered stale scheduled task state after bot restart",
+        })),
+      ),
+    );
+
+    logger.warn(
+      `[ScheduledTaskRuntime] Recovered stale running tasks: ${staleTasks.map((task) => task.id).join(", ")}`,
+    );
+  };
+
   const runDueTasks = async (): Promise<void> => {
+    await recoverStaleRunningTasks();
+
     const now = Date.now();
     const tasks = listScheduledTasks();
     const executions: Promise<void>[] = [];

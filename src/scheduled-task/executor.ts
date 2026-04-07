@@ -4,6 +4,10 @@ import type { ScheduledTask, ScheduledTaskExecutionResult } from "./types.js";
 
 const SCHEDULED_TASK_AGENT = "build";
 const SCHEDULED_TASK_SESSION_TITLE = "Scheduled task run";
+const SCHEDULED_TASK_PERMISSION_RULESET = [
+  { permission: "*", pattern: "*", action: "allow" as const },
+  { permission: "question", pattern: "*", action: "deny" as const },
+];
 
 function collectResponseText(
   parts: Array<{ type?: string; text?: string; ignored?: boolean }>,
@@ -24,7 +28,44 @@ function toErrorMessage(error: unknown): string {
     return error.trim();
   }
 
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "data" in error &&
+    typeof error.data === "object" &&
+    error.data !== null &&
+    "message" in error.data &&
+    typeof error.data.message === "string" &&
+    error.data.message.trim()
+  ) {
+    return error.data.message.trim();
+  }
+
   return "Unknown scheduled task execution error";
+}
+
+function toErrorDetails(error: unknown): Record<string, unknown> {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      cause:
+        error.cause && typeof error.cause === "object"
+          ? JSON.parse(JSON.stringify(error.cause))
+          : error.cause,
+    };
+  }
+
+  if (typeof error === "object" && error !== null) {
+    try {
+      return JSON.parse(JSON.stringify(error)) as Record<string, unknown>;
+    } catch {
+      return { value: String(error) };
+    }
+  }
+
+  return { value: error };
 }
 
 export async function executeScheduledTask(
@@ -37,6 +78,7 @@ export async function executeScheduledTask(
     const { data: session, error: createError } = await opencodeClient.session.create({
       directory: task.projectWorktree,
       title: SCHEDULED_TASK_SESSION_TITLE,
+      permission: SCHEDULED_TASK_PERMISSION_RULESET,
     });
 
     if (createError || !session) {
@@ -45,12 +87,16 @@ export async function executeScheduledTask(
 
     sessionId = session.id;
 
+    logger.info(
+      `[ScheduledTaskExecutor] Created temporary session: taskId=${task.id}, sessionId=${sessionId}`,
+    );
+
     const promptOptions: {
       sessionID: string;
       directory: string;
       parts: Array<{ type: "text"; text: string }>;
       agent: string;
-      model?: { providerID: string; modelID: string };
+      model?: { providerID: string; modelID: string; options?: { timeout: false } };
       variant?: string;
     } = {
       sessionID: session.id,
@@ -63,6 +109,7 @@ export async function executeScheduledTask(
       promptOptions.model = {
         providerID: task.model.providerID,
         modelID: task.model.modelID,
+        options: { timeout: false },
       };
     }
 
@@ -70,8 +117,13 @@ export async function executeScheduledTask(
       promptOptions.variant = task.model.variant;
     }
 
-    const { data: response, error: promptError } =
-      await opencodeClient.session.prompt(promptOptions);
+    logger.info(
+      `[ScheduledTaskExecutor] Starting prompt execution: taskId=${task.id}, sessionId=${sessionId}`,
+    );
+
+    const { data: response, error: promptError } = await opencodeClient.session.prompt(
+      promptOptions as never,
+    );
 
     if (promptError || !response) {
       throw promptError || new Error("Scheduled task prompt execution failed");
@@ -81,6 +133,10 @@ export async function executeScheduledTask(
     if (!resultText) {
       throw new Error("Scheduled task returned an empty assistant response");
     }
+
+    logger.info(
+      `[ScheduledTaskExecutor] Prompt execution completed: taskId=${task.id}, sessionId=${sessionId}`,
+    );
 
     return {
       taskId: task.id,
@@ -94,6 +150,7 @@ export async function executeScheduledTask(
     const errorMessage = toErrorMessage(error);
     logger.warn(
       `[ScheduledTaskExecutor] Task execution failed: id=${task.id}, message=${errorMessage}`,
+      toErrorDetails(error),
     );
 
     return {
@@ -107,10 +164,14 @@ export async function executeScheduledTask(
   } finally {
     if (sessionId) {
       try {
+        logger.info(
+          `[ScheduledTaskExecutor] Deleting temporary session: taskId=${task.id}, sessionId=${sessionId}`,
+        );
         await opencodeClient.session.delete({ sessionID: sessionId });
       } catch (error) {
         logger.warn(
           `[ScheduledTaskExecutor] Failed to delete temporary session: sessionId=${sessionId}`,
+          toErrorDetails(error),
           error,
         );
       }
