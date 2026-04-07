@@ -61,29 +61,18 @@ function getOrCreateWorker(directory: string): DirectoryStreamWorker {
   return nextWorker;
 }
 
-function dispatchEvent(worker: DirectoryStreamWorker, event: Event): void {
+async function dispatchEvent(worker: DirectoryStreamWorker, event: Event): Promise<void> {
   const callbacks = Array.from(worker.callbacks);
   for (const callback of callbacks) {
-    setImmediate(() => {
-      try {
-        const result = callback(event);
-        if (result && typeof (result as PromiseLike<unknown>).then === "function") {
-          void (result as PromiseLike<unknown>).then(undefined, (error) => {
-            logger.error(
-              "[Events] Async callback rejected",
-              { directory: worker.directory, eventType: event.type },
-              error,
-            );
-          });
-        }
-      } catch (error) {
-        logger.error(
-          "[Events] Event callback failed",
-          { directory: worker.directory, eventType: event.type },
-          error,
-        );
-      }
-    });
+    try {
+      await callback(event);
+    } catch (error) {
+      logger.error(
+        "[Events] Event callback failed",
+        { directory: worker.directory, eventType: event.type },
+        error,
+      );
+    }
   }
 }
 
@@ -110,7 +99,7 @@ async function runWorkerLoop(worker: DirectoryStreamWorker): Promise<void> {
         }
 
         await new Promise<void>((resolve) => setImmediate(resolve));
-        dispatchEvent(worker, event);
+        await dispatchEvent(worker, event);
       }
 
       if (abortController.signal.aborted || worker.callbacks.size === 0) {
