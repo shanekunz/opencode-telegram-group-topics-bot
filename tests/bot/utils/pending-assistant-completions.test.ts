@@ -2,24 +2,33 @@ import { describe, expect, it } from "vitest";
 import { PendingAssistantCompletions } from "../../../src/bot/utils/pending-assistant-completions.js";
 
 describe("bot/utils/pending-assistant-completions", () => {
-  it("keeps only the latest completion per session", () => {
-    const store = new PendingAssistantCompletions();
+  it("preserves multiple completions in enqueue order", () => {
+    const pending = new PendingAssistantCompletions();
 
-    store.enqueue("s1", "First");
-    store.enqueue("s1", "Second");
-    store.enqueue("s2", "Other");
+    pending.enqueue("s1", "First");
+    pending.enqueue("s1", "Second");
 
-    expect(store.peek("s1")).toBe("Second");
-    expect(store.peek("s2")).toBe("Other");
-    store.clear("s1");
-    expect(store.peek("s1")).toBeNull();
+    expect(pending.consume("s1")).toEqual(["First", "Second"]);
   });
 
-  it("ignores empty completions", () => {
-    const store = new PendingAssistantCompletions();
+  it("prepends undelivered completions ahead of newer ones", () => {
+    const pending = new PendingAssistantCompletions();
 
-    store.enqueue("s1", "   ");
+    pending.enqueue("s1", "Third");
+    pending.prepend("s1", ["First", "Second"]);
 
-    expect(store.peek("s1")).toBeNull();
+    expect(pending.consume("s1")).toEqual(["First", "Second", "Third"]);
+  });
+
+  it("reports whether a session still has pending completions", () => {
+    const pending = new PendingAssistantCompletions();
+
+    expect(pending.has("s1")).toBe(false);
+
+    pending.enqueue("s1", "First");
+    expect(pending.has("s1")).toBe(true);
+
+    pending.clear("s1");
+    expect(pending.has("s1")).toBe(false);
   });
 });

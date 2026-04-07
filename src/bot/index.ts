@@ -364,6 +364,29 @@ async function deliverAssistantCompletion(sessionId: string, messageText: string
   }
 }
 
+async function deliverPendingAssistantCompletions(sessionId: string): Promise<boolean> {
+  const pendingCompletions = pendingAssistantCompletions.consume(sessionId);
+  if (pendingCompletions.length === 0) {
+    return true;
+  }
+
+  for (let index = 0; index < pendingCompletions.length; index++) {
+    try {
+      await deliverAssistantCompletion(sessionId, pendingCompletions[index]!);
+    } catch (error) {
+      pendingAssistantCompletions.prepend(sessionId, pendingCompletions.slice(index));
+      logger.error("[Bot] Failed to deliver all pending assistant completions", {
+        sessionId,
+        remainingCount: pendingCompletions.length - index,
+        error,
+      });
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function syncKeyboardContextFromPinnedState(scopeKey: string): void {
   const contextInfo = contextStateManager.get(scopeKey);
   if (!contextInfo) {
@@ -905,12 +928,13 @@ async function ensureEventSubscription(directory: string): Promise<void> {
 
   summaryAggregator.setOnSessionIdle((sessionId) => {
     enqueueSessionDelivery(sessionId, async () => {
+      let deliveryComplete = false;
+
       try {
         await liveStream.flushSession(sessionId);
-        const pendingCompletion = pendingAssistantCompletions.peek(sessionId);
-        if (pendingCompletion) {
-          await deliverAssistantCompletion(sessionId, pendingCompletion);
-          pendingAssistantCompletions.clear(sessionId);
+        deliveryComplete = await deliverPendingAssistantCompletions(sessionId);
+        if (!deliveryComplete) {
+          return;
         }
 
         const target = getTargetBySessionId(sessionId);
@@ -919,9 +943,11 @@ async function ensureEventSubscription(directory: string): Promise<void> {
           await pinnedMessageManager.flush(target.scopeKey);
         }
       } finally {
-        summaryAggregator.stopTypingIndicator(sessionId);
-        await liveStream.sealCurrentMessage(sessionId, true);
-        await dispatchNextQueuedPrompt(sessionId);
+        if (deliveryComplete) {
+          summaryAggregator.stopTypingIndicator(sessionId);
+          await liveStream.sealCurrentMessage(sessionId, true);
+          await dispatchNextQueuedPrompt(sessionId);
+        }
       }
     });
   });
