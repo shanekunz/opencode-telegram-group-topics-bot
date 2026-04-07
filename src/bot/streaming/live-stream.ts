@@ -282,8 +282,11 @@ export class LiveStream {
     }
 
     this.applyMutation(sessionId, (state) => {
+      const existingEntry = state.entries.find(
+        (entry) => entry.kind === "service" && entry.replaceKey === normalizedPrefix,
+      );
       state.service.updates = state.service.updates.filter(
-        (update) => !update.startsWith(normalizedPrefix),
+        (update) => !update.startsWith(normalizedPrefix) && update !== existingEntry?.text,
       );
 
       const normalizedText = text.trim();

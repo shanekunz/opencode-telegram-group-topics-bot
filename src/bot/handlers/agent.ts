@@ -1,5 +1,10 @@
 import { Context, InlineKeyboard } from "grammy";
-import { selectAgent, getAvailableAgents, fetchCurrentAgent } from "../../agent/manager.js";
+import {
+  selectAgent,
+  getAvailableAgents,
+  fetchCurrentAgent,
+  resolveProjectAgent,
+} from "../../agent/manager.js";
 import { getAgentDisplayName } from "../../agent/types.js";
 import { getStoredModel } from "../../model/manager.js";
 import { formatVariantForButton } from "../../variant/manager.js";
@@ -50,7 +55,8 @@ export async function handleAgentSelect(ctx: Context): Promise<boolean> {
       await pinnedMessageManager.refreshContextLimit(scopeKey);
     }
 
-    const agentName = callbackQuery.data.replace("agent:", "");
+    const requestedAgent = callbackQuery.data.replace("agent:", "");
+    const agentName = await resolveProjectAgent(requestedAgent, scopeKey);
 
     // Select agent and persist
     selectAgent(agentName, scopeKey);

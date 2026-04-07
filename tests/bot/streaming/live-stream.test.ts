@@ -144,6 +144,33 @@ describe("bot/streaming/live-stream", () => {
     expect(sendText.mock.calls[0][1].length).toBeLessThanOrEqual(3500);
   });
 
+  it("replaces prior replace-keyed service updates instead of accumulating them", async () => {
+    vi.useFakeTimers();
+
+    const sendText = vi.fn().mockResolvedValue(52);
+    const editText = vi.fn().mockResolvedValue(undefined);
+    const stream = new LiveStream({ sendText, editText, throttleMs: 50 });
+
+    stream.replaceServiceByPrefix("s1", "__todo__", "⏳ todo step 1");
+    await vi.advanceTimersByTimeAsync(50);
+    stream.replaceServiceByPrefix("s1", "__todo__", "✅ todo step 2");
+    await vi.advanceTimersByTimeAsync(50);
+
+    const internalState = (
+      stream as unknown as {
+        states: Map<
+          string,
+          {
+            service: { updates: string[] };
+          }
+        >;
+      }
+    ).states.get("s1");
+
+    expect(editText).toHaveBeenLastCalledWith("s1", 52, "✅ todo step 2", "raw", false);
+    expect(internalState?.service.updates).toEqual(["✅ todo step 2"]);
+  });
+
   it("keeps assistant rollover progress correct across trimmed boundaries", async () => {
     vi.useFakeTimers();
 
