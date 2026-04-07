@@ -417,40 +417,6 @@ export class LiveStream {
     });
   }
 
-  async cleanupAfterFinalDelivery(sessionId: string): Promise<void> {
-    const state = this.states.get(sessionId);
-    if (!state) {
-      return;
-    }
-
-    this.clearTimer(sessionId);
-    await this.enqueueTask(sessionId, async () => {
-      await this.flushSessionState(sessionId);
-
-      const latestState = this.states.get(sessionId);
-      if (!latestState || latestState.messageId === null) {
-        return;
-      }
-
-      const hasAssistantEntry = latestState.entries.some((entry) => entry.kind === "assistant");
-      if (!hasAssistantEntry) {
-        return;
-      }
-
-      // The streamed lane is only a temporary transport for in-progress assistant output.
-      // Once the final assistant response has been delivered as standalone Markdown messages,
-      // leaving behind the raw service-only lane makes old tool activity look like new output.
-      if (this.deleteText) {
-        await this.deleteText(sessionId, latestState.messageId);
-      }
-
-      latestState.messageId = null;
-      latestState.lastSentText = "";
-      latestState.entries = [];
-      latestState.service = { thinkingText: null, updates: [] };
-    });
-  }
-
   async clearSession(sessionId: string, reason: string): Promise<void> {
     if (!this.states.has(sessionId)) {
       return;

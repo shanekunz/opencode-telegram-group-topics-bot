@@ -911,7 +911,6 @@ async function ensureEventSubscription(directory: string): Promise<void> {
         if (pendingCompletion) {
           await deliverAssistantCompletion(sessionId, pendingCompletion);
           pendingAssistantCompletions.clear(sessionId);
-          await liveStream.cleanupAfterFinalDelivery(sessionId);
         }
 
         const target = getTargetBySessionId(sessionId);

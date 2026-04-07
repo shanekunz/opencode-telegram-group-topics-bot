@@ -190,39 +190,4 @@ describe("bot/streaming/live-stream", () => {
     expect(renderedParts[1]).toBe("B");
     expect(editText).toHaveBeenLastCalledWith("s1", 62, "BCCCC", "raw", false);
   });
-
-  it("deletes the temporary streamed lane before final delivery even when service text exists", async () => {
-    vi.useFakeTimers();
-
-    const sendText = vi.fn().mockResolvedValue(71);
-    const editText = vi.fn().mockResolvedValue(undefined);
-    const deleteText = vi.fn().mockResolvedValue(undefined);
-    const stream = new LiveStream({ sendText, editText, deleteText, throttleMs: 50 });
-
-    stream.showThinking("s1", "Thinking");
-    await stream.updateAssistant("s1", "m1", "Final answer");
-    await vi.advanceTimersByTimeAsync(50);
-
-    await stream.cleanupAfterFinalDelivery("s1");
-
-    expect(deleteText).toHaveBeenCalledWith("s1", 71);
-    expect(editText).not.toHaveBeenCalled();
-  });
-
-  it("deletes the current raw streamed message before final delivery when it only contains assistant text", async () => {
-    vi.useFakeTimers();
-
-    const sendText = vi.fn().mockResolvedValue(81);
-    const editText = vi.fn().mockResolvedValue(undefined);
-    const deleteText = vi.fn().mockResolvedValue(undefined);
-    const stream = new LiveStream({ sendText, editText, deleteText, throttleMs: 50 });
-
-    await stream.updateAssistant("s1", "m1", "Final answer");
-    await vi.advanceTimersByTimeAsync(50);
-
-    await stream.cleanupAfterFinalDelivery("s1");
-
-    expect(deleteText).toHaveBeenCalledWith("s1", 81);
-    expect(editText).not.toHaveBeenCalled();
-  });
 });
