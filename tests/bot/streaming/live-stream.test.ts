@@ -191,7 +191,7 @@ describe("bot/streaming/live-stream", () => {
     expect(editText).toHaveBeenLastCalledWith("s1", 62, "BCCCC", "raw", false);
   });
 
-  it("removes the current raw assistant block before final delivery when service text exists", async () => {
+  it("deletes the temporary streamed lane before final delivery even when service text exists", async () => {
     vi.useFakeTimers();
 
     const sendText = vi.fn().mockResolvedValue(71);
@@ -205,8 +205,8 @@ describe("bot/streaming/live-stream", () => {
 
     await stream.cleanupAfterFinalDelivery("s1");
 
-    expect(editText).toHaveBeenLastCalledWith("s1", 71, "Thinking", "raw", false);
-    expect(deleteText).not.toHaveBeenCalled();
+    expect(deleteText).toHaveBeenCalledWith("s1", 71);
+    expect(editText).not.toHaveBeenCalled();
   });
 
   it("deletes the current raw streamed message before final delivery when it only contains assistant text", async () => {

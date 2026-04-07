@@ -437,27 +437,17 @@ export class LiveStream {
         return;
       }
 
-      const remainingEntries = latestState.entries.filter((entry) => entry.kind !== "assistant");
-      const remainingText = renderEntries(remainingEntries);
-
-      if (!remainingText) {
-        if (this.deleteText) {
-          await this.deleteText(sessionId, latestState.messageId);
-        }
-        latestState.messageId = null;
-        latestState.lastSentText = "";
-        latestState.entries = [];
-        return;
+      // The streamed lane is only a temporary transport for in-progress assistant output.
+      // Once the final assistant response has been delivered as standalone Markdown messages,
+      // leaving behind the raw service-only lane makes old tool activity look like new output.
+      if (this.deleteText) {
+        await this.deleteText(sessionId, latestState.messageId);
       }
 
-      if (latestState.lastSentText === remainingText) {
-        latestState.entries = remainingEntries;
-        return;
-      }
-
-      await this.editText(sessionId, latestState.messageId, remainingText, "raw", false);
-      latestState.entries = remainingEntries;
-      latestState.lastSentText = remainingText;
+      latestState.messageId = null;
+      latestState.lastSentText = "";
+      latestState.entries = [];
+      latestState.service = { thinkingText: null, updates: [] };
     });
   }
 
