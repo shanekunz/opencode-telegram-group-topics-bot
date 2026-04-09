@@ -114,6 +114,42 @@ describe("bot/commands/tasklist", () => {
     expect(options.reply_markup.inline_keyboard[0][0].callback_data).toBe("tasklist:delete:task-a");
   });
 
+  it("truncates long prompts so the task list stays within Telegram limits", async () => {
+    const longPrompt = "A".repeat(5000);
+
+    mocked.listScheduledTasksMock.mockReturnValue([
+      {
+        id: "task-a",
+        kind: "cron",
+        projectId: "project-1",
+        projectWorktree: "/repo/app",
+        createdFromScopeKey: "-100123:77",
+        agent: "review",
+        model: { providerID: "openai", modelID: "gpt-5", variant: null },
+        delivery: { chatId: -100123, threadId: 555 },
+        scheduleText: "every weekday at 09:00",
+        scheduleSummary: "weekdays 09:00",
+        timezone: "UTC",
+        prompt: longPrompt,
+        createdAt: "2026-03-25T00:00:00.000Z",
+        nextRunAt: "2026-03-26T09:00:00.000Z",
+        lastRunAt: null,
+        runCount: 0,
+        lastStatus: "idle",
+        lastError: null,
+        cron: "0 9 * * 1-5",
+      },
+    ]);
+
+    const ctx = createCommandContext();
+    await taskListCommand(ctx as never);
+
+    const [text] = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(text.length).toBeLessThan(4096);
+    expect(text).toContain(`${"A".repeat(157)}...`);
+    expect(text).not.toContain("A".repeat(5000));
+  });
+
   it("removes tasks from the active task list menu", async () => {
     mocked.listScheduledTasksMock
       .mockReturnValueOnce([

@@ -15,6 +15,7 @@ import { listScheduledTasks, removeScheduledTask } from "../../scheduled-task/st
 import type { ScheduledTask } from "../../scheduled-task/types.js";
 
 const TASKLIST_DELETE_CALLBACK_PREFIX = "tasklist:delete:";
+const MAX_PROMPT_PREVIEW_LENGTH = 160;
 
 function getScopedScheduledTasks(ctx: Context): ScheduledTask[] {
   const scopeKey = getScopeKeyFromContext(ctx);
@@ -42,6 +43,15 @@ function formatTaskStatus(task: ScheduledTask): string {
   return task.lastStatus;
 }
 
+function formatTaskPromptPreview(prompt: string): string {
+  const singleLinePrompt = prompt.replace(/\s+/g, " ").trim();
+  if (singleLinePrompt.length <= MAX_PROMPT_PREVIEW_LENGTH) {
+    return singleLinePrompt;
+  }
+
+  return `${singleLinePrompt.slice(0, MAX_PROMPT_PREVIEW_LENGTH - 3).trimEnd()}...`;
+}
+
 function buildTaskListText(tasks: ScheduledTask[]): string {
   const lines = tasks.map((task, index) => {
     const nextRunAt = task.nextRunAt ?? t("task.list.none");
@@ -49,7 +59,7 @@ function buildTaskListText(tasks: ScheduledTask[]): string {
       `${index + 1}. ${formatTaskListBadge(task)} - ${task.scheduleSummary}`,
       `   ${t("task.list.next_run", { value: nextRunAt })}`,
       `   ${t("task.list.status", { value: formatTaskStatus(task) })}`,
-      `   ${t("task.list.prompt", { value: task.prompt })}`,
+      `   ${t("task.list.prompt", { value: formatTaskPromptPreview(task.prompt) })}`,
     ].join("\n");
   });
 

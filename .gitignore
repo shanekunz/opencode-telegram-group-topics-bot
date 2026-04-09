@@ -20,9 +20,14 @@ Thumbs.db
 *.swo
 
 # Local AI tooling
+.agents/
 .claude/
 .kilocode/
 .opencode/
+skills-lock.json
+
+# Local video production workspace
+.video-production/
 
 # Project specific
 logs/

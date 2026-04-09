@@ -1,6 +1,6 @@
 {
   "name": "opencode-telegram-group-topics-bot",
-  "version": "0.15.2",
+  "version": "0.15.3",
   "description": "Telegram bot client for OpenCode with Telegram forum-topic session lanes.",
   "type": "module",
   "main": "./dist/index.js",
@@ -62,14 +62,20 @@
     "undici": "^7.16.0"
   },
   "devDependencies": {
+    "@remotion/cli": "^4.0.446",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.0.8",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@typescript-eslint/eslint-plugin": "^8.53.0",
     "@typescript-eslint/parser": "^8.53.0",
     "@vitest/coverage-v8": "^3.2.4",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.8.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "remotion": "^4.0.446",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
