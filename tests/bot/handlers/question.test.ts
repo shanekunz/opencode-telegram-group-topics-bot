@@ -169,6 +169,24 @@ describe("bot/handlers/question", () => {
     expect(api.deleteMessage).toHaveBeenCalledWith(123, 101);
   });
 
+  it("accepts transcribed custom answer text passed outside message.text", async () => {
+    const api = createApi([111, 112]);
+
+    questionManager.startQuestions([QUESTION_ONE, QUESTION_TWO], "req-voice");
+    await showCurrentQuestion(api, 123, "global", null);
+
+    const customCtx = createCallbackContext("question:custom:0", 111, api);
+    await handleQuestionCallback(customCtx);
+
+    const voiceCtx = createTextContext("", api);
+    await handleQuestionTextAnswer(voiceCtx, "Spoken custom answer");
+
+    expect(questionManager.getCustomAnswer(0)).toBe("Spoken custom answer");
+    expect(questionManager.getCurrentIndex()).toBe(1);
+    expect(questionManager.getActiveMessageId()).toBe(112);
+    expect(api.deleteMessage).toHaveBeenCalledWith(123, 111);
+  });
+
   it("rejects stale callback from old question message", async () => {
     const api = createApi([200]);
 

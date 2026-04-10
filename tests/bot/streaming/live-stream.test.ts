@@ -91,6 +91,24 @@ describe("bot/streaming/live-stream", () => {
     );
   });
 
+  it("starts a fresh streamed message after a hard seal", async () => {
+    vi.useFakeTimers();
+
+    const sendText = vi.fn().mockResolvedValueOnce(14).mockResolvedValueOnce(15);
+    const editText = vi.fn().mockResolvedValue(undefined);
+    const stream = new LiveStream({ sendText, editText, throttleMs: 50 });
+
+    await stream.updateAssistant("s1", "m1", "Before question");
+    await vi.advanceTimersByTimeAsync(50);
+
+    await stream.sealCurrentMessage("s1", true);
+    await stream.updateAssistant("s1", "m1", "After question");
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(sendText).toHaveBeenNthCalledWith(1, "s1", "Before question", "raw", false);
+    expect(sendText).toHaveBeenNthCalledWith(2, "s1", "After question", "raw", false);
+  });
+
   it("updates the current assistant entry in place while keeping service order", async () => {
     vi.useFakeTimers();
 

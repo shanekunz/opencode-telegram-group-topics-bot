@@ -52,6 +52,10 @@ function classifyIncomingInput(ctx: Context): {
   return { inputType: "other" };
 }
 
+function isVoiceOrAudioInput(ctx: Context): boolean {
+  return Boolean(ctx.message?.voice || ctx.message?.audio);
+}
+
 function getExpectedInputBlockReason(expectedInput: ExpectedInput): BlockReason {
   switch (expectedInput) {
     case "callback":
@@ -127,7 +131,11 @@ export function resolveInteractionGuardDecision(ctx: Context): GuardDecision {
   }
 
   if (state.expectedInput === "mixed") {
-    if (inputType === "callback" || inputType === "text") {
+    if (
+      inputType === "callback" ||
+      inputType === "text" ||
+      (state.kind === "question" && isVoiceOrAudioInput(ctx))
+    ) {
       return createAllowDecision(inputType, state, command);
     }
 
