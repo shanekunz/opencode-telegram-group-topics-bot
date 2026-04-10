@@ -222,8 +222,11 @@ export async function showCurrentQuestion(
   summaryAggregator.stopTypingIndicator();
 }
 
-export async function handleQuestionTextAnswer(ctx: Context): Promise<void> {
-  const text = ctx.message?.text;
+export async function handleQuestionTextAnswer(
+  ctx: Context,
+  answerText: string | null = null,
+): Promise<void> {
+  const text = answerText ?? ctx.message?.text ?? null;
   if (!text) return;
 
   const scopeKey = getScopeKeyFromContext(ctx);

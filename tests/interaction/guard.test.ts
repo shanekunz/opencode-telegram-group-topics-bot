@@ -178,7 +178,7 @@ describe("interaction guard", () => {
     expect(decision.inputType).toBe("other");
   });
 
-  it("blocks audio input when mixed input is expected", () => {
+  it("allows audio input when question mixed input is expected", () => {
     interactionManager.start({
       kind: "question",
       expectedInput: "mixed",
@@ -186,8 +186,7 @@ describe("interaction guard", () => {
 
     const decision = resolveInteractionGuardDecision(createContext({ audio: true }));
 
-    expect(decision.allow).toBe(false);
-    expect(decision.reason).toBe("expected_text");
+    expect(decision.allow).toBe(true);
     expect(decision.inputType).toBe("other");
   });
 

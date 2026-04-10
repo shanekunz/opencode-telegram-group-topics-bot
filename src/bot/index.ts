@@ -752,7 +752,7 @@ async function ensureEventSubscription(directory: string): Promise<void> {
         return;
       }
 
-      await liveStream.sealCurrentMessage(sessionId);
+      await liveStream.sealCurrentMessage(sessionId, true);
 
       const target = getTargetBySessionId(sessionId);
       if (!target) {
@@ -1433,6 +1433,18 @@ export function createBot(): Bot<Context> {
     botInstance = bot;
     rememberScopeTarget(ctx);
 
+    const scopeKey = getScopeFromContext(ctx)?.key ?? GLOBAL_SCOPE_KEY;
+    if (questionManager.isActive(scopeKey)) {
+      await handleVoiceMessage(ctx, {
+        ...voicePromptDeps,
+        processPrompt: async (voiceCtx, text) => {
+          await handleQuestionTextAnswer(voiceCtx, text);
+          return true;
+        },
+      });
+      return;
+    }
+
     if (isGroupGeneralControlScope(ctx)) {
       await replyGeneralControlPromptRestriction(ctx);
       return;
@@ -1445,6 +1457,18 @@ export function createBot(): Bot<Context> {
     logger.debug(`[Bot] Received audio message, chatId=${ctx.chat.id}`);
     botInstance = bot;
     rememberScopeTarget(ctx);
+
+    const scopeKey = getScopeFromContext(ctx)?.key ?? GLOBAL_SCOPE_KEY;
+    if (questionManager.isActive(scopeKey)) {
+      await handleVoiceMessage(ctx, {
+        ...voicePromptDeps,
+        processPrompt: async (voiceCtx, text) => {
+          await handleQuestionTextAnswer(voiceCtx, text);
+          return true;
+        },
+      });
+      return;
+    }
 
     if (isGroupGeneralControlScope(ctx)) {
       await replyGeneralControlPromptRestriction(ctx);
