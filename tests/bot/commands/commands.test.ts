@@ -166,6 +166,28 @@ function createCallbackContext(data: string, messageId: number): Context {
   } as unknown as Context;
 }
 
+function createGeneralForumCallbackContext(data: string, messageId: number): Context {
+  return {
+    chat: { id: -100777, type: "supergroup", is_forum: true },
+    callbackQuery: {
+      data,
+      message: {
+        message_id: messageId,
+        message_thread_id: 1,
+        is_topic_message: true,
+      },
+    } as Context["callbackQuery"],
+    reply: vi.fn().mockResolvedValue({ message_id: 901 }),
+    answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+    deleteMessage: vi.fn().mockResolvedValue(undefined),
+    editMessageText: vi.fn().mockResolvedValue(undefined),
+    api: {
+      sendMessage: vi.fn().mockResolvedValue({ message_id: 902 }),
+      deleteMessage: vi.fn().mockResolvedValue(true),
+    },
+  } as unknown as Context;
+}
+
 function createTextContext(text: string): Context {
   return {
     chat: { id: 777 },
@@ -392,6 +414,33 @@ describe("bot/commands/commands", () => {
       model: "openai/gpt-5",
       variant: "default",
     });
+  });
+
+  it("blocks command execution from the General topic", async () => {
+    interactionManager.start(
+      {
+        kind: "custom",
+        expectedInput: "mixed",
+        metadata: {
+          flow: "commands",
+          stage: "confirm",
+          messageId: 401,
+          projectDirectory: "D:\\Projects\\Repo",
+          commandName: "poem",
+        },
+      },
+      "-100777:1",
+    );
+
+    const ctx = createGeneralForumCallbackContext("commands:execute", 401);
+    const handled = await handleCommandsCallback(ctx, createDeps());
+
+    expect(handled).toBe(true);
+    expect(interactionManager.getSnapshot()).toBeNull();
+    expect(ctx.reply).toHaveBeenCalledWith(t("group.general.prompts_disabled"), expect.any(Object));
+    expect(mocked.sessionCreateMock).not.toHaveBeenCalled();
+    expect(mocked.sessionCommandMock).not.toHaveBeenCalled();
+    expect(mocked.ensureEventSubscriptionMock).not.toHaveBeenCalled();
   });
 
   it("executes selected command with arguments from text message", async () => {

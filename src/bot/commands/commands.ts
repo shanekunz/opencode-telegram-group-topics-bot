@@ -17,7 +17,14 @@ import { safeBackgroundTask } from "../../utils/safe-background-task.js";
 import { logger } from "../../utils/logger.js";
 import { t } from "../../i18n/index.js";
 import { config } from "../../config.js";
-import { getScopeFromContext, getScopeKeyFromContext, getThreadSendOptions } from "../scope.js";
+import {
+  GENERAL_TOPIC_THREAD_ID,
+  SCOPE_CONTEXT,
+  getScopeFromContext,
+  getScopeKeyFromContext,
+  getThreadSendOptions,
+} from "../scope.js";
+import { BOT_I18N_KEY, CHAT_TYPE, TELEGRAM_CHAT_FIELD } from "../constants.js";
 
 const COMMANDS_CALLBACK_PREFIX = "commands:";
 const COMMANDS_CALLBACK_SELECT_PREFIX = `${COMMANDS_CALLBACK_PREFIX}select:`;
@@ -67,6 +74,19 @@ function formatExecutingCommandMessage(commandName: string, args: string): strin
 
 function normalizeDirectoryForCommandApi(directory: string): string {
   return directory.replace(/\\/g, "/");
+}
+
+function isGeneralForumScope(ctx: Context): boolean {
+  const scope = getScopeFromContext(ctx);
+  const isForumEnabled =
+    ctx.chat?.type === CHAT_TYPE.SUPERGROUP &&
+    Reflect.get(ctx.chat, TELEGRAM_CHAT_FIELD.IS_FORUM) === true;
+
+  return Boolean(
+    isForumEnabled &&
+    scope?.context === SCOPE_CONTEXT.GROUP_GENERAL &&
+    (scope.threadId === null || scope.threadId === GENERAL_TOPIC_THREAD_ID),
+  );
 }
 
 function getCallbackMessageId(ctx: Context): number | null {
@@ -418,6 +438,12 @@ async function executeCommand(
 
   const args = params.argumentsText.trim();
   const threadId = getScopeFromContext(ctx)?.threadId ?? null;
+
+  if (isGeneralForumScope(ctx)) {
+    await ctx.reply(t(BOT_I18N_KEY.GROUP_GENERAL_PROMPTS_DISABLED), getThreadSendOptions(threadId));
+    return;
+  }
+
   await ctx.reply(
     formatExecutingCommandMessage(params.commandName, args),
     getThreadSendOptions(threadId),
