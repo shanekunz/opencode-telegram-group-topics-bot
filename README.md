@@ -141,6 +141,7 @@ If that works, your group workspace is ready.
 | `/abort`          | Abort the current task                                  |
 | `/sessions`       | Browse and switch between recent sessions               |
 | `/projects`       | Switch between OpenCode projects                        |
+| `/open`           | Add a project by browsing allowed directories           |
 | `/tts`            | Toggle audio replies globally                           |
 | `/rename`         | Rename the current session                              |
 | `/commands`       | Browse and run custom commands                          |
@@ -192,6 +193,7 @@ Installed-mode config paths:
 | `BOT_LOCALE`                       | Bot UI language (`en`, `de`, `es`, `fr`, `ru`, `zh`)                                 |    No    | `en`                     |
 | `SESSIONS_LIST_LIMIT`              | Sessions per page in `/sessions`                                                     |    No    | `10`                     |
 | `PROJECTS_LIST_LIMIT`              | Projects per page in `/projects`                                                     |    No    | `10`                     |
+| `OPEN_BROWSER_ROOTS`               | Comma-separated allowed roots for `/open` directory browsing                         |    No    | Home directory           |
 | `COMMANDS_LIST_LIMIT`              | Commands per page in `/commands`                                                     |    No    | `10`                     |
 | `SCHEDULED_TASK_POLL_INTERVAL_SEC` | Scheduled task poll interval in seconds                                              |    No    | `30`                     |
 | `SERVICE_MESSAGES_INTERVAL_SEC`    | Service messages interval; keep `>=2` to avoid Telegram rate limits, `0` = immediate |    No    | `5`                      |
@@ -249,6 +251,7 @@ To add favorites, open the OpenCode TUI and press `Cmd+F` / `Ctrl+F` on a model.
 - Pinned live status messages per topic
 - Live assistant response streaming and streamed tool-call updates
 - Model, agent, variant, and context controls from the keyboard
+- Project import by browsing configured directories from Telegram
 - Custom OpenCode command execution
 - Interactive permission and question handling
 - Voice/audio transcription support

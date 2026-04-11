@@ -9,6 +9,7 @@ export const de: I18nDictionary = {
   "cmd.description.last": "Neueste Sitzungsnachricht anzeigen",
   "cmd.description.tts": "Audioantworten umschalten",
   "cmd.description.projects": "Projekte auflisten",
+  "cmd.description.open": "Projekt durch Ordner-Auswahl hinzufügen",
   "cmd.description.task": "Geplante Aufgabe erstellen",
   "cmd.description.tasklist": "Geplante Aufgaben anzeigen",
   "cmd.description.commands": "Benutzerdefinierte Befehle",
@@ -476,6 +477,22 @@ export const de: I18nDictionary = {
   "commands.arguments_empty":
     "⚠️ Argumente dürfen nicht leer sein. Sende Text oder tippe auf Ausführen.",
   "commands.execute_error": "🔴 OpenCode-Befehl konnte nicht ausgeführt werden.",
+
+  "open.back": "⬆️ Hoch",
+  "open.roots": "📋 Zurück zur Auswahl",
+  "open.prev_page": "⬅️ Zurück",
+  "open.next_page": "Weiter ➡️",
+  "open.select_current": "✅ Diesen Ordner wählen",
+  "open.select_root": "📂 Stammverzeichnis zum Durchsuchen wählen:",
+  "open.access_denied": "⛔ Zugriff verweigert: Pfad liegt außerhalb erlaubter Verzeichnisse",
+  "open.scan_error": "🔴 Verzeichnis kann nicht durchsucht werden: {error}",
+  "open.open_error": "🔴 Verzeichnisbrowser konnte nicht geöffnet werden.",
+  "open.selected":
+    "✅ Projekt hinzugefügt: {project}\n\n📋 Verwende /sessions oder /new zum Arbeiten.",
+  "open.select_error": "🔴 Projekt konnte nicht hinzugefügt werden.",
+  "open.no_subfolders": "📭 Keine Unterordner",
+  "open.subfolder_count": "{count} Unterordner",
+  "open.subfolders_count": "{count} Unterordner",
 
   "cmd.description.rename": "Aktuelle Sitzung umbenennen",
 

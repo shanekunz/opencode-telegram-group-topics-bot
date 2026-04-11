@@ -211,7 +211,7 @@ function getConfiguredProjectName(scopeKey: string, chatId: number): string {
   return topicBinding?.projectWorktree ?? t("pinned.unknown");
 }
 
-function getProjectLockState(
+export function getProjectLockState(
   ctx: Context,
   scopeKey: string,
 ): { locked: boolean; messageKey?: string; projectName?: string } {

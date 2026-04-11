@@ -7,7 +7,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - Permanent git remote: `upstream` -> `https://github.com/grinev/opencode-telegram-bot.git`
 - Upstream repo: `https://github.com/grinev/opencode-telegram-bot`
 - Upstream branch: `main`
-- Last reviewed upstream head: `b9e9651` (`chore(release): v0.15.0`, 2026-04-04)
+- Last reviewed upstream head: `0580a73` (`fix(streaming): finalize replies in place and split tool streams after interim answers`, 2026-04-11)
 - Original fork point for this threaded fork: `21da71b` (`chore(release): v0.11.0`)
 
 ## Fork Rules
@@ -42,6 +42,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - `0efb80c` ported: long `bash` tool commands in Telegram summaries now truncate via `BASH_TOOL_DISPLAY_MAX_LENGTH`
 - `13a8948` adapted port: scoped agent selection now falls back to an available project agent before prompts, commands, topic creation, and scheduled tasks
 - `a25af98` ported: bot UI now labels the selector as `agent` instead of `mode`
+- `2f22851` adapted port: `/open` directory browsing now lets the fork add/select projects from configured roots while still respecting topic and per-group project locks
 
 ## Upstream Changes Intentionally Adapted
 
@@ -78,6 +79,8 @@ This repository is a product fork of the original single-chat project at `grinev
 - `dae0f82` generic Telegram API retry wrapper skipped: this fork already routes outbound calls through a topic-aware rate limiter with `retry_after` handling, plus scoped live-stream retry scheduling
 - `c91f137` test-only upstream change skipped: this fork added equivalent linked-worktree coverage inside its scoped pinned manager tests
 - Release-only bump (`v0.15.0`) reviewed; runtime/UI changes were selectively ported/adapted above
+- `1ad75a5` reviewed: file logging already exists in this fork via rotating single-file logs, so upstream's alternate retention/file-naming implementation was not ported
+- `e85380f` + `0580a73` skipped for now: upstream streaming fixes overlap with the fork's in-flight topic-aware output coordinator refactor and need a separate follow-up sync review once that branch settles
 
 ## Sync Workflow
 

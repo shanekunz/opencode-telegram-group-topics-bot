@@ -9,6 +9,7 @@ export const ru: I18nDictionary = {
   "cmd.description.last": "Показать последнее сообщение сессии",
   "cmd.description.tts": "Переключить аудиоответы",
   "cmd.description.projects": "Список проектов",
+  "cmd.description.open": "Добавить проект через обзор папок",
   "cmd.description.task": "Создать отложенную задачу",
   "cmd.description.tasklist": "Список отложенных задач",
   "cmd.description.commands": "Пользовательские команды",
@@ -463,6 +464,22 @@ export const ru: I18nDictionary = {
   "commands.arguments_empty":
     "⚠️ Аргументы не могут быть пустыми. Отправьте текст или нажмите Выполнить.",
   "commands.execute_error": "🔴 Не удалось выполнить команду OpenCode.",
+
+  "open.back": "⬆️ Наверх",
+  "open.roots": "📋 К списку корней",
+  "open.prev_page": "⬅️ Назад",
+  "open.next_page": "Далее ➡️",
+  "open.select_current": "✅ Выбрать эту папку",
+  "open.select_root": "📂 Выберите корневой каталог для просмотра:",
+  "open.access_denied": "⛔ Доступ запрещён: путь за пределами разрешённых каталогов",
+  "open.scan_error": "🔴 Не удалось открыть каталог: {error}",
+  "open.open_error": "🔴 Не удалось открыть обозреватель каталогов.",
+  "open.selected":
+    "✅ Проект добавлен: {project}\n\n📋 Используйте /sessions или /new для начала работы.",
+  "open.select_error": "🔴 Не удалось добавить проект.",
+  "open.no_subfolders": "📭 Нет подпапок",
+  "open.subfolder_count": "{count} подпапка",
+  "open.subfolders_count": "{count} подпапок",
 
   "cmd.description.rename": "Переименовать текущую сессию",
 

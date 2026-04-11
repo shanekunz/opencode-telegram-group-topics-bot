@@ -9,6 +9,7 @@ export const es: I18nDictionary = {
   "cmd.description.last": "Mostrar el último mensaje de la sesión",
   "cmd.description.tts": "Alternar respuestas de audio",
   "cmd.description.projects": "Listar proyectos",
+  "cmd.description.open": "Añadir proyecto navegando directorios",
   "cmd.description.task": "Crear una tarea programada",
   "cmd.description.tasklist": "Listar tareas programadas",
   "cmd.description.commands": "Comandos personalizados",
@@ -475,6 +476,22 @@ export const es: I18nDictionary = {
   "commands.arguments_empty":
     "⚠️ Los argumentos no pueden estar vacíos. Envía texto o toca Ejecutar.",
   "commands.execute_error": "🔴 No se pudo ejecutar el comando de OpenCode.",
+
+  "open.back": "⬆️ Subir",
+  "open.roots": "📋 Volver a raíces",
+  "open.prev_page": "⬅️ Anterior",
+  "open.next_page": "Siguiente ➡️",
+  "open.select_current": "✅ Seleccionar esta carpeta",
+  "open.select_root": "📂 Selecciona un directorio raíz para explorar:",
+  "open.access_denied": "⛔ Acceso denegado: la ruta está fuera de los directorios permitidos",
+  "open.scan_error": "🔴 No se puede explorar el directorio: {error}",
+  "open.open_error": "🔴 No se pudo abrir el explorador de directorios.",
+  "open.selected":
+    "✅ Proyecto añadido: {project}\n\n📋 Usa /sessions o /new para empezar a trabajar.",
+  "open.select_error": "🔴 No se pudo añadir el proyecto.",
+  "open.no_subfolders": "📭 Sin subcarpetas",
+  "open.subfolder_count": "{count} subcarpeta",
+  "open.subfolders_count": "{count} subcarpetas",
 
   "cmd.description.rename": "Renombrar la sesión actual",
 
