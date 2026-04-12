@@ -18,6 +18,7 @@ export const de: I18nDictionary = {
   "cmd.description.opencode_start": "OpenCode-Server starten",
   "cmd.description.opencode_stop": "OpenCode-Server stoppen",
   "cmd.description.help": "Hilfe",
+  "cmd.description.open": "Projekt durch Ordner-Auswahl hinzufügen",
 
   "callback.unknown_command": "Unbekannter Befehl",
   "callback.processing_error": "Verarbeitungsfehler",
@@ -147,6 +148,22 @@ export const de: I18nDictionary = {
   "projects.locked.group_project":
     "⚠️ Diese Gruppe ist bereits für folgendes Projekt konfiguriert: {project}. Erstelle eine neue Gruppe, wenn du in einem anderen Repository arbeiten willst.",
   "projects.locked.callback": "Projektwechsel ist für diese Gruppe gesperrt.",
+
+  "open.back": "⬆️ Hoch",
+  "open.roots": "📋 Zurück zur Auswahl",
+  "open.prev_page": "⬅️ Zurück",
+  "open.next_page": "Weiter ➡️",
+  "open.select_current": "✅ Diesen Ordner wählen",
+  "open.select_root": "📂 Stammverzeichnis zum Durchsuchen wählen:",
+  "open.access_denied": "⛔ Zugriff verweigert: Pfad liegt außerhalb erlaubter Verzeichnisse",
+  "open.scan_error": "🔴 Verzeichnis kann nicht durchsucht werden: {error}",
+  "open.open_error": "🔴 Verzeichnisbrowser konnte nicht geöffnet werden.",
+  "open.selected":
+    "✅ Projekt hinzugefügt: {project}\n\n📋 Verwende /sessions oder /new zum Arbeiten.",
+  "open.select_error": "🔴 Projekt konnte nicht hinzugefügt werden.",
+  "open.no_subfolders": "📭 Keine Unterordner",
+  "open.subfolder_count": "{count} Unterordner",
+  "open.subfolders_count": "{count} Unterordner",
 
   "sessions.project_not_selected":
     "🏗 Projekt ist nicht ausgewählt.\n\nWähle zuerst ein Projekt mit /projects.",

@@ -18,6 +18,7 @@ export const es: I18nDictionary = {
   "cmd.description.opencode_start": "Iniciar servidor OpenCode",
   "cmd.description.opencode_stop": "Detener servidor OpenCode",
   "cmd.description.help": "Ayuda",
+  "cmd.description.open": "Añadir proyecto navegando directorios",
 
   "callback.unknown_command": "Comando desconocido",
   "callback.processing_error": "Error de procesamiento",
@@ -147,6 +148,22 @@ export const es: I18nDictionary = {
   "projects.locked.group_project":
     "⚠️ Este grupo ya está configurado para el proyecto: {project}. Crea un grupo nuevo si quieres trabajar en otro repositorio.",
   "projects.locked.callback": "El cambio de proyecto está bloqueado para este grupo.",
+
+  "open.back": "⬆️ Subir",
+  "open.roots": "📋 Volver a raíces",
+  "open.prev_page": "⬅️ Anterior",
+  "open.next_page": "Siguiente ➡️",
+  "open.select_current": "✅ Seleccionar esta carpeta",
+  "open.select_root": "📂 Selecciona un directorio raíz para explorar:",
+  "open.access_denied": "⛔ Acceso denegado: la ruta está fuera de los directorios permitidos",
+  "open.scan_error": "🔴 No se puede explorar el directorio: {error}",
+  "open.open_error": "🔴 No se pudo abrir el explorador de directorios.",
+  "open.selected":
+    "✅ Proyecto añadido: {project}\n\n📋 Usa /sessions o /new para empezar a trabajar.",
+  "open.select_error": "🔴 No se pudo añadir el proyecto.",
+  "open.no_subfolders": "📭 Sin subcarpetas",
+  "open.subfolder_count": "{count} subcarpeta",
+  "open.subfolders_count": "{count} subcarpetas",
 
   "sessions.project_not_selected":
     "🏗 No hay un proyecto seleccionado.\n\nPrimero selecciona un proyecto con /projects.",

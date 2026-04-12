@@ -102,6 +102,7 @@ Current command set:
 - [x] `/abort` - stop the current task
 - [x] `/sessions` - show and switch recent sessions
 - [x] `/projects` - show and switch projects
+- [x] `/open` - add and select a project by browsing allowed directories
 - [x] `/rename` - rename current session
 - [x] `/commands` - browse and run custom commands (plus built-ins like `init` and `review`)
 - [x] `/task` - create a scheduled task for the current project

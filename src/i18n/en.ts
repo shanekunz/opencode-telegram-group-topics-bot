@@ -16,6 +16,7 @@ export const en = {
   "cmd.description.opencode_start": "Start OpenCode server",
   "cmd.description.opencode_stop": "Stop OpenCode server",
   "cmd.description.help": "Help",
+  "cmd.description.open": "Add a project by browsing directories",
 
   "callback.unknown_command": "Unknown command",
   "callback.processing_error": "Processing error",
@@ -159,6 +160,21 @@ export const en = {
   "projects.locked.group_project":
     "⚠️ This group is already configured for project: {project}. Create a new group if you want to work on another repository.",
   "projects.locked.callback": "Project switching is locked for this group.",
+
+  "open.back": "⬆️ Up",
+  "open.roots": "📋 Back to roots",
+  "open.prev_page": "⬅️ Previous",
+  "open.next_page": "Next ➡️",
+  "open.select_current": "✅ Select this folder",
+  "open.select_root": "📂 Select a root directory to browse:",
+  "open.access_denied": "⛔ Access denied: path is outside allowed roots",
+  "open.scan_error": "🔴 Cannot browse directory: {error}",
+  "open.open_error": "🔴 Failed to open directory browser.",
+  "open.selected": "✅ Project added: {project}\n\n📋 Use /sessions or /new to start working.",
+  "open.select_error": "🔴 Failed to add project.",
+  "open.no_subfolders": "📭 No subfolders",
+  "open.subfolder_count": "{count} subfolder",
+  "open.subfolders_count": "{count} subfolders",
 
   "sessions.project_not_selected":
     "🏗 Project is not selected.\n\nFirst select a project with /projects.",
