@@ -8,6 +8,7 @@ export const BOT_COMMAND = {
   LAST: "last",
   TTS: "tts",
   PROJECTS: "projects",
+  OPEN: "open",
   TASK: "task",
   TASKLIST: "tasklist",
   RENAME: "rename",

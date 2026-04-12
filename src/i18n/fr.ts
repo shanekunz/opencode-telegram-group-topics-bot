@@ -19,6 +19,7 @@ export const fr: I18nDictionary = {
   "cmd.description.opencode_start": "Démarrer le serveur OpenCode",
   "cmd.description.opencode_stop": "Arrêter le serveur OpenCode",
   "cmd.description.help": "Aide",
+  "cmd.description.open": "Ajouter un projet en parcourant les dossiers",
   "common.unknown": "inconnu",
   "common.unknown_error": "erreur inconnue",
   "commands.select": "Choisissez une commande OpenCode :",

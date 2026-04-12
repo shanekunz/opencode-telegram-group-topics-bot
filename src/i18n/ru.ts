@@ -18,6 +18,7 @@ export const ru: I18nDictionary = {
   "cmd.description.opencode_start": "Запустить OpenCode сервер",
   "cmd.description.opencode_stop": "Остановить OpenCode сервер",
   "cmd.description.help": "Справка",
+  "cmd.description.open": "Добавить проект через обзор папок",
 
   "callback.unknown_command": "Неизвестная команда",
   "callback.processing_error": "Ошибка обработки",
@@ -140,6 +141,22 @@ export const ru: I18nDictionary = {
   "projects.locked.group_project":
     "⚠️ Эта группа уже настроена для проекта: {project}. Создайте новую группу, если хотите работать с другим репозиторием.",
   "projects.locked.callback": "Смена проекта для этой группы заблокирована.",
+
+  "open.back": "⬆️ Наверх",
+  "open.roots": "📋 К списку корней",
+  "open.prev_page": "⬅️ Назад",
+  "open.next_page": "Далее ➡️",
+  "open.select_current": "✅ Выбрать эту папку",
+  "open.select_root": "📂 Выберите корневой каталог для просмотра:",
+  "open.access_denied": "⛔ Доступ запрещён: путь за пределами разрешённых каталогов",
+  "open.scan_error": "🔴 Не удалось открыть каталог: {error}",
+  "open.open_error": "🔴 Не удалось открыть обозреватель каталогов.",
+  "open.selected":
+    "✅ Проект добавлен: {project}\n\n📋 Используйте /sessions или /new для начала работы.",
+  "open.select_error": "🔴 Не удалось добавить проект.",
+  "open.no_subfolders": "📭 Нет подпапок",
+  "open.subfolder_count": "{count} подпапка",
+  "open.subfolders_count": "{count} подпапок",
 
   "sessions.project_not_selected":
     "🏗 Проект не выбран.\n\nСначала выберите проект командой /projects.",

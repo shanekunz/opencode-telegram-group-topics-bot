@@ -1,17 +1,11 @@
 import { CommandContext, Context } from "grammy";
 import { InlineKeyboard } from "grammy";
-import { setCurrentProject, getCurrentProject } from "../../settings/manager.js";
+import { getCurrentProject } from "../../settings/manager.js";
 import { getProjects } from "../../project/manager.js";
 import { syncSessionDirectoryCache } from "../../session/cache-manager.js";
-import { clearSession } from "../../session/manager.js";
-import { pinnedMessageManager } from "../../pinned/manager.js";
-import { keyboardManager } from "../../keyboard/manager.js";
-import { getStoredAgent, resolveProjectAgent } from "../../agent/manager.js";
-import { getStoredModel } from "../../model/manager.js";
-import { formatVariantForButton } from "../../variant/manager.js";
 import { clearAllInteractionState } from "../../interaction/cleanup.js";
 import { INTERACTION_CLEAR_REASON } from "../../interaction/constants.js";
-import { createMainKeyboard } from "../utils/keyboard.js";
+import { switchToProject } from "../utils/switch-project.js";
 import {
   appendInlineMenuCancelButton,
   ensureActiveInlineMenu,
@@ -25,7 +19,6 @@ import {
   GLOBAL_SCOPE_KEY,
   SCOPE_CONTEXT,
   getScopeFromContext,
-  getScopeFromKey,
   getScopeKeyFromContext,
   getThreadSendOptions,
 } from "../scope.js";
@@ -41,6 +34,12 @@ interface ProjectsPaginationRange {
   totalPages: number;
   startIndex: number;
   endIndex: number;
+}
+
+export interface ProjectLockState {
+  locked: boolean;
+  messageKey?: string;
+  projectName?: string;
 }
 
 function formatProjectButtonLabel(label: string, isActive: boolean): string {
@@ -211,10 +210,7 @@ function getConfiguredProjectName(scopeKey: string, chatId: number): string {
   return topicBinding?.projectWorktree ?? t("pinned.unknown");
 }
 
-function getProjectLockState(
-  ctx: Context,
-  scopeKey: string,
-): { locked: boolean; messageKey?: string; projectName?: string } {
+export function getProjectLockState(ctx: Context, scopeKey: string): ProjectLockState {
   if (!ctx.chat) {
     return { locked: false };
   }
@@ -283,7 +279,6 @@ export async function projectsCommand(ctx: CommandContext<Context>) {
 export async function handleProjectSelect(ctx: Context): Promise<boolean> {
   const scopeKey = getScopeKeyFromContext(ctx);
   const scope = getScopeFromContext(ctx);
-  const usePinned = ctx.chat?.type !== "private";
   const callbackQuery = ctx.callbackQuery;
   if (!callbackQuery?.data) {
     return false;
@@ -358,55 +353,10 @@ export async function handleProjectSelect(ctx: Context): Promise<boolean> {
       `[Bot] Project selected: ${selectedProject.name || selectedProject.worktree} (id: ${projectId})`,
     );
 
-    setCurrentProject(selectedProject, scopeKey);
-    clearSession(scopeKey);
-    clearInteractionWithScope(INTERACTION_CLEAR_REASON.PROJECT_SWITCHED, scopeKey);
-
-    // Clear pinned message when switching projects
-    if (usePinned) {
-      try {
-        await pinnedMessageManager.clear(scopeKey);
-      } catch (err) {
-        logger.error("[Bot] Error clearing pinned message:", err);
-      }
-    }
-
-    // Initialize keyboard manager if not already
-    if (ctx.chat) {
-      keyboardManager.initialize(ctx.api, ctx.chat.id, scopeKey);
-    }
-
-    // Refresh context limit for current model
-    if (usePinned) {
-      await pinnedMessageManager.refreshContextLimit(scopeKey);
-    }
-    const contextLimit = usePinned ? pinnedMessageManager.getContextLimit(scopeKey) : 0;
-
-    // Reset context to 0 (no session selected) with current model's limit
-    if (contextLimit > 0) {
-      keyboardManager.updateContext(0, contextLimit, scopeKey);
-    } else {
-      keyboardManager.clearContext(scopeKey);
-    }
-
-    // Get current state for keyboard (with context = 0)
-    const currentAgent = await resolveProjectAgent(getStoredAgent(scopeKey), scopeKey);
-    const currentModel = getStoredModel(scopeKey);
-    const contextInfo = { tokensUsed: 0, tokensLimit: contextLimit };
-    const variantName = formatVariantForButton(currentModel.variant || "default");
-    keyboardManager.updateAgent(currentAgent, scopeKey);
-    const scopeFromKey = getScopeFromKey(scopeKey);
-    const scopedKeyboard = createMainKeyboard(
-      currentAgent,
-      currentModel,
-      contextInfo,
-      variantName,
-      scopeFromKey?.context === SCOPE_CONTEXT.GROUP_GENERAL
-        ? {
-            contextFirst: true,
-            contextLabel: t("keyboard.general_defaults"),
-          }
-        : undefined,
+    const scopedKeyboard = await switchToProject(
+      ctx,
+      selectedProject,
+      INTERACTION_CLEAR_REASON.PROJECT_SWITCHED,
     );
 
     const projectName = selectedProject.name || selectedProject.worktree;

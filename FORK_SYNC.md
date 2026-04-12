@@ -7,7 +7,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - Permanent git remote: `upstream` -> `https://github.com/grinev/opencode-telegram-bot.git`
 - Upstream repo: `https://github.com/grinev/opencode-telegram-bot`
 - Upstream branch: `main`
-- Last reviewed upstream head: `b9e9651` (`chore(release): v0.15.0`, 2026-04-04)
+- Last reviewed upstream head: `7a8e542` (`chore(release): v0.16.0`, 2026-04-12)
 - Original fork point for this threaded fork: `21da71b` (`chore(release): v0.11.0`)
 
 ## Fork Rules
@@ -42,6 +42,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - `0efb80c` ported: long `bash` tool commands in Telegram summaries now truncate via `BASH_TOOL_DISPLAY_MAX_LENGTH`
 - `13a8948` adapted port: scoped agent selection now falls back to an available project agent before prompts, commands, topic creation, and scheduled tasks
 - `a25af98` ported: bot UI now labels the selector as `agent` instead of `mode`
+- `2f22851` adapted port: `/open` now adds projects by browsing configurable allowed roots while still respecting this fork's group/topic project-lock rules and scoped state reset flow
 
 ## Upstream Changes Intentionally Adapted
 
@@ -78,6 +79,9 @@ This repository is a product fork of the original single-chat project at `grinev
 - `dae0f82` generic Telegram API retry wrapper skipped: this fork already routes outbound calls through a topic-aware rate limiter with `retry_after` handling, plus scoped live-stream retry scheduling
 - `c91f137` test-only upstream change skipped: this fork added equivalent linked-worktree coverage inside its scoped pinned manager tests
 - Release-only bump (`v0.15.0`) reviewed; runtime/UI changes were selectively ported/adapted above
+- `1ad75a5` reviewed; file logging was already present in this fork, so no additional port was needed
+- `e85380f` + `0580a73` + `5222bae` + `ed512ff` reviewed for `v0.16.0`; skipped for now because this fork's topic-scoped live-stream/final-delivery pipeline diverges heavily and needs a dedicated manual adaptation pass
+- Release-only/docs-only changes in `v0.16.0` skipped after review (`57a0c56`, `a75f055`, `8940e35`, `7a8e542`)
 
 ## Sync Workflow
 
