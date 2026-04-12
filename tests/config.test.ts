@@ -126,6 +126,22 @@ describe("config boolean env parsing", () => {
     expect(config.bot.responseStreamThrottleMs).toBe(1000);
   });
 
+  it("keeps open browser roots unset by default", async () => {
+    vi.stubEnv("OPEN_BROWSER_ROOTS", "");
+
+    const config = await loadConfig();
+
+    expect(config.bot.openBrowserRoots).toBe("");
+  });
+
+  it("reads configured open browser roots", async () => {
+    vi.stubEnv("OPEN_BROWSER_ROOTS", "~/projects,/srv/repos");
+
+    const config = await loadConfig();
+
+    expect(config.bot.openBrowserRoots).toBe("~/projects,/srv/repos");
+  });
+
   it("parses response stream throttle", async () => {
     vi.stubEnv("RESPONSE_STREAM_THROTTLE_MS", "750");
 

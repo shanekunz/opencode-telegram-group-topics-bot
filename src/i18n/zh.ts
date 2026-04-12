@@ -18,6 +18,7 @@ export const zh: I18nDictionary = {
   "cmd.description.opencode_start": "启动 OpenCode 服务器",
   "cmd.description.opencode_stop": "停止 OpenCode 服务器",
   "cmd.description.help": "帮助",
+  "cmd.description.open": "通过浏览目录添加项目",
 
   "callback.unknown_command": "未知命令",
   "callback.processing_error": "处理错误",
@@ -130,6 +131,21 @@ export const zh: I18nDictionary = {
   "projects.locked.group_project":
     "⚠️ 此群组已配置为项目：{project}。若要处理其他仓库，请创建新群组。",
   "projects.locked.callback": "此群组已锁定项目切换。",
+
+  "open.back": "⬆️ 上级",
+  "open.roots": "📋 返回根目录",
+  "open.prev_page": "⬅️ 上一页",
+  "open.next_page": "下一页 ➡️",
+  "open.select_current": "✅ 选择此文件夹",
+  "open.select_root": "📂 选择要浏览的根目录：",
+  "open.access_denied": "⛔ 访问被拒绝：路径超出允许的目录范围",
+  "open.scan_error": "🔴 无法浏览目录：{error}",
+  "open.open_error": "🔴 无法打开目录浏览器。",
+  "open.selected": "✅ 项目已添加：{project}\n\n📋 使用 /sessions 或 /new 开始工作。",
+  "open.select_error": "🔴 添加项目失败。",
+  "open.no_subfolders": "📭 无子文件夹",
+  "open.subfolder_count": "{count} 个子文件夹",
+  "open.subfolders_count": "{count} 个子文件夹",
 
   "sessions.project_not_selected": "🏗 未选择项目。\n\n请先使用 /projects 选择一个项目。",
   "sessions.empty": "📭 未找到会话。\n\n使用 /new 创建新会话。",
