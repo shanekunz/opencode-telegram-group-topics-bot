@@ -99,11 +99,11 @@ import { BOT_I18N_KEY, CHAT_TYPE, GENERAL_TOPIC, TELEGRAM_CHAT_FIELD } from "./c
 import { TELEGRAM_CHAT_ACTION } from "./telegram-constants.js";
 import { syncTopicTitleForSession } from "../topic/title-sync.js";
 import { sendTtsResponseForSession } from "./utils/send-tts-response.js";
-import { pendingAssistantCompletions } from "./utils/pending-assistant-completions.js";
 import { consumePendingCompactionNotice } from "./utils/pending-compaction-notices.js";
 import { LiveStream } from "./streaming/live-stream.js";
 import { contextStateManager } from "../context/manager.js";
 import { formatContextForButton } from "./utils/keyboard.js";
+import { SessionOutputCoordinator } from "./session-output-coordinator.js";
 
 let botInstance: Bot<Context> | null = null;
 const initializedCommandChats = new Set<number>();
@@ -111,27 +111,6 @@ const renamedGeneralTopicChats = new Set<number>();
 const DM_ALLOWED_COMMAND_SET = new Set<string>(DM_ALLOWED_COMMANDS);
 const telegramRateLimiter = new TelegramRateLimiter();
 const eventCallbackByDirectory = new Map<string, (event: OpenCodeEvent) => void>();
-const sessionDeliveryTasks = new Map<string, Promise<void>>();
-
-function enqueueSessionDelivery(sessionId: string, task: () => Promise<void>): void {
-  const previousTask = sessionDeliveryTasks.get(sessionId) ?? Promise.resolve();
-  const nextTask = previousTask
-    .catch(() => undefined)
-    .then(task)
-    .catch((error) => {
-      logger.error("[Bot] Session delivery task failed", {
-        sessionId,
-        error,
-      });
-    })
-    .finally(() => {
-      if (sessionDeliveryTasks.get(sessionId) === nextTask) {
-        sessionDeliveryTasks.delete(sessionId);
-      }
-    });
-
-  sessionDeliveryTasks.set(sessionId, nextTask);
-}
 
 async function ensureGeneralTopicName(ctx: Context): Promise<void> {
   if (!ctx.chat || ctx.chat.type === CHAT_TYPE.PRIVATE) {
@@ -243,9 +222,270 @@ function extractSessionTitleUpdate(
 const TELEGRAM_DOCUMENT_CAPTION_MAX_LENGTH = 1024;
 const SUBAGENT_STREAM_PREFIX = "🧩";
 const TODO_STREAM_PREFIX = "__todo__";
+const TOOL_STREAM_PREFIX = "__tool__";
 const SESSION_ERROR_MESSAGE_MAX_LENGTH = 3500;
+const FINAL_DELIVERY_SETTLE_MS = Math.max(1500, config.bot.responseStreamThrottleMs + 500);
 const FILE_MUTATION_TOOLS = new Set(["write", "edit", "apply_patch"]);
 const sessionErrorThrottle = new SessionErrorThrottle(3000);
+
+function getToolStreamKey(callId: string): string {
+  return `${TOOL_STREAM_PREFIX}:${callId}`;
+}
+
+async function finalizeSessionDelivery(
+  sessionId: string,
+  pendingCompletionText: string | null,
+): Promise<boolean> {
+  let deliveryComplete = false;
+
+  try {
+    await liveStream.flushSession(sessionId);
+    if (pendingCompletionText) {
+      deliveryComplete = await deliverAssistantCompletion(sessionId, pendingCompletionText)
+        .then(() => true)
+        .catch((error) => {
+          logger.error("[Bot] Failed to deliver pending assistant completion", {
+            sessionId,
+            error,
+          });
+          return false;
+        });
+    } else {
+      deliveryComplete = true;
+    }
+
+    if (!deliveryComplete) {
+      return false;
+    }
+
+    await liveStream.cleanupAfterFinalDelivery(sessionId);
+
+    const target = getTargetBySessionId(sessionId);
+    if (target && pinnedMessageManager.isInitialized(target.scopeKey)) {
+      syncKeyboardContextFromPinnedState(target.scopeKey);
+      await pinnedMessageManager.flush(target.scopeKey);
+    }
+  } finally {
+    if (deliveryComplete) {
+      // Coordinator decides when this finalize attempt is the committed final delivery.
+    }
+  }
+
+  return deliveryComplete;
+}
+
+const sessionOutputCoordinator = new SessionOutputCoordinator({
+  settleMs: FINAL_DELIVERY_SETTLE_MS,
+  onFinalizeSession: finalizeSessionDelivery,
+  onFinalDeliveryCommitted: async (sessionId) => {
+    summaryAggregator.stopTypingIndicator(sessionId);
+    await liveStream.sealCurrentMessage(sessionId, true);
+    await dispatchNextQueuedPrompt(sessionId);
+  },
+  handlers: {
+    onAssistantUpdate: async ({ sessionId, messageId, text }) => {
+      await liveStream.updateAssistant(sessionId, messageId, text);
+    },
+    onAssistantComplete: async ({ sessionId, messageId, text }) => {
+      await liveStream.completeAssistant(sessionId, messageId, text);
+    },
+    onTool: async ({ sessionId, toolInfo }) => {
+      if (!botInstance) {
+        logger.error("Bot or chat ID not available for sending tool notification");
+        return;
+      }
+
+      const isFileMutationTool = FILE_MUTATION_TOOLS.has(toolInfo.tool);
+      if (config.bot.hideToolCallMessages || isFileMutationTool || toolInfo.tool === "task") {
+        return;
+      }
+
+      try {
+        const target = getTargetBySessionId(sessionId);
+        const projectWorktree = target ? getCurrentProject(target.scopeKey)?.worktree : undefined;
+        const message = formatToolInfo(toolInfo, projectWorktree);
+        if (!message) {
+          return;
+        }
+
+        const status = "status" in toolInfo.state ? toolInfo.state.status : undefined;
+        const streamKey =
+          toolInfo.tool === "todowrite" ? TODO_STREAM_PREFIX : getToolStreamKey(toolInfo.callId);
+
+        if (status === "running") {
+          liveStream.replaceServiceByPrefix(sessionId, streamKey, `⏳ ${message}`);
+          return;
+        }
+
+        if (status === "error") {
+          liveStream.replaceServiceByPrefix(sessionId, streamKey, `❌ ${message}`);
+          return;
+        }
+
+        liveStream.replaceServiceByPrefix(sessionId, streamKey, `✅ ${message}`);
+      } catch (err) {
+        logger.error("Failed to send tool notification to Telegram:", err);
+      }
+    },
+    onSubagent: async ({ sessionId, subagents }) => {
+      if (config.bot.hideToolCallMessages) {
+        return;
+      }
+
+      try {
+        const renderedCards = renderSubagentCards(subagents);
+        liveStream.replaceServiceByPrefix(sessionId, SUBAGENT_STREAM_PREFIX, renderedCards);
+      } catch (err) {
+        logger.error("Failed to render subagent activity for Telegram:", err);
+      }
+    },
+    onToolFile: async ({ sessionId, fileInfo }) => {
+      if (!botInstance) {
+        logger.error("Bot or chat ID not available for sending file");
+        return;
+      }
+
+      try {
+        const target = getTargetBySessionId(sessionId);
+        const projectWorktree = target ? getCurrentProject(target.scopeKey)?.worktree : undefined;
+        const toolMessage = formatToolInfo(fileInfo, projectWorktree);
+        const caption = prepareDocumentCaption(toolMessage || fileInfo.fileData.caption);
+
+        await liveStream.sealCurrentMessage(sessionId, false, true);
+        await sendSessionDocumentMessage(sessionId, {
+          ...fileInfo.fileData,
+          caption,
+        });
+      } catch (err) {
+        logger.error("Failed to send file to Telegram:", err);
+      }
+    },
+    onQuestion: async ({ sessionId, questions, requestId }) => {
+      if (!botInstance) {
+        logger.error("Bot or chat ID not available for showing questions");
+        return;
+      }
+
+      await liveStream.sealCurrentMessage(sessionId, true);
+
+      const target = getTargetBySessionId(sessionId);
+      if (!target) {
+        return;
+      }
+
+      if (questionManager.isActive(target.scopeKey)) {
+        logger.warn("[Bot] Replacing active poll with a new one");
+
+        const previousMessageIds = questionManager.getMessageIds(target.scopeKey);
+        for (const messageId of previousMessageIds) {
+          await botInstance.api.deleteMessage(target.chatId, messageId).catch(() => {});
+        }
+
+        clearAllInteractionState(
+          INTERACTION_CLEAR_REASON.QUESTION_REPLACED_BY_NEW_POLL,
+          target.scopeKey,
+        );
+      }
+
+      logger.info(
+        `[Bot] Received ${questions.length} questions from agent, requestID=${requestId}`,
+      );
+      questionManager.startQuestions(questions, requestId, target.scopeKey);
+      await showCurrentQuestion(botInstance.api, target.chatId, target.scopeKey, target.threadId);
+    },
+    onPermission: async ({ sessionId, request }) => {
+      if (!botInstance) {
+        logger.error("Bot or chat ID not available for showing permission request");
+        return;
+      }
+
+      const target = getTargetBySessionId(sessionId);
+      if (!target) {
+        return;
+      }
+
+      await liveStream.sealCurrentMessage(sessionId);
+
+      logger.info(
+        `[Bot] Received permission request from agent: type=${request.permission}, requestID=${request.id}`,
+      );
+      await showPermissionRequest(
+        botInstance.api,
+        target.chatId,
+        request,
+        target.scopeKey,
+        target.threadId,
+      );
+    },
+    onThinking: async ({ sessionId }) => {
+      if (config.bot.hideThinkingMessages || !botInstance) {
+        return;
+      }
+
+      const target = getTargetBySessionId(sessionId);
+      if (!target) {
+        return;
+      }
+
+      logger.debug("[Bot] Agent started thinking");
+      liveStream.showThinking(sessionId, t("bot.thinking"));
+    },
+    onSessionError: async ({ sessionId, message }) => {
+      if (!botInstance) {
+        clearPromptResponseMode(sessionId);
+        return;
+      }
+
+      const target = getTargetBySessionId(sessionId);
+      if (!target) {
+        clearPromptResponseMode(sessionId);
+        return;
+      }
+
+      clearPromptResponseMode(sessionId);
+      await liveStream.flushSession(sessionId);
+      await liveStream.sealCurrentMessage(sessionId, true);
+
+      const normalizedMessage = message.trim() || t("common.unknown_error");
+      if (isOperationAbortedSessionError(normalizedMessage)) {
+        logger.info(`[Bot] Suppressing session.abort error notification for ${sessionId}`);
+        return;
+      }
+
+      if (sessionErrorThrottle.shouldSuppress(sessionId, normalizedMessage)) {
+        logger.debug(`[Bot] Suppressing duplicate session.error notification for ${sessionId}`);
+        return;
+      }
+
+      const truncatedMessage =
+        normalizedMessage.length > SESSION_ERROR_MESSAGE_MAX_LENGTH
+          ? `${normalizedMessage.slice(0, SESSION_ERROR_MESSAGE_MAX_LENGTH - 3)}...`
+          : normalizedMessage;
+
+      await botInstance.api
+        .sendMessage(target.chatId, t("bot.session_error", { message: truncatedMessage }), {
+          ...getThreadSendOptions(target.threadId),
+        })
+        .catch((err) => {
+          logger.error("[Bot] Failed to send session.error message:", err);
+        });
+    },
+    onSessionRetry: async ({ sessionId, retryInfo }) => {
+      if (!botInstance) {
+        return;
+      }
+
+      const normalizedMessage = retryInfo.message.trim() || t("common.unknown_error");
+      const truncatedMessage =
+        normalizedMessage.length > SESSION_ERROR_MESSAGE_MAX_LENGTH
+          ? `${normalizedMessage.slice(0, SESSION_ERROR_MESSAGE_MAX_LENGTH - 3)}...`
+          : normalizedMessage;
+
+      const retryMessage = t("bot.session_retry", { message: truncatedMessage });
+      liveStream.pushServiceUpdate(sessionId, retryMessage);
+    },
+  },
+});
 
 function isGroupGeneralControlScope(ctx: Context): boolean {
   const scope = getScopeFromContext(ctx);
@@ -363,38 +603,6 @@ async function deliverAssistantCompletion(sessionId: string, messageText: string
     logger.warn("[Bot] Assistant message delivery failed; keeping event processing active");
     throw err;
   }
-}
-
-async function deliverPendingAssistantCompletions(sessionId: string): Promise<boolean> {
-  const pendingCompletions = pendingAssistantCompletions.consume(sessionId);
-  if (pendingCompletions.length === 0) {
-    return true;
-  }
-
-  const latestCompletion = pendingCompletions[pendingCompletions.length - 1];
-  if (!latestCompletion) {
-    return true;
-  }
-
-  if (pendingCompletions.length > 1) {
-    logger.debug("[Bot] Collapsing multiple assistant completions to the latest final message", {
-      sessionId,
-      completionCount: pendingCompletions.length,
-    });
-  }
-
-  try {
-    await deliverAssistantCompletion(sessionId, latestCompletion);
-  } catch (error) {
-    pendingAssistantCompletions.prepend(sessionId, [latestCompletion]);
-    logger.error("[Bot] Failed to deliver pending assistant completion", {
-      sessionId,
-      error,
-    });
-    return false;
-  }
-
-  return true;
 }
 
 function syncKeyboardContextFromPinnedState(scopeKey: string): void {
@@ -624,161 +832,63 @@ async function ensureEventSubscription(directory: string): Promise<void> {
   }
 
   summaryAggregator.setOnCleared(() => {
+    sessionOutputCoordinator.clearAll();
     void liveStream.clearAll("summary_aggregator_clear");
   });
 
   summaryAggregator.setOnMessageUpdated((sessionId, messageId, messageText) => {
-    enqueueSessionDelivery(sessionId, async () => {
-      await liveStream.updateAssistant(sessionId, messageId, messageText);
+    sessionOutputCoordinator.dispatch({
+      kind: "assistant_update",
+      sessionId,
+      messageId,
+      text: messageText,
     });
   });
 
   summaryAggregator.setOnComplete((sessionId, messageId, messageText) => {
-    enqueueSessionDelivery(sessionId, async () => {
-      await liveStream.completeAssistant(sessionId, messageId, messageText);
-      pendingAssistantCompletions.enqueue(sessionId, messageText);
+    sessionOutputCoordinator.dispatch({
+      kind: "assistant_complete",
+      sessionId,
+      messageId,
+      text: messageText,
     });
   });
 
   summaryAggregator.setOnTool(async (toolInfo) => {
-    enqueueSessionDelivery(toolInfo.sessionId, async () => {
-      if (!botInstance) {
-        logger.error("Bot or chat ID not available for sending tool notification");
-        return;
-      }
-
-      const isFileMutationTool = FILE_MUTATION_TOOLS.has(toolInfo.tool);
-
-      if (config.bot.hideToolCallMessages || isFileMutationTool || toolInfo.tool === "task") {
-        return;
-      }
-
-      try {
-        const target = getTargetBySessionId(toolInfo.sessionId);
-        const projectWorktree = target ? getCurrentProject(target.scopeKey)?.worktree : undefined;
-        const message = formatToolInfo(toolInfo, projectWorktree);
-        if (!message) {
-          return;
-        }
-
-        const status = "status" in toolInfo.state ? toolInfo.state.status : undefined;
-
-        if (status === "running") {
-          if (toolInfo.tool === "todowrite") {
-            liveStream.replaceServiceByPrefix(
-              toolInfo.sessionId,
-              TODO_STREAM_PREFIX,
-              `⏳ ${message}`,
-            );
-            return;
-          }
-
-          liveStream.pushServiceUpdate(toolInfo.sessionId, `⏳ ${message}`);
-          return;
-        }
-
-        if (status === "error") {
-          if (toolInfo.tool === "todowrite") {
-            liveStream.replaceServiceByPrefix(
-              toolInfo.sessionId,
-              TODO_STREAM_PREFIX,
-              `❌ ${message}`,
-            );
-            return;
-          }
-
-          liveStream.pushServiceUpdate(toolInfo.sessionId, `❌ ${message}`);
-          return;
-        }
-
-        if (toolInfo.tool === "todowrite") {
-          liveStream.replaceServiceByPrefix(
-            toolInfo.sessionId,
-            TODO_STREAM_PREFIX,
-            `✅ ${message}`,
-          );
-          return;
-        }
-
-        liveStream.pushServiceUpdate(toolInfo.sessionId, `✅ ${message}`);
-      } catch (err) {
-        logger.error("Failed to send tool notification to Telegram:", err);
-      }
+    sessionOutputCoordinator.dispatch({
+      kind: "tool",
+      sessionId: toolInfo.sessionId,
+      toolInfo,
+      visibleToUser:
+        !config.bot.hideToolCallMessages &&
+        !FILE_MUTATION_TOOLS.has(toolInfo.tool) &&
+        toolInfo.tool !== "task",
     });
   });
 
   summaryAggregator.setOnSubagent((sessionId, subagents) => {
-    enqueueSessionDelivery(sessionId, async () => {
-      if (config.bot.hideToolCallMessages) {
-        return;
-      }
-
-      try {
-        const renderedCards = renderSubagentCards(subagents);
-        liveStream.replaceServiceByPrefix(sessionId, SUBAGENT_STREAM_PREFIX, renderedCards);
-      } catch (err) {
-        logger.error("Failed to render subagent activity for Telegram:", err);
-      }
+    sessionOutputCoordinator.dispatch({
+      kind: "subagent",
+      sessionId,
+      subagents,
+      visibleToUser: !config.bot.hideToolCallMessages,
     });
   });
 
   summaryAggregator.setOnToolFile(async (fileInfo) => {
-    enqueueSessionDelivery(fileInfo.sessionId, async () => {
-      if (!botInstance) {
-        logger.error("Bot or chat ID not available for sending file");
-        return;
-      }
-
-      try {
-        const target = getTargetBySessionId(fileInfo.sessionId);
-        const projectWorktree = target ? getCurrentProject(target.scopeKey)?.worktree : undefined;
-        const toolMessage = formatToolInfo(fileInfo, projectWorktree);
-        const caption = prepareDocumentCaption(toolMessage || fileInfo.fileData.caption);
-
-        await liveStream.sealCurrentMessage(fileInfo.sessionId, false, true);
-        await sendSessionDocumentMessage(fileInfo.sessionId, {
-          ...fileInfo.fileData,
-          caption,
-        });
-      } catch (err) {
-        logger.error("Failed to send file to Telegram:", err);
-      }
+    sessionOutputCoordinator.dispatch({
+      kind: "tool_file",
+      sessionId: fileInfo.sessionId,
+      fileInfo,
     });
   });
 
   summaryAggregator.setOnQuestion((sessionId, questions, requestID) => {
-    enqueueSessionDelivery(sessionId, async () => {
-      if (!botInstance) {
-        logger.error("Bot or chat ID not available for showing questions");
-        return;
-      }
-
-      await liveStream.sealCurrentMessage(sessionId, true);
-
-      const target = getTargetBySessionId(sessionId);
-      if (!target) {
-        return;
-      }
-
-      if (questionManager.isActive(target.scopeKey)) {
-        logger.warn("[Bot] Replacing active poll with a new one");
-
-        const previousMessageIds = questionManager.getMessageIds(target.scopeKey);
-        for (const messageId of previousMessageIds) {
-          await botInstance.api.deleteMessage(target.chatId, messageId).catch(() => {});
-        }
-
-        clearAllInteractionState(
-          INTERACTION_CLEAR_REASON.QUESTION_REPLACED_BY_NEW_POLL,
-          target.scopeKey,
-        );
-      }
-
-      logger.info(
-        `[Bot] Received ${questions.length} questions from agent, requestID=${requestID}`,
-      );
-      questionManager.startQuestions(questions, requestID, target.scopeKey);
-      await showCurrentQuestion(botInstance.api, target.chatId, target.scopeKey, target.threadId);
+    sessionOutputCoordinator.dispatch({
+      kind: "question",
+      sessionId,
+      questions,
+      requestId: requestID,
     });
   });
 
@@ -801,29 +911,10 @@ async function ensureEventSubscription(directory: string): Promise<void> {
   });
 
   summaryAggregator.setOnPermission((request) => {
-    enqueueSessionDelivery(request.sessionID, async () => {
-      if (!botInstance) {
-        logger.error("Bot or chat ID not available for showing permission request");
-        return;
-      }
-
-      const target = getTargetBySessionId(request.sessionID);
-      if (!target) {
-        return;
-      }
-
-      await liveStream.sealCurrentMessage(request.sessionID);
-
-      logger.info(
-        `[Bot] Received permission request from agent: type=${request.permission}, requestID=${request.id}`,
-      );
-      await showPermissionRequest(
-        botInstance.api,
-        target.chatId,
-        request,
-        target.scopeKey,
-        target.threadId,
-      );
+    sessionOutputCoordinator.dispatch({
+      kind: "permission",
+      sessionId: request.sessionID,
+      request,
     });
   });
 
@@ -854,22 +945,10 @@ async function ensureEventSubscription(directory: string): Promise<void> {
   });
 
   summaryAggregator.setOnThinking(async (sessionId) => {
-    enqueueSessionDelivery(sessionId, async () => {
-      if (config.bot.hideThinkingMessages) {
-        return;
-      }
-
-      if (!botInstance) {
-        return;
-      }
-
-      const target = getTargetBySessionId(sessionId);
-      if (!target) {
-        return;
-      }
-
-      logger.debug("[Bot] Agent started thinking");
-      liveStream.showThinking(sessionId, t("bot.thinking"));
+    sessionOutputCoordinator.dispatch({
+      kind: "thinking",
+      sessionId,
+      visibleToUser: !config.bot.hideThinkingMessages,
     });
   });
 
@@ -937,94 +1016,25 @@ async function ensureEventSubscription(directory: string): Promise<void> {
   });
 
   summaryAggregator.setOnSessionIdle((sessionId) => {
-    enqueueSessionDelivery(sessionId, async () => {
-      let deliveryComplete = false;
-
-      try {
-        await liveStream.flushSession(sessionId);
-        deliveryComplete = await deliverPendingAssistantCompletions(sessionId);
-        if (!deliveryComplete) {
-          return;
-        }
-
-        await liveStream.cleanupAfterFinalDelivery(sessionId);
-
-        const target = getTargetBySessionId(sessionId);
-        if (target && pinnedMessageManager.isInitialized(target.scopeKey)) {
-          syncKeyboardContextFromPinnedState(target.scopeKey);
-          await pinnedMessageManager.flush(target.scopeKey);
-        }
-      } finally {
-        if (deliveryComplete) {
-          summaryAggregator.stopTypingIndicator(sessionId);
-          await liveStream.sealCurrentMessage(sessionId, true);
-          await dispatchNextQueuedPrompt(sessionId);
-        }
-      }
+    sessionOutputCoordinator.dispatch({
+      kind: "session_idle",
+      sessionId,
     });
   });
 
   summaryAggregator.setOnSessionError(async (sessionId, message) => {
-    enqueueSessionDelivery(sessionId, async () => {
-      if (!botInstance) {
-        pendingAssistantCompletions.clear(sessionId);
-        clearPromptResponseMode(sessionId);
-        return;
-      }
-
-      const target = getTargetBySessionId(sessionId);
-      if (!target) {
-        pendingAssistantCompletions.clear(sessionId);
-        clearPromptResponseMode(sessionId);
-        return;
-      }
-
-      pendingAssistantCompletions.clear(sessionId);
-      clearPromptResponseMode(sessionId);
-      await liveStream.flushSession(sessionId);
-      await liveStream.sealCurrentMessage(sessionId, true);
-
-      const normalizedMessage = message.trim() || t("common.unknown_error");
-
-      if (isOperationAbortedSessionError(normalizedMessage)) {
-        logger.info(`[Bot] Suppressing session.abort error notification for ${sessionId}`);
-        return;
-      }
-
-      if (sessionErrorThrottle.shouldSuppress(sessionId, normalizedMessage)) {
-        logger.debug(`[Bot] Suppressing duplicate session.error notification for ${sessionId}`);
-        return;
-      }
-
-      const truncatedMessage =
-        normalizedMessage.length > SESSION_ERROR_MESSAGE_MAX_LENGTH
-          ? `${normalizedMessage.slice(0, SESSION_ERROR_MESSAGE_MAX_LENGTH - 3)}...`
-          : normalizedMessage;
-
-      await botInstance.api
-        .sendMessage(target.chatId, t("bot.session_error", { message: truncatedMessage }), {
-          ...getThreadSendOptions(target.threadId),
-        })
-        .catch((err) => {
-          logger.error("[Bot] Failed to send session.error message:", err);
-        });
+    sessionOutputCoordinator.dispatch({
+      kind: "session_error",
+      sessionId,
+      message,
     });
   });
 
-  summaryAggregator.setOnSessionRetry(async ({ sessionId, message }) => {
-    enqueueSessionDelivery(sessionId, async () => {
-      if (!botInstance) {
-        return;
-      }
-
-      const normalizedMessage = message.trim() || t("common.unknown_error");
-      const truncatedMessage =
-        normalizedMessage.length > SESSION_ERROR_MESSAGE_MAX_LENGTH
-          ? `${normalizedMessage.slice(0, SESSION_ERROR_MESSAGE_MAX_LENGTH - 3)}...`
-          : normalizedMessage;
-
-      const retryMessage = t("bot.session_retry", { message: truncatedMessage });
-      liveStream.pushServiceUpdate(sessionId, retryMessage);
+  summaryAggregator.setOnSessionRetry(async (retryInfo) => {
+    sessionOutputCoordinator.dispatch({
+      kind: "session_retry",
+      sessionId: retryInfo.sessionId,
+      retryInfo,
     });
   });
 
@@ -1099,6 +1109,7 @@ async function ensureEventSubscription(directory: string): Promise<void> {
 }
 
 async function prepareSessionForPrompt(sessionId: string): Promise<void> {
+  await sessionOutputCoordinator.flushPendingFinalDelivery(sessionId);
   await liveStream.sealCurrentMessage(sessionId, true);
 }
 

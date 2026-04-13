@@ -69,7 +69,6 @@ describe("bot/commands/last", () => {
     expect(mocked.sessionMessagesMock).toHaveBeenCalledWith({
       sessionID: "session-1",
       directory: "/repo",
-      limit: 50,
     });
     expect(replyMock).toHaveBeenCalledWith(
       `${t("last.title")}\n\n${t("sessions.preview.agent")} Latest agent reply`,
@@ -106,6 +105,39 @@ describe("bot/commands/last", () => {
     );
   });
 
+  it("selects the newest assistant reply even when history is returned oldest-first", async () => {
+    mocked.sessionMessagesMock.mockResolvedValueOnce({
+      data: [
+        {
+          info: { role: "assistant", time: { created: 1 } },
+          parts: [{ type: "text", text: "Older agent reply" }],
+        },
+        {
+          info: { role: "user", time: { created: 2 } },
+          parts: [{ type: "text", text: "My follow-up" }],
+        },
+        {
+          info: { role: "assistant", time: { created: 3 } },
+          parts: [{ type: "text", text: "Actual latest final reply" }],
+        },
+      ],
+      error: null,
+    });
+    const replyMock = vi.fn().mockResolvedValue(undefined);
+    const ctx = {
+      chat: { id: -100, type: "supergroup" },
+      message: { text: "/last", message_thread_id: 22 },
+      reply: replyMock,
+    } as unknown as Context;
+
+    await lastCommand(ctx as never);
+
+    expect(replyMock).toHaveBeenCalledWith(
+      `${t("last.title")}\n\n${t("sessions.preview.agent")} Actual latest final reply`,
+      { message_thread_id: 22 },
+    );
+  });
+
   it("returns an empty state when there are no visible messages", async () => {
     mocked.sessionMessagesMock.mockResolvedValue({ data: [], error: null });
     const replyMock = vi.fn().mockResolvedValue(undefined);
@@ -134,7 +166,6 @@ describe("bot/commands/last", () => {
     expect(mocked.sessionMessagesMock).toHaveBeenCalledWith({
       sessionID: "session-1",
       directory: "/repo",
-      limit: 50,
     });
   });
 

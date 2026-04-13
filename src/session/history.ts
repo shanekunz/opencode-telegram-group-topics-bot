@@ -20,8 +20,6 @@ type SessionMessageInfo = {
   };
 };
 
-const DEFAULT_HISTORY_SCAN_LIMIT = 50;
-
 function extractTextParts(parts: SessionMessagePart[]): string | null {
   const textParts = parts
     .filter((part) => part.type === "text" && typeof part.text === "string")
@@ -47,14 +45,16 @@ export function truncateText(text: string, maxLength: number): string {
 export async function loadSessionHistoryItems(
   sessionId: string,
   directory: string,
-  limit: number = DEFAULT_HISTORY_SCAN_LIMIT,
+  limit?: number,
 ): Promise<SessionHistoryItem[]> {
   try {
-    const { data: messages, error } = await opencodeClient.session.messages({
+    const parameters = {
       sessionID: sessionId,
       directory,
-      limit,
-    });
+      ...(typeof limit === "number" ? { limit } : {}),
+    };
+
+    const { data: messages, error } = await opencodeClient.session.messages(parameters);
 
     if (error || !messages) {
       logger.warn("[SessionHistory] Failed to fetch session messages:", error);
@@ -62,7 +62,7 @@ export async function loadSessionHistoryItems(
     }
 
     return messages
-      .map(({ info, parts }) => {
+      .map(({ info, parts }, index) => {
         const messageInfo = info as SessionMessageInfo;
         const role = messageInfo.role as "user" | "assistant" | undefined;
         if (role !== "user" && role !== "assistant") {
@@ -82,9 +82,18 @@ export async function loadSessionHistoryItems(
           role,
           text,
           created: messageInfo.time?.created ?? 0,
-        } satisfies SessionHistoryItem;
+          sourceIndex: index,
+        } satisfies SessionHistoryItem & { sourceIndex: number };
       })
-      .filter((item): item is SessionHistoryItem => Boolean(item));
+      .filter((item): item is SessionHistoryItem & { sourceIndex: number } => Boolean(item))
+      .sort((left, right) => {
+        if (right.created !== left.created) {
+          return right.created - left.created;
+        }
+
+        return right.sourceIndex - left.sourceIndex;
+      })
+      .map(({ sourceIndex: _sourceIndex, ...item }) => item);
   } catch (err) {
     logger.error("[SessionHistory] Error loading session history:", err);
     return [];

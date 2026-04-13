@@ -189,6 +189,34 @@ describe("bot/streaming/live-stream", () => {
     expect(internalState?.service.updates).toEqual(["✅ todo step 2"]);
   });
 
+  it("replaces a tool status update in place when the same call progresses", async () => {
+    vi.useFakeTimers();
+
+    const sendText = vi.fn().mockResolvedValue(53);
+    const editText = vi.fn().mockResolvedValue(undefined);
+    const stream = new LiveStream({ sendText, editText, throttleMs: 50 });
+
+    stream.replaceServiceByPrefix("s1", "__tool__:call-1", "⏳ bash npm test");
+    await vi.advanceTimersByTimeAsync(50);
+    stream.replaceServiceByPrefix("s1", "__tool__:call-1", "✅ bash npm test");
+    await vi.advanceTimersByTimeAsync(50);
+
+    const internalState = (
+      stream as unknown as {
+        states: Map<
+          string,
+          {
+            service: { updates: string[] };
+          }
+        >;
+      }
+    ).states.get("s1");
+
+    expect(sendText).toHaveBeenCalledWith("s1", "⏳ bash npm test", "raw", false);
+    expect(editText).toHaveBeenLastCalledWith("s1", 53, "✅ bash npm test", "raw", false);
+    expect(internalState?.service.updates).toEqual(["✅ bash npm test"]);
+  });
+
   it("keeps assistant rollover progress correct across trimmed boundaries", async () => {
     vi.useFakeTimers();
 
