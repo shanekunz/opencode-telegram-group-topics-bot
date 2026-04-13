@@ -14,7 +14,20 @@ export interface SummaryInfo {
   lastUpdated: number;
 }
 
-type MessageCompleteCallback = (sessionId: string, messageId: string, messageText: string) => void;
+export interface MessageCompletionInfo {
+  agent?: string;
+  providerID?: string;
+  modelID?: string;
+  createdAt?: number;
+  completedAt?: number;
+}
+
+type MessageCompleteCallback = (
+  sessionId: string,
+  messageId: string,
+  messageText: string,
+  completionInfo: MessageCompletionInfo,
+) => void;
 type MessageUpdatedCallback = (sessionId: string, messageId: string, messageText: string) => void;
 
 export interface ToolInfo {
@@ -239,7 +252,10 @@ class SummaryAggregator {
   private trackedSessionIds: Set<string> = new Set();
   private currentMessageParts: Map<string, string[]> = new Map();
   private pendingParts: Map<string, string[]> = new Map();
-  private messages: Map<string, { role: string; sessionId: string }> = new Map();
+  private messages: Map<
+    string,
+    { role: string; sessionId: string; completionInfo?: MessageCompletionInfo }
+  > = new Map();
   private messageCount = 0;
   private lastUpdated = 0;
   private onCompleteCallback: MessageCompleteCallback | null = null;
@@ -1046,6 +1062,22 @@ class SummaryAggregator {
           this.onTokensCallback(info.sessionID, tokens);
         }
 
+        const messageState = this.messages.get(messageKey);
+        if (messageState) {
+          const completionInfoSource = info as {
+            agent?: string;
+            providerID?: string;
+            modelID?: string;
+          };
+          messageState.completionInfo = {
+            agent: completionInfoSource.agent,
+            providerID: completionInfoSource.providerID,
+            modelID: completionInfoSource.modelID,
+            createdAt: time?.created,
+            completedAt: time?.completed,
+          };
+        }
+
         this.scheduleMessageCompletion(messageKey, info.sessionID);
       }
 
@@ -1645,6 +1677,7 @@ class SummaryAggregator {
   private finalizeMessageCompletion(messageKey: string, sessionId: string): void {
     const parts = this.currentMessageParts.get(messageKey) || [];
     const messageText = parts.join("");
+    const completionInfo = this.messages.get(messageKey)?.completionInfo ?? {};
 
     logger.debug(
       `[Aggregator] Message completed: messageKey=${messageKey}, textLength=${messageText.length}, totalParts=${parts.length}, session=${sessionId}`,
@@ -1652,7 +1685,7 @@ class SummaryAggregator {
 
     if (this.onCompleteCallback && messageText.length > 0) {
       const messageId = messageKey.slice(sessionId.length + 1);
-      this.onCompleteCallback(sessionId, messageId, messageText);
+      this.onCompleteCallback(sessionId, messageId, messageText, completionInfo);
     }
 
     this.currentMessageParts.delete(messageKey);

@@ -27,9 +27,54 @@ describe("summary/aggregator", () => {
     summaryAggregator.setOnToolFile(() => {});
     summaryAggregator.setOnMessageUpdated(() => {});
     summaryAggregator.setOnThinking(() => {});
+    summaryAggregator.setOnSubagent(() => {});
     summaryAggregator.setOnSessionIdle(() => {});
     summaryAggregator.setOnSessionError(() => {});
     summaryAggregator.setOnSessionRetry(() => {});
+  });
+
+  it("includes completion metadata in assistant completion callbacks", async () => {
+    const onComplete = vi.fn();
+    summaryAggregator.setOnComplete(onComplete);
+    summaryAggregator.setSession("session-1");
+
+    summaryAggregator.processEvent({
+      type: "message.updated",
+      properties: {
+        info: {
+          id: "message-1",
+          sessionID: "session-1",
+          role: "assistant",
+          agent: "build",
+          providerID: "openai",
+          modelID: "gpt-5",
+          time: { created: 100, completed: 250 },
+        },
+      },
+    } as unknown as Event);
+
+    summaryAggregator.processEvent({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "part-1",
+          sessionID: "session-1",
+          messageID: "message-1",
+          type: "text",
+          text: "Done",
+        },
+      },
+    } as unknown as Event);
+
+    await new Promise((resolve) => setTimeout(resolve, 130));
+
+    expect(onComplete).toHaveBeenCalledWith("session-1", "message-1", "Done", {
+      agent: "build",
+      providerID: "openai",
+      modelID: "gpt-5",
+      createdAt: 100,
+      completedAt: 250,
+    });
   });
 
   it("invokes onCleared callback when aggregator is cleared", () => {
@@ -722,7 +767,15 @@ describe("summary/aggregator", () => {
 
     await vi.advanceTimersByTimeAsync(100);
 
-    expect(onComplete).toHaveBeenCalledWith("session-1", "message-1", "Hello world!");
+    expect(onComplete).toHaveBeenCalledWith(
+      "session-1",
+      "message-1",
+      "Hello world!",
+      expect.objectContaining({
+        createdAt: expect.any(Number),
+        completedAt: expect.any(Number),
+      }),
+    );
 
     vi.useRealTimers();
   });
@@ -789,7 +842,15 @@ describe("summary/aggregator", () => {
 
     await vi.advanceTimersByTimeAsync(100);
 
-    expect(onComplete).toHaveBeenCalledWith("session-1", "message-2", "First second");
+    expect(onComplete).toHaveBeenCalledWith(
+      "session-1",
+      "message-2",
+      "First second",
+      expect.objectContaining({
+        createdAt: expect.any(Number),
+        completedAt: expect.any(Number),
+      }),
+    );
 
     vi.useRealTimers();
   });

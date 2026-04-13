@@ -104,6 +104,8 @@ import { LiveStream } from "./streaming/live-stream.js";
 import { contextStateManager } from "../context/manager.js";
 import { formatContextForButton } from "./utils/keyboard.js";
 import { SessionOutputCoordinator } from "./session-output-coordinator.js";
+import { assistantRunState } from "./assistant-run-state.js";
+import { formatAssistantRunFooter } from "./utils/assistant-run-footer.js";
 
 let botInstance: Bot<Context> | null = null;
 const initializedCommandChats = new Set<number>();
@@ -280,6 +282,50 @@ const sessionOutputCoordinator = new SessionOutputCoordinator({
   onFinalDeliveryCommitted: async (sessionId) => {
     summaryAggregator.stopTypingIndicator(sessionId);
     await liveStream.sealCurrentMessage(sessionId, true);
+
+    const completedRun = assistantRunState.finishRun(sessionId, "final_delivery_committed");
+    const target = getTargetBySessionId(sessionId);
+    if (
+      completedRun?.hasCompletedResponse &&
+      botInstance &&
+      target &&
+      (completedRun.actualAgent || completedRun.configuredAgent) &&
+      (completedRun.actualProviderID || completedRun.configuredProviderID) &&
+      (completedRun.actualModelID || completedRun.configuredModelID)
+    ) {
+      const agent = completedRun.actualAgent || completedRun.configuredAgent;
+      const providerID = completedRun.actualProviderID || completedRun.configuredProviderID;
+      const modelID = completedRun.actualModelID || completedRun.configuredModelID;
+
+      if (!agent || !providerID || !modelID) {
+        await dispatchNextQueuedPrompt(sessionId);
+        return;
+      }
+
+      try {
+        await botInstance.api.sendMessage(
+          target.chatId,
+          formatAssistantRunFooter({
+            agent,
+            providerID,
+            modelID,
+            elapsedMs: Date.now() - completedRun.startedAt,
+          }),
+          {
+            ...(keyboardManager.isInitialized(target.scopeKey)
+              ? { reply_markup: keyboardManager.getKeyboard(target.scopeKey) }
+              : {}),
+            ...getThreadSendOptions(target.threadId),
+          },
+        );
+      } catch (error) {
+        logger.error("[Bot] Failed to send assistant run footer", {
+          sessionId,
+          error,
+        });
+      }
+    }
+
     await dispatchNextQueuedPrompt(sessionId);
   },
   handlers: {
@@ -562,6 +608,7 @@ async function deliverAssistantCompletion(sessionId: string, messageText: string
               ...(isLastPart && keyboardManager.isInitialized(target.scopeKey)
                 ? { reply_markup: keyboardManager.getKeyboard(target.scopeKey) }
                 : {}),
+              disable_notification: true,
               ...getThreadSendOptions(target.threadId),
             },
             format,
@@ -845,7 +892,13 @@ async function ensureEventSubscription(directory: string): Promise<void> {
     });
   });
 
-  summaryAggregator.setOnComplete((sessionId, messageId, messageText) => {
+  summaryAggregator.setOnComplete((sessionId, messageId, messageText, completionInfo) => {
+    assistantRunState.markResponseCompleted(sessionId, {
+      agent: completionInfo.agent,
+      providerID: completionInfo.providerID,
+      modelID: completionInfo.modelID,
+    });
+
     sessionOutputCoordinator.dispatch({
       kind: "assistant_complete",
       sessionId,
@@ -1023,6 +1076,7 @@ async function ensureEventSubscription(directory: string): Promise<void> {
   });
 
   summaryAggregator.setOnSessionError(async (sessionId, message) => {
+    assistantRunState.clearRun(sessionId, "session_error");
     sessionOutputCoordinator.dispatch({
       kind: "session_error",
       sessionId,
@@ -1115,6 +1169,7 @@ async function prepareSessionForPrompt(sessionId: string): Promise<void> {
 
 export function createBot(): Bot<Context> {
   clearAllInteractionState(INTERACTION_CLEAR_REASON.BOT_STARTUP);
+  assistantRunState.clearAll("bot_startup");
 
   const botOptions: ConstructorParameters<typeof Bot<Context>>[1] = {};
 

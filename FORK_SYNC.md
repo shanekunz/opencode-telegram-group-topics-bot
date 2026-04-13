@@ -43,6 +43,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - `13a8948` adapted port: scoped agent selection now falls back to an available project agent before prompts, commands, topic creation, and scheduled tasks
 - `a25af98` ported: bot UI now labels the selector as `agent` instead of `mode`
 - `2f22851` adapted port: `/open` now adds projects by browsing configurable allowed roots while still respecting this fork's group/topic project-lock rules and scoped state reset flow
+- `e85380f` + `5222bae` adapted port: topic-scoped runs now retain configured/resolved agent+model metadata, final assistant replies are delivered silently, and an in-thread completion footer announces the run summary after final delivery commits
 
 ## Upstream Changes Intentionally Adapted
 
@@ -80,7 +81,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - `c91f137` test-only upstream change skipped: this fork added equivalent linked-worktree coverage inside its scoped pinned manager tests
 - Release-only bump (`v0.15.0`) reviewed; runtime/UI changes were selectively ported/adapted above
 - `1ad75a5` reviewed; file logging was already present in this fork, so no additional port was needed
-- `e85380f` + `0580a73` + `5222bae` + `ed512ff` reviewed for `v0.16.0`; skipped for now because this fork's topic-scoped live-stream/final-delivery pipeline diverges heavily and needs a dedicated manual adaptation pass
+- `0580a73` + `ed512ff` reviewed for `v0.16.0`; still skipped for now because this fork's topic-scoped live-stream/final-delivery pipeline diverges heavily and the remaining in-place split/entities-first renderer work needs a dedicated adaptation pass
 - Release-only/docs-only changes in `v0.16.0` skipped after review (`57a0c56`, `a75f055`, `8940e35`, `7a8e542`)
 
 ## Sync Workflow

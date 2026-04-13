@@ -19,6 +19,8 @@ const mocked = vi.hoisted(() => ({
   safeBackgroundTaskMock: vi.fn(),
   sessionStatusMock: vi.fn(),
   sessionPromptAsyncMock: vi.fn(),
+  assistantRunStateStartRunMock: vi.fn(),
+  assistantRunStateClearRunMock: vi.fn(),
 }));
 
 vi.mock("../../../src/opencode/client.js", () => ({
@@ -156,6 +158,13 @@ vi.mock("../../../src/scheduled-task/store.js", () => ({
   getScheduledTaskTopicByChatAndThread: mocked.getScheduledTaskTopicByChatAndThreadMock,
 }));
 
+vi.mock("../../../src/bot/assistant-run-state.js", () => ({
+  assistantRunState: {
+    startRun: mocked.assistantRunStateStartRunMock,
+    clearRun: mocked.assistantRunStateClearRunMock,
+  },
+}));
+
 function createContext(): Context {
   return {
     chat: {
@@ -183,6 +192,8 @@ describe("bot/handlers/prompt", () => {
     mocked.safeBackgroundTaskMock.mockReset();
     mocked.sessionStatusMock.mockReset();
     mocked.sessionPromptAsyncMock.mockReset();
+    mocked.assistantRunStateStartRunMock.mockReset();
+    mocked.assistantRunStateClearRunMock.mockReset();
 
     mocked.getCurrentProjectMock.mockReturnValue({ id: "project-1", worktree: "/repo/app" });
     mocked.isTtsEnabledMock.mockReturnValue(false);
@@ -301,6 +312,14 @@ describe("bot/handlers/prompt", () => {
       model: { providerID: "openai", modelID: "gpt-5" },
       variant: "fast",
     });
+    expect(mocked.assistantRunStateStartRunMock).toHaveBeenCalledWith(
+      "session-1",
+      expect.objectContaining({
+        configuredAgent: "builder",
+        configuredProviderID: "openai",
+        configuredModelID: "gpt-5",
+      }),
+    );
     expect(consumePromptResponseMode("session-1")).toBe("text_and_tts");
   });
 

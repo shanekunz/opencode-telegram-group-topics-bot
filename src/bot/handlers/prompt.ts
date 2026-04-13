@@ -29,6 +29,7 @@ import { BOT_I18N_KEY, CHAT_TYPE } from "../constants.js";
 import { INTERACTION_CLEAR_REASON } from "../../interaction/constants.js";
 import { getTopicBindingByScopeKey } from "../../topic/manager.js";
 import { getScheduledTaskTopicByChatAndThread } from "../../scheduled-task/store.js";
+import { assistantRunState } from "../assistant-run-state.js";
 
 /** Module-level references for async callbacks that don't have ctx. */
 let botInstance: Bot<Context> | null = null;
@@ -65,6 +66,9 @@ interface QueuedPromptRequest {
   chatId: number;
   threadId: number | null;
   responseMode: PromptResponseMode;
+  configuredAgent?: string;
+  configuredProviderID?: string;
+  configuredModelID?: string;
   promptOptions: PromptRequestOptions;
   promptErrorLogContext: PromptErrorLogContext;
   notifyOnQueue: boolean;
@@ -242,6 +246,12 @@ export function consumePromptResponseMode(sessionId: string): PromptResponseMode
 
 function submitPromptRequest(bot: Bot<Context>, request: QueuedPromptRequest): void {
   setActivePromptResponseMode(request.sessionId, request.responseMode);
+  assistantRunState.startRun(request.sessionId, {
+    startedAt: Date.now(),
+    configuredAgent: request.configuredAgent,
+    configuredProviderID: request.configuredProviderID,
+    configuredModelID: request.configuredModelID,
+  });
 
   logger.info(
     `[Bot] Calling session.promptAsync (fire-and-forget) with agent=${request.promptOptions.agent}, fileCount=${request.promptErrorLogContext.fileCount}...`,
@@ -276,6 +286,8 @@ function submitPromptRequest(bot: Bot<Context>, request: QueuedPromptRequest): v
           errorType === "session_not_found"
             ? "bot.prompt_send_error_session_not_found"
             : "bot.prompt_send_error";
+
+        assistantRunState.clearRun(request.sessionId, "session_prompt_api_error");
 
         void bot.api
           .sendMessage(request.chatId, t(errorMessageKey), {
@@ -315,6 +327,7 @@ function submitPromptRequest(bot: Bot<Context>, request: QueuedPromptRequest): v
           : "bot.prompt_send_error";
 
       clearPromptResponseMode(request.sessionId);
+      assistantRunState.clearRun(request.sessionId, "session_prompt_background_error");
 
       void bot.api
         .sendMessage(request.chatId, t(errorMessageKey), {
@@ -564,6 +577,9 @@ export async function processUserPrompt(
       chatId: ctx.chat!.id,
       threadId: scope?.threadId ?? null,
       responseMode,
+      configuredAgent: currentAgent ?? undefined,
+      configuredProviderID: storedModel.providerID ?? undefined,
+      configuredModelID: storedModel.modelID ?? undefined,
       promptOptions: queuedRequest.promptOptions,
       promptErrorLogContext: queuedRequest.promptErrorLogContext,
       notifyOnQueue: true,
@@ -589,6 +605,9 @@ export async function processUserPrompt(
       chatId: ctx.chat!.id,
       threadId: scope?.threadId ?? null,
       responseMode,
+      configuredAgent: currentAgent ?? undefined,
+      configuredProviderID: storedModel.providerID ?? undefined,
+      configuredModelID: storedModel.modelID ?? undefined,
       promptOptions: request.promptOptions,
       promptErrorLogContext: request.promptErrorLogContext,
       notifyOnQueue: true,
@@ -596,6 +615,7 @@ export async function processUserPrompt(
 
     return true;
   } catch (err) {
+    assistantRunState.clearRun(currentSession.id, "session_prompt_handler_error");
     logger.error("Error in prompt handler:", err);
     if (interactionManager.getSnapshot(scopeKey)) {
       clearAllInteractionState(INTERACTION_CLEAR_REASON.MESSAGE_HANDLER_ERROR, scopeKey);
