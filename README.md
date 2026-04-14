@@ -197,6 +197,7 @@ Installed-mode config paths:
 | `SERVICE_MESSAGES_INTERVAL_SEC`    | Service messages interval; keep `>=2` to avoid Telegram rate limits, `0` = immediate |    No    | `5`                      |
 | `HIDE_THINKING_MESSAGES`           | Hide `Thinking...` service messages                                                  |    No    | `false`                  |
 | `HIDE_TOOL_CALL_MESSAGES`          | Hide tool-call service messages                                                      |    No    | `false`                  |
+| `HIDE_TOOL_FILE_MESSAGES`          | Hide tool-generated file edit documents sent as Telegram attachments                 |    No    | `false`                  |
 | `MESSAGE_FORMAT_MODE`              | Assistant reply formatting mode: `markdown` or `raw`                                 |    No    | `markdown`               |
 | `RESPONSE_STREAM_THROTTLE_MS`      | Delay between streamed assistant updates in ms                                       |    No    | `1000`                   |
 | `BASH_TOOL_DISPLAY_MAX_LENGTH`     | Maximum displayed length for `bash` tool commands in Telegram summaries              |    No    | `128`                    |
@@ -212,6 +213,20 @@ Installed-mode config paths:
 | `LOG_LEVEL`                        | Log level (`debug`, `info`, `warn`, `error`)                                         |    No    | `info`                   |
 
 Keep your `.env` private. It contains your bot token.
+
+### Installed Daemon Mode
+
+Installed mode supports a background daemon process:
+
+```bash
+opencode-telegram-group-topics-bot start --daemon
+opencode-telegram-group-topics-bot status
+opencode-telegram-group-topics-bot stop
+```
+
+- Daemon mode is available only in `installed` mode.
+- The daemon state file lives under the installed runtime `run/` directory.
+- Daemon logs are written to timestamped files under the installed runtime `logs/` directory.
 
 ### Optional: Voice and Audio Transcription
 

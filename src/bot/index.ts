@@ -47,7 +47,7 @@ import { questionManager } from "../question/manager.js";
 import { interactionManager } from "../interaction/manager.js";
 import { clearAllInteractionState } from "../interaction/cleanup.js";
 import { keyboardManager } from "../keyboard/manager.js";
-import { subscribeToEvents } from "../opencode/events.js";
+import { stopEventListening, subscribeToEvents } from "../opencode/events.js";
 import { summaryAggregator } from "../summary/aggregator.js";
 import {
   formatSummaryWithRawFallback,
@@ -111,6 +111,7 @@ const renamedGeneralTopicChats = new Set<number>();
 const DM_ALLOWED_COMMAND_SET = new Set<string>(DM_ALLOWED_COMMANDS);
 const telegramRateLimiter = new TelegramRateLimiter();
 const eventCallbackByDirectory = new Map<string, (event: OpenCodeEvent) => void>();
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
 async function ensureGeneralTopicName(ctx: Context): Promise<void> {
   if (!ctx.chat || ctx.chat.type === CHAT_TYPE.PRIVATE) {
@@ -342,6 +343,10 @@ const sessionOutputCoordinator = new SessionOutputCoordinator({
     onToolFile: async ({ sessionId, fileInfo }) => {
       if (!botInstance) {
         logger.error("Bot or chat ID not available for sending file");
+        return;
+      }
+
+      if (config.bot.hideToolFileMessages) {
         return;
       }
 
@@ -1116,6 +1121,11 @@ async function prepareSessionForPrompt(sessionId: string): Promise<void> {
 export function createBot(): Bot<Context> {
   clearAllInteractionState(INTERACTION_CLEAR_REASON.BOT_STARTUP);
 
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+
   const botOptions: ConstructorParameters<typeof Bot<Context>>[1] = {};
 
   if (config.telegram.proxyUrl) {
@@ -1147,7 +1157,7 @@ export function createBot(): Bot<Context> {
 
   // Heartbeat for diagnostics: verify the event loop is not blocked
   let heartbeatCounter = 0;
-  setInterval(() => {
+  heartbeatTimer = setInterval(() => {
     heartbeatCounter++;
     if (heartbeatCounter % 6 === 0) {
       // Log every 30 seconds (5 sec * 6)
@@ -1644,4 +1654,21 @@ export function createBot(): Bot<Context> {
   });
 
   return bot;
+}
+
+export function cleanupBotRuntime(reason: string): void {
+  stopEventListening();
+  summaryAggregator.clear();
+  sessionOutputCoordinator.clearAll();
+  void liveStream.clearAll(reason);
+  eventCallbackByDirectory.clear();
+  initializedCommandChats.clear();
+  renamedGeneralTopicChats.clear();
+
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+
+  botInstance = null;
 }
