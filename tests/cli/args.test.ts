@@ -7,6 +7,7 @@ describe("cli/args", () => {
 
     expect(parsed).toEqual({
       command: "start",
+      daemon: false,
       mode: undefined,
       showHelp: false,
     });
@@ -17,6 +18,7 @@ describe("cli/args", () => {
 
     expect(parsed).toEqual({
       command: "start",
+      daemon: false,
       mode: "installed",
       showHelp: false,
     });
@@ -27,7 +29,19 @@ describe("cli/args", () => {
 
     expect(parsed).toEqual({
       command: "start",
+      daemon: false,
       mode: "sources",
+      showHelp: false,
+    });
+  });
+
+  it("parses daemon flag for start", () => {
+    const parsed = parseCliArgs(["start", "--daemon"]);
+
+    expect(parsed).toEqual({
+      command: "start",
+      daemon: true,
+      mode: undefined,
       showHelp: false,
     });
   });
@@ -36,6 +50,7 @@ describe("cli/args", () => {
     const parsed = parseCliArgs(["start", "--mode=invalid"]);
 
     expect(parsed.command).toBe("start");
+    expect(parsed.daemon).toBe(false);
     expect(parsed.showHelp).toBe(true);
     expect(parsed.error).toContain("Invalid mode value");
   });
@@ -44,6 +59,7 @@ describe("cli/args", () => {
     const parsed = parseCliArgs(["deploy"]);
 
     expect(parsed.command).toBe("start");
+    expect(parsed.daemon).toBe(false);
     expect(parsed.showHelp).toBe(true);
     expect(parsed.error).toContain("Unknown command");
   });
@@ -52,6 +68,7 @@ describe("cli/args", () => {
     const parsed = parseCliArgs(["start", "--mode", "qa"]);
 
     expect(parsed.command).toBe("start");
+    expect(parsed.daemon).toBe(false);
     expect(parsed.showHelp).toBe(true);
     expect(parsed.error).toContain("Invalid mode value");
   });
@@ -61,6 +78,7 @@ describe("cli/args", () => {
 
     expect(parsed).toEqual({
       command: "config",
+      daemon: false,
       mode: "sources",
       showHelp: false,
     });
@@ -70,8 +88,18 @@ describe("cli/args", () => {
     const parsed = parseCliArgs(["status", "--mode", "sources"]);
 
     expect(parsed.command).toBe("status");
+    expect(parsed.daemon).toBe(false);
     expect(parsed.showHelp).toBe(true);
     expect(parsed.error).toContain("supported only for the start and config commands");
+  });
+
+  it("rejects --daemon for non-start commands", () => {
+    const parsed = parseCliArgs(["status", "--daemon"]);
+
+    expect(parsed.command).toBe("status");
+    expect(parsed.daemon).toBe(true);
+    expect(parsed.showHelp).toBe(true);
+    expect(parsed.error).toContain("--daemon");
   });
 
   it("shows help when requested", () => {
@@ -79,6 +107,7 @@ describe("cli/args", () => {
 
     expect(parsed).toEqual({
       command: "start",
+      daemon: false,
       mode: undefined,
       showHelp: true,
     });

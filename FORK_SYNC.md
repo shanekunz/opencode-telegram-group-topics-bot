@@ -7,7 +7,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - Permanent git remote: `upstream` -> `https://github.com/grinev/opencode-telegram-bot.git`
 - Upstream repo: `https://github.com/grinev/opencode-telegram-bot`
 - Upstream branch: `main`
-- Last reviewed upstream head: `7a8e542` (`chore(release): v0.16.0`, 2026-04-12)
+- Last reviewed upstream head: `2d464cf` (`chore(release): v0.16.1`, 2026-04-14)
 - Original fork point for this threaded fork: `21da71b` (`chore(release): v0.11.0`)
 
 ## Fork Rules
@@ -43,6 +43,8 @@ This repository is a product fork of the original single-chat project at `grinev
 - `13a8948` adapted port: scoped agent selection now falls back to an available project agent before prompts, commands, topic creation, and scheduled tasks
 - `a25af98` ported: bot UI now labels the selector as `agent` instead of `mode`
 - `2f22851` adapted port: `/open` now adds projects by browsing configurable allowed roots while still respecting this fork's group/topic project-lock rules and scoped state reset flow
+- `6009873` ported: `HIDE_TOOL_FILE_MESSAGES` now suppresses Telegram document sends for tool-generated file edits
+- `a84ce68` ported: installed-mode CLI now supports daemon `start/status/stop`, with graceful bot shutdown and service state cleanup
 
 ## Upstream Changes Intentionally Adapted
 
@@ -82,6 +84,8 @@ This repository is a product fork of the original single-chat project at `grinev
 - `1ad75a5` reviewed; file logging was already present in this fork, so no additional port was needed
 - `e85380f` + `0580a73` + `5222bae` + `ed512ff` reviewed for `v0.16.0`; skipped for now because this fork's topic-scoped live-stream/final-delivery pipeline diverges heavily and needs a dedicated manual adaptation pass
 - Release-only/docs-only changes in `v0.16.0` skipped after review (`57a0c56`, `a75f055`, `8940e35`, `7a8e542`)
+- `6ba05f0` docs-only systemd guide skipped for now; daemon support was ported but the service guide still needs fork-specific packaging/docs wording
+- Release-only bump (`v0.16.1`) reviewed after porting runtime changes (`2d464cf`)
 
 ## Sync Workflow
 

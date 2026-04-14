@@ -406,6 +406,7 @@ async function finalizeTaskRun(bot: Bot<Context>, task: ScheduledTask): Promise<
 export interface ScheduledTaskRuntime {
   start: () => void;
   stop: () => void;
+  shutdown: () => void;
   runDueTasks: () => Promise<void>;
 }
 
@@ -506,6 +507,14 @@ export function createScheduledTaskRuntime(bot: Bot<Context>): ScheduledTaskRunt
 
       clearInterval(timer);
       timer = null;
+      runningTaskIds.clear();
+    },
+    shutdown: () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+
       runningTaskIds.clear();
     },
     runDueTasks,
