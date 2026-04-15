@@ -22,8 +22,7 @@ import {
   getScopeKeyFromContext,
   getThreadSendOptions,
 } from "../scope.js";
-import { getTopicBindingsByChat } from "../../topic/manager.js";
-import { BOT_I18N_KEY, TELEGRAM_CHAT_FIELD } from "../constants.js";
+import { BOT_I18N_KEY } from "../constants.js";
 
 const MAX_INLINE_BUTTON_LABEL_LENGTH = 64;
 const PROJECT_PAGE_CALLBACK_PREFIX = "projects:page:";
@@ -194,23 +193,8 @@ function clearInteractionWithScope(reason: string, scopeKey: string): void {
   clearAllInteractionState(reason, scopeKey);
 }
 
-function getConfiguredProjectName(scopeKey: string, chatId: number): string {
-  const currentProject = getCurrentProject(scopeKey);
-  if (currentProject?.name) {
-    return currentProject.name;
-  }
 
-  if (currentProject?.worktree) {
-    return currentProject.worktree;
-  }
-
-  const topicBinding = getTopicBindingsByChat(chatId).find((binding) =>
-    Boolean(binding.projectWorktree),
-  );
-  return topicBinding?.projectWorktree ?? t("pinned.unknown");
-}
-
-export function getProjectLockState(ctx: Context, scopeKey: string): ProjectLockState {
+export function getProjectLockState(ctx: Context, _scopeKey: string): ProjectLockState {
   if (!ctx.chat) {
     return { locked: false };
   }
@@ -223,21 +207,11 @@ export function getProjectLockState(ctx: Context, scopeKey: string): ProjectLock
     };
   }
 
-  const isForumEnabled = Reflect.get(ctx.chat, TELEGRAM_CHAT_FIELD.IS_FORUM) === true;
-  if (!isForumEnabled) {
-    return { locked: false };
-  }
-
-  const hasTopicBindings = getTopicBindingsByChat(ctx.chat.id).length > 0;
-  if (!hasTopicBindings) {
-    return { locked: false };
-  }
-
-  return {
-    locked: true,
-    messageKey: BOT_I18N_KEY.PROJECTS_LOCKED_GROUP_PROJECT,
-    projectName: getConfiguredProjectName(scopeKey, ctx.chat.id),
-  };
+  // General topic and non-forum chats are never locked — users can switch
+  // projects freely there. Each session topic is bound to the project that
+  // was active when the topic was created (handled by the GROUP_TOPIC check
+  // above), so different topics can belong to different projects.
+  return { locked: false };
 }
 
 export async function projectsCommand(ctx: CommandContext<Context>) {

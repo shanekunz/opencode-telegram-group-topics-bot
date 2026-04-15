@@ -84,22 +84,38 @@ export async function getProjects(): Promise<ProjectInfo[]> {
     });
   }
 
+  // Also include worktree paths from project sandboxes so git worktrees
+  // appear as selectable projects with their own session histories.
+  for (const apiProject of apiProjects) {
+    const rawSandboxes = (apiProject as unknown as { sandboxes?: string[] }).sandboxes;
+    if (Array.isArray(rawSandboxes)) {
+      for (const sandbox of rawSandboxes) {
+        if (typeof sandbox === "string" && sandbox.trim()) {
+          const key = worktreeKey(sandbox);
+          if (!mergedByWorktree.has(key)) {
+            mergedByWorktree.set(key, {
+              id: `${apiProject.id}_wt_${sandbox.split("/").pop()}`,
+              worktree: sandbox,
+              name: sandbox,
+              lastUpdated: apiProject.lastUpdated,
+            });
+          }
+        }
+      }
+    }
+  }
+
   const projectList = Array.from(mergedByWorktree.values()).sort(
     (left, right) => right.lastUpdated - left.lastUpdated,
   );
 
-  const linkedWorktreeFlags = await Promise.all(
-    projectList.map((project) => isLinkedGitWorktree(project.worktree)),
-  );
-
-  const visibleProjects = projectList.filter((_, index) => !linkedWorktreeFlags[index]);
-  const hiddenLinkedWorktrees = projectList.length - visibleProjects.length;
-
+  // Keep linked worktrees visible — they have independent session histories
+  // that users need to access.
   logger.debug(
-    `[ProjectManager] Projects resolved: api=${projects.length}, cached=${cachedProjects.length}, hiddenLinkedWorktrees=${hiddenLinkedWorktrees}, total=${visibleProjects.length}`,
+    `[ProjectManager] Projects resolved: api=${projects.length}, cached=${cachedProjects.length}, total=${projectList.length}`,
   );
 
-  return visibleProjects.map(({ id, worktree, name }) => ({ id, worktree, name }));
+  return projectList.map(({ id, worktree, name }) => ({ id, worktree, name }));
 }
 
 export async function getProjectById(id: string): Promise<ProjectInfo> {
