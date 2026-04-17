@@ -345,6 +345,10 @@ const sessionOutputCoordinator = new SessionOutputCoordinator({
         return;
       }
 
+      if (config.bot.hideToolFileMessages) {
+        return;
+      }
+
       try {
         const target = getTargetBySessionId(sessionId);
         const projectWorktree = target ? getCurrentProject(target.scopeKey)?.worktree : undefined;

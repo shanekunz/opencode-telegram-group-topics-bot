@@ -7,7 +7,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - Permanent git remote: `upstream` -> `https://github.com/grinev/opencode-telegram-bot.git`
 - Upstream repo: `https://github.com/grinev/opencode-telegram-bot`
 - Upstream branch: `main`
-- Last reviewed upstream head: `7a8e542` (`chore(release): v0.16.0`, 2026-04-12)
+- Last reviewed upstream head: `86284f2` (`chore(release): v0.17.0`, 2026-04-17)
 - Original fork point for this threaded fork: `21da71b` (`chore(release): v0.11.0`)
 
 ## Fork Rules
@@ -43,6 +43,9 @@ This repository is a product fork of the original single-chat project at `grinev
 - `13a8948` adapted port: scoped agent selection now falls back to an available project agent before prompts, commands, topic creation, and scheduled tasks
 - `a25af98` ported: bot UI now labels the selector as `agent` instead of `mode`
 - `2f22851` adapted port: `/open` now adds projects by browsing configurable allowed roots while still respecting this fork's group/topic project-lock rules and scoped state reset flow
+- `6009873` ported: tool-file `.txt` attachments can now be suppressed via `HIDE_TOOL_FILE_MESSAGES`
+- `7a6d073` ported: voice transcriptions can prepend a configurable `STT_NOTE_PROMPT` before prompt submission
+- `7aa8f59` ported: scheduled tasks now run via `promptAsync`, poll for final assistant completion, and surface clearer timeout guidance
 
 ## Upstream Changes Intentionally Adapted
 
@@ -82,6 +85,12 @@ This repository is a product fork of the original single-chat project at `grinev
 - `1ad75a5` reviewed; file logging was already present in this fork, so no additional port was needed
 - `e85380f` + `0580a73` + `5222bae` + `ed512ff` reviewed for `v0.16.0`; skipped for now because this fork's topic-scoped live-stream/final-delivery pipeline diverges heavily and needs a dedicated manual adaptation pass
 - Release-only/docs-only changes in `v0.16.0` skipped after review (`57a0c56`, `a75f055`, `8940e35`, `7a8e542`)
+- `a84ce68` reviewed for `v0.16.1`; CLI daemon mode is not applicable to this fork's current runtime entrypoints
+- `bcd52bf` reviewed for `v0.17.0`; local server process management rewrite skipped for now because this fork still exposes managed-process status/uptime and persists local process ownership in settings
+- `c820b93` reviewed for `v0.17.0`; `/worktree` needs a dedicated fork adaptation pass because project switching is constrained by topic-scoped session bindings and project-lock rules
+- `0ded31d` reviewed for `v0.17.0`; `/skills` is lower priority because this fork already exposes commands separately and currently hides skills from `/commands` intentionally
+- `8cc1291` reviewed for `v0.17.0`; setup wizard `.env` preservation skipped because this fork does not carry the same wizard flow yet
+- Release-only/docs-only changes in `v0.16.1` and `v0.17.0` skipped after review (`6ba05f0`, `2d464cf`, `282ffa4`, `ff59c79`, `a2b6855`, `c482609`, `86284f2`)
 
 ## Sync Workflow
 

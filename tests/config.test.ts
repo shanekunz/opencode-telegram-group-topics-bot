@@ -17,41 +17,49 @@ describe("config boolean env parsing", () => {
   it("uses false defaults for hide service message flags", async () => {
     vi.stubEnv("HIDE_THINKING_MESSAGES", "");
     vi.stubEnv("HIDE_TOOL_CALL_MESSAGES", "");
+    vi.stubEnv("HIDE_TOOL_FILE_MESSAGES", "");
 
     const config = await loadConfig();
 
     expect(config.bot.hideThinkingMessages).toBe(false);
     expect(config.bot.hideToolCallMessages).toBe(false);
+    expect(config.bot.hideToolFileMessages).toBe(false);
   });
 
   it("parses truthy values for hide service message flags", async () => {
     vi.stubEnv("HIDE_THINKING_MESSAGES", "YES");
     vi.stubEnv("HIDE_TOOL_CALL_MESSAGES", "1");
+    vi.stubEnv("HIDE_TOOL_FILE_MESSAGES", "true");
 
     const config = await loadConfig();
 
     expect(config.bot.hideThinkingMessages).toBe(true);
     expect(config.bot.hideToolCallMessages).toBe(true);
+    expect(config.bot.hideToolFileMessages).toBe(true);
   });
 
   it("parses falsy values for hide service message flags", async () => {
     vi.stubEnv("HIDE_THINKING_MESSAGES", "off");
     vi.stubEnv("HIDE_TOOL_CALL_MESSAGES", "0");
+    vi.stubEnv("HIDE_TOOL_FILE_MESSAGES", "false");
 
     const config = await loadConfig();
 
     expect(config.bot.hideThinkingMessages).toBe(false);
     expect(config.bot.hideToolCallMessages).toBe(false);
+    expect(config.bot.hideToolFileMessages).toBe(false);
   });
 
   it("falls back to defaults on invalid values", async () => {
     vi.stubEnv("HIDE_THINKING_MESSAGES", "banana");
     vi.stubEnv("HIDE_TOOL_CALL_MESSAGES", "nope");
+    vi.stubEnv("HIDE_TOOL_FILE_MESSAGES", "invalid");
 
     const config = await loadConfig();
 
     expect(config.bot.hideThinkingMessages).toBe(false);
     expect(config.bot.hideToolCallMessages).toBe(false);
+    expect(config.bot.hideToolFileMessages).toBe(false);
   });
 
   it("uses markdown as default message format mode", async () => {
@@ -116,6 +124,22 @@ describe("config boolean env parsing", () => {
     const config = await loadConfig();
 
     expect(config.bot.scheduledTasksPollIntervalSec).toBe(30);
+  });
+
+  it("uses 120 minutes as default scheduled task execution timeout", async () => {
+    vi.stubEnv("SCHEDULED_TASK_EXECUTION_TIMEOUT_MINUTES", "");
+
+    const config = await loadConfig();
+
+    expect(config.bot.scheduledTaskExecutionTimeoutMinutes).toBe(120);
+  });
+
+  it("parses scheduled task execution timeout", async () => {
+    vi.stubEnv("SCHEDULED_TASK_EXECUTION_TIMEOUT_MINUTES", "45");
+
+    const config = await loadConfig();
+
+    expect(config.bot.scheduledTaskExecutionTimeoutMinutes).toBe(45);
   });
 
   it("uses 1000ms as default response stream throttle", async () => {
@@ -195,5 +219,21 @@ describe("config boolean env parsing", () => {
     expect(config.tts.apiKey).toBe("");
     expect(config.tts.model).toBe("gpt-4o-mini-tts");
     expect(config.tts.voice).toBe("alloy");
+  });
+
+  it("keeps STT note prompt unset by default", async () => {
+    vi.stubEnv("STT_NOTE_PROMPT", "");
+
+    const config = await loadConfig();
+
+    expect(config.stt.notePrompt).toBe("");
+  });
+
+  it("reads configured STT note prompt", async () => {
+    vi.stubEnv("STT_NOTE_PROMPT", "Infer intent from transcription context.");
+
+    const config = await loadConfig();
+
+    expect(config.stt.notePrompt).toBe("Infer intent from transcription context.");
   });
 });
