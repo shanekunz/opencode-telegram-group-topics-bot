@@ -118,6 +118,10 @@ export const config = {
     openBrowserRoots: getEnvVar("OPEN_BROWSER_ROOTS", false),
     responseStreamThrottleMs: getOptionalPositiveIntEnvVar("RESPONSE_STREAM_THROTTLE_MS", 1000),
     bashToolDisplayMaxLength: getOptionalPositiveIntEnvVar("BASH_TOOL_DISPLAY_MAX_LENGTH", 128),
+    scheduledTaskExecutionTimeoutMinutes: getOptionalPositiveIntEnvVar(
+      "SCHEDULED_TASK_EXECUTION_TIMEOUT_MINUTES",
+      120,
+    ),
     scheduledTasksPollIntervalSec: getOptionalPositiveIntEnvVar(
       "SCHEDULED_TASK_POLL_INTERVAL_SEC",
       30,
@@ -129,6 +133,7 @@ export const config = {
     ),
     hideThinkingMessages: getOptionalBooleanEnvVar("HIDE_THINKING_MESSAGES", false),
     hideToolCallMessages: getOptionalBooleanEnvVar("HIDE_TOOL_CALL_MESSAGES", false),
+    hideToolFileMessages: getOptionalBooleanEnvVar("HIDE_TOOL_FILE_MESSAGES", false),
     messageFormatMode: getOptionalMessageFormatModeEnvVar("MESSAGE_FORMAT_MODE", "markdown"),
   },
   files: {
@@ -139,6 +144,7 @@ export const config = {
     apiKey: getEnvVar("STT_API_KEY", false),
     model: getEnvVar("STT_MODEL", false) || "whisper-large-v3-turbo",
     language: getEnvVar("STT_LANGUAGE", false),
+    notePrompt: getEnvVar("STT_NOTE_PROMPT", false),
   },
   tts: {
     apiUrl: getEnvVar("TTS_API_URL", false),

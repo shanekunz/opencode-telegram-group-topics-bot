@@ -179,4 +179,50 @@ describe("scheduled-task/runtime", () => {
       }),
     );
   });
+
+  it("delivers timeout guidance returned by the executor", async () => {
+    await setScheduledTasks([
+      {
+        id: "task-timeout",
+        kind: "cron",
+        projectId: "project-1",
+        projectWorktree: "/repo/app",
+        createdFromScopeKey: "-100123:77",
+        agent: "review",
+        model: { providerID: "openai", modelID: "gpt-5", variant: null },
+        delivery: { chatId: -100123, threadId: 555 },
+        scheduleText: "every hour",
+        scheduleSummary: "Every hour",
+        timezone: "UTC",
+        prompt: "Resume the report",
+        createdAt: "2026-03-25T00:00:00.000Z",
+        nextRunAt: "2026-03-25T00:00:00.000Z",
+        lastRunAt: null,
+        runCount: 0,
+        lastStatus: "idle",
+        lastError: null,
+        cron: "0 * * * *",
+      },
+    ]);
+    mocked.executeScheduledTaskMock.mockResolvedValue({
+      taskId: "task-timeout",
+      status: "error",
+      startedAt: "2026-03-25T00:00:00.000Z",
+      finishedAt: "2026-03-25T00:01:00.000Z",
+      resultText: null,
+      errorMessage:
+        "Request timed out after 300000ms. Check OpenCode model timeout settings: https://opencode.ai/docs/config/#models",
+    });
+
+    const runtime = createScheduledTaskRuntime({ api: {} } as never);
+    await runtime.runDueTasks();
+
+    expect(mocked.sendBotTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chatId: -100123,
+        text: expect.stringContaining("https://opencode.ai/docs/config/#models"),
+        options: { message_thread_id: 555 },
+      }),
+    );
+  });
 });
