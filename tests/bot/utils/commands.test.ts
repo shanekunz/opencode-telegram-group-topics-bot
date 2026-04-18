@@ -15,6 +15,7 @@ describe("bot/utils/commands", () => {
 
   it("checks known commands set", () => {
     expect(isKnownCommand("status")).toBe(true);
+    expect(isKnownCommand("skills")).toBe(true);
     expect(isKnownCommand("start")).toBe(true);
     expect(isKnownCommand("foobar")).toBe(false);
   });

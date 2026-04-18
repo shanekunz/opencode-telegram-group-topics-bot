@@ -1,6 +1,7 @@
 import { buildThinkingMessage, hasOnlyThinkingLine } from "../utils/thinking-message.js";
 import { logger } from "../../utils/logger.js";
 import type { TelegramTextFormat } from "../utils/telegram-text.js";
+import type { TelegramRenderedPart } from "../../telegram/render/types.js";
 import { getTelegramRetryAfterMs } from "../utils/send-with-markdown-fallback.js";
 
 const DEFAULT_THROTTLE_MS = 1000;
@@ -20,6 +21,13 @@ interface LiveStreamOptions {
     messageId: number,
     text: string,
     format?: TelegramTextFormat,
+    includeKeyboard?: boolean,
+    rawFallbackText?: string,
+  ) => Promise<void>;
+  editRenderedPart?: (
+    sessionId: string,
+    messageId: number,
+    part: TelegramRenderedPart,
     includeKeyboard?: boolean,
   ) => Promise<void>;
   deleteText?: (sessionId: string, messageId: number) => Promise<void>;
@@ -47,6 +55,7 @@ interface AssistantState {
   fullText: string;
   committedLength: number;
   replaySuppressionPrefix: string | null;
+  archivedMessageIds: number[];
 }
 
 interface ServiceState {
@@ -203,6 +212,7 @@ function splitEntriesForLimit(entries: StreamEntry[]): {
 export class LiveStream {
   private readonly sendText;
   private readonly editText;
+  private readonly editRenderedPart;
   private readonly deleteText;
   private readonly throttleMs: number;
   private readonly states = new Map<string, SessionState>();
@@ -212,6 +222,7 @@ export class LiveStream {
   constructor(options: LiveStreamOptions) {
     this.sendText = options.sendText;
     this.editText = options.editText;
+    this.editRenderedPart = options.editRenderedPart;
     this.deleteText = options.deleteText;
     this.throttleMs = options.throttleMs ?? DEFAULT_THROTTLE_MS;
   }
@@ -225,6 +236,8 @@ export class LiveStream {
     if (!sessionId || !assistantMessageId || !normalizedText) {
       return;
     }
+
+    await this.breakAssistantBoundary(sessionId, assistantMessageId);
 
     this.applyMutation(sessionId, (state) => {
       this.syncAssistantEntry(state, assistantMessageId, normalizedText);
@@ -365,6 +378,7 @@ export class LiveStream {
         fullText: "",
         committedLength: 0,
         replaySuppressionPrefix: null,
+        archivedMessageIds: [],
       };
       return;
     }
@@ -375,6 +389,40 @@ export class LiveStream {
 
     state.assistant.replaySuppressionPrefix =
       suppressAssistantReplay && visibleAssistantText ? visibleAssistantText : null;
+  }
+
+  async breakServiceBoundary(sessionId: string): Promise<void> {
+    const state = this.states.get(sessionId);
+    if (!state) {
+      return;
+    }
+
+    const hasAssistantEntry = state.entries.some((entry) => entry.kind === "assistant");
+    const hasServiceEntry = state.entries.some((entry) => entry.kind === "service");
+    if (!hasAssistantEntry || hasServiceEntry) {
+      return;
+    }
+
+    await this.sealCurrentMessage(sessionId, false, true);
+  }
+
+  async breakAssistantBoundary(sessionId: string, assistantMessageId: string): Promise<void> {
+    const state = this.states.get(sessionId);
+    if (!state) {
+      return;
+    }
+
+    const hasServiceEntry = state.service.updates.length > 0;
+    const hasAssistantEntry = state.entries.some((entry) => entry.kind === "assistant");
+    if (!hasServiceEntry || hasAssistantEntry) {
+      return;
+    }
+
+    if (state.assistant.messageId === assistantMessageId) {
+      return;
+    }
+
+    await this.sealCurrentMessage(sessionId, false, false);
   }
 
   async flushSession(sessionId: string): Promise<void> {
@@ -390,30 +438,69 @@ export class LiveStream {
 
   async finalizeCurrentMessage(
     sessionId: string,
-    options: { format: TelegramTextFormat; includeKeyboard: boolean },
-  ): Promise<void> {
+    options: {
+      format: TelegramTextFormat;
+      includeKeyboard: boolean;
+      rawFallbackText?: string;
+      renderedPart?: TelegramRenderedPart;
+    },
+  ): Promise<boolean> {
     const state = this.states.get(sessionId);
     if (!state || state.messageId === null) {
-      return;
+      return false;
     }
 
     this.clearTimer(sessionId);
-    await this.enqueueTask(sessionId, async () => {
+    return await this.enqueueTask(sessionId, async () => {
       await this.flushSessionState(sessionId);
 
       const latestState = this.states.get(sessionId);
       if (!latestState || latestState.messageId === null) {
-        return;
+        return false;
       }
 
       const text = renderEntries(latestState.entries);
       if (!text) {
-        return;
+        return false;
       }
 
-      const format = this.canUseAssistantFormat(latestState) ? options.format : "raw";
-      await this.editText(sessionId, latestState.messageId, text, format, options.includeKeyboard);
+      if (
+        !this.canUseAssistantFormat(latestState) ||
+        latestState.assistant.archivedMessageIds.length > 0
+      ) {
+        return false;
+      }
+
+      if (options.renderedPart && this.editRenderedPart) {
+        await this.editRenderedPart(
+          sessionId,
+          latestState.messageId,
+          options.renderedPart,
+          options.includeKeyboard,
+        );
+      } else {
+        await this.editText(
+          sessionId,
+          latestState.messageId,
+          text,
+          options.format,
+          options.includeKeyboard,
+          options.rawFallbackText,
+        );
+      }
       latestState.lastSentText = text;
+      latestState.messageId = null;
+      latestState.lastSentText = "";
+      latestState.entries = [];
+      latestState.service = { thinkingText: null, updates: [] };
+      latestState.assistant = {
+        messageId: null,
+        fullText: "",
+        committedLength: 0,
+        replaySuppressionPrefix: null,
+        archivedMessageIds: [],
+      };
+      return true;
     });
   }
 
@@ -429,8 +516,21 @@ export class LiveStream {
 
       const latestState = this.states.get(sessionId);
       if (!latestState || latestState.messageId === null) {
+        if (latestState && this.deleteText) {
+          for (const archivedMessageId of latestState.assistant.archivedMessageIds) {
+            await this.deleteText(sessionId, archivedMessageId);
+          }
+          latestState.assistant.archivedMessageIds = [];
+        }
         return;
       }
+
+      if (this.deleteText) {
+        for (const archivedMessageId of latestState.assistant.archivedMessageIds) {
+          await this.deleteText(sessionId, archivedMessageId);
+        }
+      }
+      latestState.assistant.archivedMessageIds = [];
 
       const hasAssistantEntry = latestState.entries.some((entry) => entry.kind === "assistant");
       if (!hasAssistantEntry) {
@@ -461,6 +561,7 @@ export class LiveStream {
         fullText: "",
         committedLength: 0,
         replaySuppressionPrefix: latestState.assistant.replaySuppressionPrefix,
+        archivedMessageIds: [],
       };
     });
   }
@@ -497,6 +598,7 @@ export class LiveStream {
         fullText: "",
         committedLength: 0,
         replaySuppressionPrefix: null,
+        archivedMessageIds: [],
       },
       service: {
         thinkingText: null,
@@ -518,6 +620,7 @@ export class LiveStream {
         fullText,
         committedLength: 0,
         replaySuppressionPrefix: state.assistant.replaySuppressionPrefix,
+        archivedMessageIds: state.assistant.archivedMessageIds,
       };
     } else {
       state.assistant.fullText = fullText;
@@ -782,6 +885,13 @@ export class LiveStream {
 
       state.lastSentText = prefixText;
       this.commitAssistantProgress(state, sentEntries);
+      if (
+        state.messageId !== null &&
+        sentEntries.some((entry) => entry.kind === "assistant") &&
+        !state.assistant.archivedMessageIds.includes(state.messageId)
+      ) {
+        state.assistant.archivedMessageIds.push(state.messageId);
+      }
       state.messageId = null;
       state.lastSentText = "";
       state.entries = remainingEntries;

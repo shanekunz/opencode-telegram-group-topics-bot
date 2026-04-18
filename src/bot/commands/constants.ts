@@ -13,6 +13,7 @@ export const BOT_COMMAND = {
   TASKLIST: "tasklist",
   RENAME: "rename",
   COMMANDS: "commands",
+  SKILLS: "skills",
   OPENCODE_START: "opencode_start",
   OPENCODE_STOP: "opencode_stop",
 } as const;

@@ -7,6 +7,7 @@ describe("cli/args", () => {
 
     expect(parsed).toEqual({
       command: "start",
+      daemon: false,
       mode: undefined,
       showHelp: false,
     });
@@ -17,6 +18,7 @@ describe("cli/args", () => {
 
     expect(parsed).toEqual({
       command: "start",
+      daemon: false,
       mode: "installed",
       showHelp: false,
     });
@@ -27,6 +29,7 @@ describe("cli/args", () => {
 
     expect(parsed).toEqual({
       command: "start",
+      daemon: false,
       mode: "sources",
       showHelp: false,
     });
@@ -61,6 +64,7 @@ describe("cli/args", () => {
 
     expect(parsed).toEqual({
       command: "config",
+      daemon: false,
       mode: "sources",
       showHelp: false,
     });
@@ -79,8 +83,28 @@ describe("cli/args", () => {
 
     expect(parsed).toEqual({
       command: "start",
+      daemon: false,
       mode: undefined,
       showHelp: true,
     });
+  });
+
+  it("parses daemon flag for start", () => {
+    const parsed = parseCliArgs(["start", "--daemon"]);
+
+    expect(parsed).toEqual({
+      command: "start",
+      daemon: true,
+      mode: undefined,
+      showHelp: false,
+    });
+  });
+
+  it("rejects daemon flag for status", () => {
+    const parsed = parseCliArgs(["status", "--daemon"]);
+
+    expect(parsed.command).toBe("status");
+    expect(parsed.showHelp).toBe(true);
+    expect(parsed.error).toContain("supported only for the start command");
   });
 });

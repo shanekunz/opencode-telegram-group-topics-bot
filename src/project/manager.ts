@@ -1,5 +1,3 @@
-import { readFile, stat } from "node:fs/promises";
-import path from "node:path";
 import { opencodeClient } from "../opencode/client.js";
 import { ProjectInfo } from "../settings/manager.js";
 import { getCachedSessionProjects } from "../session/cache-manager.js";
@@ -7,33 +5,6 @@ import { logger } from "../utils/logger.js";
 
 interface InternalProject extends ProjectInfo {
   lastUpdated: number;
-}
-
-async function isLinkedGitWorktree(worktree: string): Promise<boolean> {
-  if (worktree === "/") {
-    return false;
-  }
-
-  const gitPath = path.join(worktree, ".git");
-
-  try {
-    const gitStat = await stat(gitPath);
-
-    if (!gitStat.isFile()) {
-      return false;
-    }
-
-    const gitPointer = (await readFile(gitPath, "utf-8")).trim();
-    const match = gitPointer.match(/^gitdir:\s*(.+)$/i);
-    if (!match) {
-      return false;
-    }
-
-    const gitDir = path.resolve(worktree, match[1].trim()).replace(/\\/g, "/").toLowerCase();
-    return gitDir.includes("/.git/worktrees/");
-  } catch {
-    return false;
-  }
 }
 
 function worktreeKey(worktree: string): string {
@@ -57,6 +28,26 @@ export async function getProjects(): Promise<ProjectInfo[]> {
     name: project.name || project.worktree,
     lastUpdated: project.time?.updated ?? 0,
   }));
+
+  for (const project of projects) {
+    const sandboxes = Array.isArray((project as { sandboxes?: unknown[] }).sandboxes)
+      ? ((project as { sandboxes?: unknown[] }).sandboxes as unknown[])
+      : [];
+
+    for (const sandbox of sandboxes) {
+      if (typeof sandbox !== "string" || sandbox.trim().length === 0) {
+        continue;
+      }
+
+      const normalizedSandbox = sandbox.trim();
+      apiProjects.push({
+        id: `${project.id}:${normalizedSandbox}`,
+        worktree: normalizedSandbox,
+        name: normalizedSandbox,
+        lastUpdated: project.time?.updated ?? 0,
+      });
+    }
+  }
 
   const cachedProjects = await getCachedSessionProjects();
   const mergedByWorktree = new Map<string, InternalProject>();
@@ -84,19 +75,12 @@ export async function getProjects(): Promise<ProjectInfo[]> {
     });
   }
 
-  const projectList = Array.from(mergedByWorktree.values()).sort(
+  const visibleProjects = Array.from(mergedByWorktree.values()).sort(
     (left, right) => right.lastUpdated - left.lastUpdated,
   );
 
-  const linkedWorktreeFlags = await Promise.all(
-    projectList.map((project) => isLinkedGitWorktree(project.worktree)),
-  );
-
-  const visibleProjects = projectList.filter((_, index) => !linkedWorktreeFlags[index]);
-  const hiddenLinkedWorktrees = projectList.length - visibleProjects.length;
-
   logger.debug(
-    `[ProjectManager] Projects resolved: api=${projects.length}, cached=${cachedProjects.length}, hiddenLinkedWorktrees=${hiddenLinkedWorktrees}, total=${visibleProjects.length}`,
+    `[ProjectManager] Projects resolved: api=${projects.length}, expanded=${apiProjects.length}, cached=${cachedProjects.length}, total=${visibleProjects.length}`,
   );
 
   return visibleProjects.map(({ id, worktree, name }) => ({ id, worktree, name }));

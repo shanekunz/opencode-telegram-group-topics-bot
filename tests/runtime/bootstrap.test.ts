@@ -113,4 +113,47 @@ describe("runtime/bootstrap", () => {
     expect(withoutPassword).toContain("OPENCODE_SERVER_USERNAME=alice");
     expect(withoutPassword).not.toContain("OPENCODE_SERVER_PASSWORD=");
   });
+
+  it("preserves env example structure when template is provided", () => {
+    const existingContent = [
+      "BOT_LOCALE=ru",
+      "CUSTOM_FLAG=enabled",
+      "EXTRA_TOKEN=abc",
+      "OPENCODE_MODEL_PROVIDER=old-provider",
+      "OPENCODE_MODEL_ID=old-model",
+      "",
+    ].join("\n");
+
+    const envExampleContent = [
+      "# template",
+      "BOT_LOCALE=",
+      "TELEGRAM_BOT_TOKEN=",
+      "TELEGRAM_ALLOWED_USER_ID=",
+      "OPENCODE_MODEL_PROVIDER=opencode",
+      "OPENCODE_MODEL_ID=big-pickle",
+      "",
+    ].join("\n");
+
+    const updated = buildEnvFileContent(
+      existingContent,
+      {
+        BOT_LOCALE: "en",
+        TELEGRAM_BOT_TOKEN: "token:value",
+        TELEGRAM_ALLOWED_USER_ID: "42",
+        OPENCODE_SERVER_USERNAME: "opencode",
+        OPENCODE_MODEL_PROVIDER: "new-provider",
+        OPENCODE_MODEL_ID: "new-model",
+      },
+      envExampleContent,
+    );
+
+    expect(updated).toContain("# template");
+    expect(updated).toContain("BOT_LOCALE=en");
+    expect(updated).toContain("TELEGRAM_BOT_TOKEN=token:value");
+    expect(updated).toContain("TELEGRAM_ALLOWED_USER_ID=42");
+    expect(updated).toContain("OPENCODE_MODEL_PROVIDER=new-provider");
+    expect(updated).toContain("OPENCODE_MODEL_ID=new-model");
+    expect(updated).toContain("CUSTOM_FLAG=enabled");
+    expect(updated).toContain("EXTRA_TOKEN=abc");
+  });
 });

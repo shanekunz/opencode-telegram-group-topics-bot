@@ -331,8 +331,11 @@ class PinnedMessageManager {
   private async refreshProjectMetadata(scopeKey: string): Promise<void> {
     const context = this.getContext(scopeKey);
     const project = getCurrentProject(scopeKey);
-    context.state.projectName =
+    const projectName =
       project?.name || this.extractProjectName(project?.worktree) || t("pinned.unknown");
+    context.state.projectName = project?.id.includes(":")
+      ? `${projectName} [worktree]`
+      : projectName;
     context.state.projectBranch = await this.getGitBranchName(project?.worktree);
   }
 

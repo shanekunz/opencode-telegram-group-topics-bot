@@ -109,6 +109,43 @@ describe("bot/streaming/live-stream", () => {
     expect(sendText).toHaveBeenNthCalledWith(2, "s1", "After question", "raw", false);
   });
 
+  it("starts a new service stream after an assistant-only boundary break", async () => {
+    vi.useFakeTimers();
+
+    const sendText = vi.fn().mockResolvedValueOnce(16).mockResolvedValueOnce(17);
+    const editText = vi.fn().mockResolvedValue(undefined);
+    const stream = new LiveStream({ sendText, editText, throttleMs: 50 });
+
+    await stream.updateAssistant("s1", "m1", "Interim answer");
+    await vi.advanceTimersByTimeAsync(50);
+
+    await stream.breakServiceBoundary("s1");
+    stream.replaceServiceByPrefix("s1", "__tool__:call-1", "⏳ bash npm test");
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(sendText).toHaveBeenNthCalledWith(1, "s1", "Interim answer", "raw", false);
+    expect(sendText).toHaveBeenNthCalledWith(2, "s1", "⏳ bash npm test", "raw", false);
+    expect(editText).not.toHaveBeenCalled();
+  });
+
+  it("starts a new assistant stream after a service-only boundary break", async () => {
+    vi.useFakeTimers();
+
+    const sendText = vi.fn().mockResolvedValueOnce(21).mockResolvedValueOnce(22);
+    const editText = vi.fn().mockResolvedValue(undefined);
+    const stream = new LiveStream({ sendText, editText, throttleMs: 50 });
+
+    stream.replaceServiceByPrefix("s1", "__tool__:call-1", "⏳ bash npm test");
+    await vi.advanceTimersByTimeAsync(50);
+
+    await stream.updateAssistant("s1", "m2", "Small reply");
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(sendText).toHaveBeenNthCalledWith(1, "s1", "⏳ bash npm test", "raw", false);
+    expect(sendText).toHaveBeenNthCalledWith(2, "s1", "Small reply", "raw", false);
+    expect(editText).not.toHaveBeenCalled();
+  });
+
   it("updates the current assistant entry in place while keeping service order", async () => {
     vi.useFakeTimers();
 
@@ -270,5 +307,93 @@ describe("bot/streaming/live-stream", () => {
 
     expect(deleteText).toHaveBeenCalledWith("s1", 81);
     expect(editText).not.toHaveBeenCalled();
+  });
+
+  it("deletes rolled assistant-only stream messages during final cleanup", async () => {
+    vi.useFakeTimers();
+
+    const sendText = vi.fn().mockResolvedValueOnce(91).mockResolvedValueOnce(92);
+    const editText = vi.fn().mockResolvedValue(undefined);
+    const deleteText = vi.fn().mockResolvedValue(undefined);
+    const stream = new LiveStream({ sendText, editText, deleteText, throttleMs: 50 });
+
+    const longText = `${"A".repeat(3000)}\n\n${"B".repeat(1800)}`;
+    await stream.updateAssistant("s1", "m1", longText);
+    await vi.advanceTimersByTimeAsync(50);
+
+    await stream.cleanupAfterFinalDelivery("s1");
+
+    expect(deleteText).toHaveBeenNthCalledWith(1, "s1", 91);
+    expect(deleteText).toHaveBeenNthCalledWith(2, "s1", 92);
+  });
+
+  it("finalizes a single assistant-only stream message in place", async () => {
+    vi.useFakeTimers();
+
+    const sendText = vi.fn().mockResolvedValue(101);
+    const editText = vi.fn().mockResolvedValue(undefined);
+    const stream = new LiveStream({ sendText, editText, throttleMs: 50 });
+
+    await stream.updateAssistant("s1", "m1", "Final answer");
+    await vi.advanceTimersByTimeAsync(50);
+
+    await expect(
+      stream.finalizeCurrentMessage("s1", {
+        format: "markdown_v2",
+        includeKeyboard: true,
+        rawFallbackText: "Final answer",
+      }),
+    ).resolves.toBe(true);
+
+    expect(editText).toHaveBeenLastCalledWith(
+      "s1",
+      101,
+      "Final answer",
+      "markdown_v2",
+      true,
+      "Final answer",
+    );
+    const internalState = (
+      stream as unknown as {
+        states: Map<
+          string,
+          {
+            messageId: number | null;
+            entries: unknown[];
+          }
+        >;
+      }
+    ).states.get("s1");
+    expect(internalState?.messageId).toBeNull();
+    expect(internalState?.entries).toEqual([]);
+  });
+
+  it("does not finalize in place after stream rollover", async () => {
+    vi.useFakeTimers();
+
+    const sendText = vi.fn().mockResolvedValueOnce(111).mockResolvedValueOnce(112);
+    const editText = vi.fn().mockResolvedValue(undefined);
+    const stream = new LiveStream({ sendText, editText, throttleMs: 50 });
+
+    const longText = `${"A".repeat(3000)}\n\n${"B".repeat(1800)}`;
+    await stream.updateAssistant("s1", "m1", longText);
+    await vi.advanceTimersByTimeAsync(50);
+
+    await expect(
+      stream.finalizeCurrentMessage("s1", {
+        format: "markdown_v2",
+        includeKeyboard: true,
+        rawFallbackText: longText,
+      }),
+    ).resolves.toBe(false);
+
+    expect(editText).not.toHaveBeenCalledWith(
+      "s1",
+      112,
+      expect.any(String),
+      "markdown_v2",
+      true,
+      longText,
+    );
   });
 });

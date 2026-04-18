@@ -1,3 +1,4 @@
+import { access } from "node:fs/promises";
 import { Bot, Context } from "grammy";
 import type { FilePartInput, TextPartInput } from "@opencode-ai/sdk/v2";
 import { opencodeClient } from "../../opencode/client.js";
@@ -29,6 +30,7 @@ import { BOT_I18N_KEY, CHAT_TYPE } from "../constants.js";
 import { INTERACTION_CLEAR_REASON } from "../../interaction/constants.js";
 import { getTopicBindingByScopeKey } from "../../topic/manager.js";
 import { getScheduledTaskTopicByChatAndThread } from "../../scheduled-task/store.js";
+import { assistantRunState } from "../assistant-run-state.js";
 
 /** Module-level references for async callbacks that don't have ctx. */
 let botInstance: Bot<Context> | null = null;
@@ -242,6 +244,12 @@ export function consumePromptResponseMode(sessionId: string): PromptResponseMode
 
 function submitPromptRequest(bot: Bot<Context>, request: QueuedPromptRequest): void {
   setActivePromptResponseMode(request.sessionId, request.responseMode);
+  assistantRunState.startRun(request.sessionId, {
+    startedAt: Date.now(),
+    configuredAgent: request.promptOptions.agent,
+    configuredProviderID: request.promptOptions.model?.providerID,
+    configuredModelID: request.promptOptions.model?.modelID,
+  });
 
   logger.info(
     `[Bot] Calling session.promptAsync (fire-and-forget) with agent=${request.promptOptions.agent}, fileCount=${request.promptErrorLogContext.fileCount}...`,
@@ -262,6 +270,7 @@ function submitPromptRequest(bot: Bot<Context>, request: QueuedPromptRequest): v
         logger.error("[Bot] session.promptAsync raw API error object:", error);
 
         if (errorType === "busy") {
+          assistantRunState.clearRun(request.sessionId, "prompt_busy_requeued");
           const position = enqueuePromptRequest({
             ...request,
             notifyOnQueue: false,
@@ -276,6 +285,8 @@ function submitPromptRequest(bot: Bot<Context>, request: QueuedPromptRequest): v
           errorType === "session_not_found"
             ? "bot.prompt_send_error_session_not_found"
             : "bot.prompt_send_error";
+
+        assistantRunState.clearRun(request.sessionId, "prompt_submit_error");
 
         void bot.api
           .sendMessage(request.chatId, t(errorMessageKey), {
@@ -299,6 +310,7 @@ function submitPromptRequest(bot: Bot<Context>, request: QueuedPromptRequest): v
 
       if (errorType === "busy") {
         clearPromptResponseMode(request.sessionId);
+        assistantRunState.clearRun(request.sessionId, "prompt_busy_background_requeued");
         const position = enqueuePromptRequest({
           ...request,
           notifyOnQueue: false,
@@ -315,6 +327,7 @@ function submitPromptRequest(bot: Bot<Context>, request: QueuedPromptRequest): v
           : "bot.prompt_send_error";
 
       clearPromptResponseMode(request.sessionId);
+      assistantRunState.clearRun(request.sessionId, "prompt_submit_background_error");
 
       void bot.api
         .sendMessage(request.chatId, t(errorMessageKey), {
@@ -386,6 +399,15 @@ async function isSessionBusy(sessionId: string, directory: string): Promise<bool
   }
 }
 
+async function projectDirectoryExists(directory: string): Promise<boolean> {
+  try {
+    await access(directory);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function resetMismatchedSessionContextForScope(scopeKey: string): void {
   clearAllInteractionState(INTERACTION_CLEAR_REASON.SESSION_MISMATCH_RESET, scopeKey);
   clearSession(scopeKey);
@@ -433,6 +455,15 @@ export async function processUserPrompt(
   const currentProject = getCurrentProject(scopeKey);
   if (!currentProject) {
     await ctx.reply(t("bot.project_not_selected"));
+    return false;
+  }
+
+  if (
+    scope?.context === SCOPE_CONTEXT.GROUP_TOPIC &&
+    currentProject.id.includes(":") &&
+    !(await projectDirectoryExists(currentProject.worktree))
+  ) {
+    await ctx.reply(t("topic.worktree_missing"), getThreadSendOptions(scope.threadId));
     return false;
   }
 

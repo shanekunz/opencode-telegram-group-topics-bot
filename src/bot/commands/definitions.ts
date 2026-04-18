@@ -34,6 +34,7 @@ const COMMAND_DEFINITIONS: BotCommandI18nDefinition[] = [
   { command: BOT_COMMAND.TASKLIST, descriptionKey: "cmd.description.tasklist" },
   { command: BOT_COMMAND.RENAME, descriptionKey: "cmd.description.rename" },
   { command: BOT_COMMAND.COMMANDS, descriptionKey: "cmd.description.commands" },
+  { command: BOT_COMMAND.SKILLS, descriptionKey: "cmd.description.skills" },
   { command: BOT_COMMAND.OPENCODE_START, descriptionKey: "cmd.description.opencode_start" },
   { command: BOT_COMMAND.OPENCODE_STOP, descriptionKey: "cmd.description.opencode_stop" },
   { command: BOT_COMMAND.HELP, descriptionKey: "cmd.description.help" },

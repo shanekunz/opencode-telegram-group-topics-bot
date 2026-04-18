@@ -3,6 +3,7 @@ import {
   editMessageWithMarkdownFallback,
   sendMessageWithMarkdownFallback,
 } from "./send-with-markdown-fallback.js";
+import type { TelegramRenderedPart } from "../../telegram/render/types.js";
 
 type SendMessageApi = Pick<Api<RawApi>, "sendMessage">;
 type EditMessageApi = Pick<Api<RawApi>, "editMessageText">;
@@ -75,4 +76,60 @@ export async function editBotText({
     options,
     parseMode: resolveParseMode(format),
   });
+}
+
+interface SendRenderedPartParams {
+  api: SendMessageApi;
+  chatId: Parameters<SendMessageApi["sendMessage"]>[0];
+  part: TelegramRenderedPart;
+  options?: TelegramSendMessageOptions;
+}
+
+interface EditRenderedPartParams {
+  api: EditMessageApi;
+  chatId: Parameters<EditMessageApi["editMessageText"]>[0];
+  messageId: Parameters<EditMessageApi["editMessageText"]>[1];
+  part: TelegramRenderedPart;
+  options?: TelegramEditMessageOptions;
+}
+
+export async function sendBotRenderedPart({
+  api,
+  chatId,
+  part,
+  options,
+}: SendRenderedPartParams): Promise<Awaited<ReturnType<SendMessageApi["sendMessage"]>>> {
+  if (part.entities?.length) {
+    try {
+      return await api.sendMessage(chatId, part.text, {
+        ...(options || {}),
+        entities: part.entities,
+      });
+    } catch {
+      return await api.sendMessage(chatId, part.fallbackText, options);
+    }
+  }
+
+  return await api.sendMessage(chatId, part.text, options);
+}
+
+export async function editBotRenderedPart({
+  api,
+  chatId,
+  messageId,
+  part,
+  options,
+}: EditRenderedPartParams): Promise<Awaited<ReturnType<EditMessageApi["editMessageText"]>>> {
+  if (part.entities?.length) {
+    try {
+      return await api.editMessageText(chatId, messageId, part.text, {
+        ...(options || {}),
+        entities: part.entities,
+      });
+    } catch {
+      return await api.editMessageText(chatId, messageId, part.fallbackText, options);
+    }
+  }
+
+  return await api.editMessageText(chatId, messageId, part.text, options);
 }

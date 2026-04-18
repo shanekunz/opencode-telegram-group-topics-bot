@@ -31,6 +31,11 @@ import {
   handleCommandsCallback,
   handleCommandTextArguments,
 } from "./commands/commands.js";
+import {
+  handleSkillTextArguments,
+  handleSkillsCallback,
+  skillsCommand,
+} from "./commands/skills.js";
 import { ttsCommand } from "./commands/tts.js";
 import {
   handleQuestionCallback,
@@ -69,8 +74,8 @@ import {
 import { handleVoiceMessage } from "./handlers/voice.js";
 import { handleDocumentMessage } from "./handlers/document.js";
 import { downloadTelegramFile, toDataUri } from "./utils/file-download.js";
-import { sendBotText } from "./utils/telegram-text.js";
-import { editBotText } from "./utils/telegram-text.js";
+import { editBotRenderedPart, editBotText } from "./utils/telegram-text.js";
+import { sendBotRenderedPart, sendBotText } from "./utils/telegram-text.js";
 import {
   getTelegramRetryAfterMs,
   isTelegramMessageNotModifiedError,
@@ -104,6 +109,9 @@ import { LiveStream } from "./streaming/live-stream.js";
 import { contextStateManager } from "../context/manager.js";
 import { formatContextForButton } from "./utils/keyboard.js";
 import { SessionOutputCoordinator } from "./session-output-coordinator.js";
+import { assistantRunState } from "./assistant-run-state.js";
+import { formatAssistantRunFooter } from "./utils/assistant-run-footer.js";
+import { renderAssistantFinalPartsSafe } from "./utils/assistant-rendering.js";
 
 let botInstance: Bot<Context> | null = null;
 const initializedCommandChats = new Set<number>();
@@ -312,6 +320,8 @@ const sessionOutputCoordinator = new SessionOutputCoordinator({
         const streamKey =
           toolInfo.tool === "todowrite" ? TODO_STREAM_PREFIX : getToolStreamKey(toolInfo.callId);
 
+        await liveStream.breakServiceBoundary(sessionId);
+
         if (status === "running") {
           liveStream.replaceServiceByPrefix(sessionId, streamKey, `⏳ ${message}`);
           return;
@@ -333,6 +343,7 @@ const sessionOutputCoordinator = new SessionOutputCoordinator({
       }
 
       try {
+        await liveStream.breakServiceBoundary(sessionId);
         const renderedCards = renderSubagentCards(subagents);
         liveStream.replaceServiceByPrefix(sessionId, SUBAGENT_STREAM_PREFIX, renderedCards);
       } catch (err) {
@@ -342,6 +353,10 @@ const sessionOutputCoordinator = new SessionOutputCoordinator({
     onToolFile: async ({ sessionId, fileInfo }) => {
       if (!botInstance) {
         logger.error("Bot or chat ID not available for sending file");
+        return;
+      }
+
+      if (config.bot.hideToolFileMessages) {
         return;
       }
 
@@ -433,16 +448,19 @@ const sessionOutputCoordinator = new SessionOutputCoordinator({
     onSessionError: async ({ sessionId, message }) => {
       if (!botInstance) {
         clearPromptResponseMode(sessionId);
+        assistantRunState.clearRun(sessionId, "session_error_no_bot");
         return;
       }
 
       const target = getTargetBySessionId(sessionId);
       if (!target) {
         clearPromptResponseMode(sessionId);
+        assistantRunState.clearRun(sessionId, "session_error_no_target");
         return;
       }
 
       clearPromptResponseMode(sessionId);
+      assistantRunState.clearRun(sessionId, "session_error");
       await liveStream.flushSession(sessionId);
       await liveStream.sealCurrentMessage(sessionId, true);
 
@@ -522,6 +540,11 @@ async function deliverAssistantCompletion(sessionId: string, messageText: string
     return;
   }
 
+  const currentRun = assistantRunState.getRun(sessionId);
+  const finalMessageText = currentRun
+    ? `${normalizedMessageText}\n\n${formatAssistantRunFooter(currentRun)}`
+    : normalizedMessageText;
+
   if (!botInstance) {
     clearPromptResponseMode(sessionId);
     logger.error("Bot not available for sending message");
@@ -545,26 +568,51 @@ async function deliverAssistantCompletion(sessionId: string, messageText: string
 
     const assistantParseMode = getAssistantParseMode();
     const format = assistantParseMode === "MarkdownV2" ? "markdown_v2" : "raw";
-    const formattedParts = formatSummaryWithRawFallback(normalizedMessageText);
-    const parts = formattedParts.map((part) => part.text);
+    const finalParts = renderAssistantFinalPartsSafe(finalMessageText);
+    const formattedParts = formatSummaryWithRawFallback(finalMessageText);
 
-    for (let index = 0; index < parts.length; index++) {
-      const isLastPart = index === parts.length - 1;
+    if (formattedParts.length === 1) {
+      const finalizedInPlace = await liveStream.finalizeCurrentMessage(sessionId, {
+        format,
+        includeKeyboard: keyboardManager.isInitialized(target.scopeKey),
+        rawFallbackText: formattedParts[0]?.rawFallbackText,
+        renderedPart: finalParts[0],
+      });
+
+      if (finalizedInPlace) {
+        const ttsSent = await sendTtsResponseForSession({
+          api: activeBot.api,
+          sessionId,
+          chatId: target.chatId,
+          threadId: target.threadId,
+          text: normalizedMessageText,
+        });
+
+        logger.debug("[Bot] Assistant completion finalized in place", {
+          sessionId,
+          ttsSent,
+        });
+        assistantRunState.finishRun(sessionId, "final_delivery_in_place");
+        return;
+      }
+    }
+
+    for (let index = 0; index < finalParts.length; index++) {
+      const isLastPart = index === finalParts.length - 1;
 
       while (true) {
         try {
-          await sendBotText({
+          await sendBotRenderedPart({
             api: activeBot.api,
             chatId: target.chatId,
-            text: parts[index],
-            rawFallbackText: formattedParts[index]?.rawFallbackText,
+            part: finalParts[index],
             options: {
               ...(isLastPart && keyboardManager.isInitialized(target.scopeKey)
                 ? { reply_markup: keyboardManager.getKeyboard(target.scopeKey) }
                 : {}),
+              disable_notification: !isLastPart,
               ...getThreadSendOptions(target.threadId),
             },
-            format,
           });
           break;
         } catch (error) {
@@ -594,9 +642,10 @@ async function deliverAssistantCompletion(sessionId: string, messageText: string
 
     logger.debug("[Bot] Assistant completion finalized", {
       sessionId,
-      partCount: parts.length,
+      partCount: finalParts.length,
       ttsSent,
     });
+    assistantRunState.finishRun(sessionId, "final_delivery_sent");
   } catch (err) {
     clearPromptResponseMode(sessionId);
     logger.error("Failed to send message to Telegram:", err);
@@ -658,6 +707,7 @@ async function editSessionTextMessage(
   text: string,
   format: "raw" | "markdown_v2" = "raw",
   _includeKeyboard: boolean = false,
+  rawFallbackText?: string,
 ): Promise<void> {
   if (!botInstance) {
     return;
@@ -679,6 +729,7 @@ async function editSessionTextMessage(
       chatId: target.chatId,
       messageId,
       text,
+      rawFallbackText,
       format,
     });
   } catch (error) {
@@ -775,7 +826,33 @@ const liveStream = new LiveStream({
     text: string,
     format: "raw" | "markdown_v2" = "raw",
     includeKeyboard: boolean = false,
-  ) => await editSessionTextMessage(sessionId, messageId, text, format, includeKeyboard),
+    rawFallbackText?: string,
+  ) =>
+    await editSessionTextMessage(
+      sessionId,
+      messageId,
+      text,
+      format,
+      includeKeyboard,
+      rawFallbackText,
+    ),
+  editRenderedPart: async (sessionId, messageId, part, _includeKeyboard = false) => {
+    if (!botInstance) {
+      return;
+    }
+
+    const target = getTargetBySessionId(sessionId);
+    if (!target) {
+      return;
+    }
+
+    await editBotRenderedPart({
+      api: botInstance.api,
+      chatId: target.chatId,
+      messageId,
+      part,
+    });
+  },
   deleteText: deleteSessionMessage,
 });
 
@@ -1273,6 +1350,7 @@ export function createBot(): Bot<Context> {
   bot.command(BOT_COMMAND.ABORT, abortCommand);
   bot.command(BOT_COMMAND.RENAME, renameCommand);
   bot.command(BOT_COMMAND.COMMANDS, commandsCommand);
+  bot.command(BOT_COMMAND.SKILLS, skillsCommand);
 
   bot.on("message:text", unknownCommandMiddleware);
 
@@ -1299,9 +1377,14 @@ export function createBot(): Bot<Context> {
       const handledCompactConfirm = await handleCompactConfirm(ctx);
       const handledRenameCancel = await handleRenameCancel(ctx);
       const handledCommands = await handleCommandsCallback(ctx, { ensureEventSubscription });
+      const handledSkills = await handleSkillsCallback(ctx, {
+        bot,
+        ensureEventSubscription,
+        prepareSessionForPrompt,
+      });
 
       logger.debug(
-        `[Bot] Callback handled: inlineCancel=${handledInlineCancel}, session=${handledSession}, project=${handledProject}, open=${handledOpen}, taskList=${handledTaskList}, question=${handledQuestion}, permission=${handledPermission}, agent=${handledAgent}, model=${handledModel}, variant=${handledVariant}, compactConfirm=${handledCompactConfirm}, rename=${handledRenameCancel}, commands=${handledCommands}`,
+        `[Bot] Callback handled: inlineCancel=${handledInlineCancel}, session=${handledSession}, project=${handledProject}, open=${handledOpen}, taskList=${handledTaskList}, question=${handledQuestion}, permission=${handledPermission}, agent=${handledAgent}, model=${handledModel}, variant=${handledVariant}, compactConfirm=${handledCompactConfirm}, rename=${handledRenameCancel}, commands=${handledCommands}, skills=${handledSkills}`,
       );
 
       if (
@@ -1317,7 +1400,8 @@ export function createBot(): Bot<Context> {
         !handledVariant &&
         !handledCompactConfirm &&
         !handledRenameCancel &&
-        !handledCommands
+        !handledCommands &&
+        !handledSkills
       ) {
         logger.debug("Unknown callback query:", ctx.callbackQuery?.data);
         await ctx.answerCallbackQuery({ text: t("callback.unknown_command") });
@@ -1619,6 +1703,11 @@ export function createBot(): Bot<Context> {
       return;
     }
 
+    const handledSkillArgs = await handleSkillTextArguments(ctx, promptDeps);
+    if (handledSkillArgs) {
+      return;
+    }
+
     if (isGroupGeneralControlScope(ctx)) {
       await replyGeneralControlPromptRestriction(ctx);
       return;
@@ -1644,4 +1733,14 @@ export function createBot(): Bot<Context> {
   });
 
   return bot;
+}
+
+export function cleanupBotRuntime(reason: string): void {
+  summaryAggregator.clear();
+  sessionOutputCoordinator.clearAll();
+  void liveStream.clearAll(reason);
+  eventCallbackByDirectory.clear();
+  initializedCommandChats.clear();
+  renamedGeneralTopicChats.clear();
+  botInstance = null;
 }

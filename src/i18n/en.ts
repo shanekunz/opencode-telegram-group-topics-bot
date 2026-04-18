@@ -10,6 +10,7 @@ export const en = {
   "cmd.description.task": "Create a scheduled task",
   "cmd.description.tasklist": "List scheduled tasks",
   "cmd.description.commands": "Custom commands",
+  "cmd.description.skills": "Skills catalog",
   "cmd.description.model": "Select model",
   "cmd.description.agent": "Select agent",
   "cmd.description.cleanup": "Close stale topic threads",
@@ -141,6 +142,8 @@ export const en = {
   "group.general.prompts_disabled":
     "⚠️ Prompts are disabled in General topic. Use /new to create a dedicated session topic.",
   "topic.unbound": "⚠️ This topic is not linked to any session. Go to General topic and run /new.",
+  "topic.worktree_missing":
+    "⚠️ This topic is linked to a worktree that is no longer available. Switch to Session Control, choose an available worktree, and create a new topic.",
 
   "projects.empty":
     "📭 No projects found.\n\nOpen a directory in OpenCode and create at least one session, then it will appear here.",
@@ -160,6 +163,26 @@ export const en = {
   "projects.locked.group_project":
     "⚠️ This group is already configured for project: {project}. Create a new group if you want to work on another repository.",
   "projects.locked.callback": "Project switching is locked for this group.",
+  "projects.worktree_missing":
+    "⚠️ The selected project directory is no longer available. Choose an available project or worktree from /projects.",
+  "skills.select": "Choose an OpenCode skill:",
+  "skills.empty": "📭 No OpenCode skills are available for this project.",
+  "skills.fetch_error": "🔴 Failed to load OpenCode skills.",
+  "skills.no_description": "No description",
+  "skills.button.execute": "✅ Execute",
+  "skills.button.cancel": "❌ Cancel",
+  "skills.confirm":
+    "Choose how to run skill {skill}. Tap Execute to run it directly, or send text arguments.",
+  "skills.inactive_callback": "This skill menu is inactive",
+  "skills.cancelled_callback": "Cancelled",
+  "skills.execute_callback": "Using skill...",
+  "skills.executing_prefix": "⚡ Using skill:",
+  "skills.arguments_empty": "⚠️ Arguments cannot be empty. Send text or tap Execute.",
+  "skills.select_page": "Choose an OpenCode skill (page {page}):",
+  "skills.button.prev_page": "⬅️ Prev",
+  "skills.button.next_page": "Next ➡️",
+  "skills.page_empty_callback": "No skills on this page",
+  "skills.page_load_error_callback": "Cannot load this page. Please try again.",
 
   "open.back": "⬆️ Up",
   "open.roots": "📋 Back to roots",

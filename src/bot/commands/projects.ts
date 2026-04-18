@@ -22,8 +22,7 @@ import {
   getScopeKeyFromContext,
   getThreadSendOptions,
 } from "../scope.js";
-import { getTopicBindingsByChat } from "../../topic/manager.js";
-import { BOT_I18N_KEY, TELEGRAM_CHAT_FIELD } from "../constants.js";
+import { BOT_I18N_KEY } from "../constants.js";
 
 const MAX_INLINE_BUTTON_LABEL_LENGTH = 64;
 const PROJECT_PAGE_CALLBACK_PREFIX = "projects:page:";
@@ -40,6 +39,41 @@ export interface ProjectLockState {
   locked: boolean;
   messageKey?: string;
   projectName?: string;
+}
+
+function getProjectRepoFamilyKey(project: ProjectInfo | null): string | null {
+  if (!project?.id) {
+    return null;
+  }
+
+  const separatorIndex = project.id.indexOf(":");
+  return separatorIndex === -1 ? project.id : project.id.slice(0, separatorIndex);
+}
+
+function belongsToProjectRepoFamily(project: ProjectInfo, familyKey: string): boolean {
+  return project.id === familyKey || project.id.startsWith(`${familyKey}:`);
+}
+
+function getVisibleProjectsForScope(
+  ctx: Context,
+  projects: ProjectInfo[],
+  scopeKey: string,
+): ProjectInfo[] {
+  const scope = getScopeFromContext(ctx);
+  if (scope?.context !== SCOPE_CONTEXT.GROUP_GENERAL) {
+    return projects;
+  }
+
+  const currentProject = getCurrentProject(scopeKey);
+  const familyKey = getProjectRepoFamilyKey(currentProject ?? null);
+  if (!familyKey) {
+    return projects;
+  }
+
+  const familyProjects = projects.filter((project) =>
+    belongsToProjectRepoFamily(project, familyKey),
+  );
+  return familyProjects.length > 0 ? familyProjects : projects;
 }
 
 function formatProjectButtonLabel(label: string, isActive: boolean): string {
@@ -194,23 +228,7 @@ function clearInteractionWithScope(reason: string, scopeKey: string): void {
   clearAllInteractionState(reason, scopeKey);
 }
 
-function getConfiguredProjectName(scopeKey: string, chatId: number): string {
-  const currentProject = getCurrentProject(scopeKey);
-  if (currentProject?.name) {
-    return currentProject.name;
-  }
-
-  if (currentProject?.worktree) {
-    return currentProject.worktree;
-  }
-
-  const topicBinding = getTopicBindingsByChat(chatId).find((binding) =>
-    Boolean(binding.projectWorktree),
-  );
-  return topicBinding?.projectWorktree ?? t("pinned.unknown");
-}
-
-export function getProjectLockState(ctx: Context, scopeKey: string): ProjectLockState {
+export function getProjectLockState(ctx: Context, _scopeKey: string): ProjectLockState {
   if (!ctx.chat) {
     return { locked: false };
   }
@@ -223,21 +241,7 @@ export function getProjectLockState(ctx: Context, scopeKey: string): ProjectLock
     };
   }
 
-  const isForumEnabled = Reflect.get(ctx.chat, TELEGRAM_CHAT_FIELD.IS_FORUM) === true;
-  if (!isForumEnabled) {
-    return { locked: false };
-  }
-
-  const hasTopicBindings = getTopicBindingsByChat(ctx.chat.id).length > 0;
-  if (!hasTopicBindings) {
-    return { locked: false };
-  }
-
-  return {
-    locked: true,
-    messageKey: BOT_I18N_KEY.PROJECTS_LOCKED_GROUP_PROJECT,
-    projectName: getConfiguredProjectName(scopeKey, ctx.chat.id),
-  };
+  return { locked: false };
 }
 
 export async function projectsCommand(ctx: CommandContext<Context>) {
@@ -263,7 +267,8 @@ export async function projectsCommand(ctx: CommandContext<Context>) {
       return;
     }
 
-    const { text, keyboard } = buildProjectsMenuView(projects, 0, scopeKey);
+    const visibleProjects = getVisibleProjectsForScope(ctx, projects, scopeKey);
+    const { text, keyboard } = buildProjectsMenuView(visibleProjects, 0, scopeKey);
 
     await replyWithInlineMenu(ctx, {
       menuKind: "project",
@@ -301,7 +306,7 @@ export async function handleProjectSelect(ctx: Context): Promise<boolean> {
     }
 
     try {
-      const projects = await getProjects();
+      const projects = getVisibleProjectsForScope(ctx, await getProjects(), scopeKey);
       if (projects.length === 0) {
         await ctx.answerCallbackQuery();
         await ctx.reply(t("projects.empty"), getThreadSendOptions(scope?.threadId ?? null));
@@ -342,7 +347,7 @@ export async function handleProjectSelect(ctx: Context): Promise<boolean> {
   }
 
   try {
-    const projects = await getProjects();
+    const projects = getVisibleProjectsForScope(ctx, await getProjects(), scopeKey);
     const selectedProject = projects.find((p) => p.id === projectId);
 
     if (!selectedProject) {

@@ -49,6 +49,24 @@ export interface WizardEnvValues {
   OPENCODE_MODEL_ID: string;
 }
 
+interface ParsedEnvAssignmentLine {
+  key: string;
+  rawValue: string;
+  line: string;
+  isCommented: boolean;
+}
+
+const WIZARD_ENV_KEYS: ReadonlyArray<keyof WizardEnvValues> = [
+  "BOT_LOCALE",
+  "TELEGRAM_BOT_TOKEN",
+  "TELEGRAM_ALLOWED_USER_ID",
+  "OPENCODE_API_URL",
+  "OPENCODE_SERVER_USERNAME",
+  "OPENCODE_SERVER_PASSWORD",
+  "OPENCODE_MODEL_PROVIDER",
+  "OPENCODE_MODEL_ID",
+];
+
 function isPositiveInteger(value: string): boolean {
   return /^[1-9]\d*$/.test(value);
 }
@@ -106,11 +124,79 @@ function removeEnvKey(lines: string[], key: string): string[] {
   return lines.filter((line) => !regex.test(line));
 }
 
+function parseEnvAssignmentLine(line: string): ParsedEnvAssignmentLine | null {
+  const match = /^(\s*#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/.exec(line);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    key: match[2],
+    rawValue: match[3],
+    line,
+    isCommented: typeof match[1] === "string",
+  };
+}
+
+function buildTemplateKeySet(templateContent: string): Set<string> {
+  const keys = new Set<string>();
+
+  for (const line of normalizeEnvLineEndings(templateContent)) {
+    const parsedLine = parseEnvAssignmentLine(line);
+    if (parsedLine !== null) {
+      keys.add(parsedLine.key);
+    }
+  }
+
+  return keys;
+}
+
+function collectActiveEnvAssignments(content: string): Map<string, ParsedEnvAssignmentLine> {
+  const assignments = new Map<string, ParsedEnvAssignmentLine>();
+
+  for (const line of normalizeEnvLineEndings(content)) {
+    const parsedLine = parseEnvAssignmentLine(line);
+    if (parsedLine === null || parsedLine.isCommented) {
+      continue;
+    }
+
+    assignments.set(parsedLine.key, parsedLine);
+  }
+
+  return assignments;
+}
+
+function collectCustomEnvAssignments(existingContent: string, templateKeys: Set<string>): string[] {
+  const customAssignments: ParsedEnvAssignmentLine[] = [];
+  const seenKeys = new Set<string>();
+
+  const lines = normalizeEnvLineEndings(existingContent);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const parsedLine = parseEnvAssignmentLine(lines[index]);
+    if (parsedLine === null || parsedLine.isCommented || templateKeys.has(parsedLine.key)) {
+      continue;
+    }
+
+    if (seenKeys.has(parsedLine.key)) {
+      continue;
+    }
+
+    seenKeys.add(parsedLine.key);
+    customAssignments.push(parsedLine);
+  }
+
+  return customAssignments.reverse().map((assignment) => assignment.line);
+}
+
+function renderEnvAssignment(key: string, rawValue: string): string {
+  return `${key}=${rawValue}`;
+}
+
 function finalizeEnvContent(lines: string[]): string {
   return `${lines.join("\n")}\n`;
 }
 
-export function buildEnvFileContent(existingContent: string, values: WizardEnvValues): string {
+function buildFlatEnvFileContent(existingContent: string, values: WizardEnvValues): string {
   let lines = normalizeEnvLineEndings(existingContent);
 
   const orderedUpdates: Array<[keyof WizardEnvValues, string | undefined]> = [
@@ -133,6 +219,61 @@ export function buildEnvFileContent(existingContent: string, values: WizardEnvVa
   }
 
   return finalizeEnvContent(lines);
+}
+
+export function buildEnvFileContent(
+  existingContent: string,
+  values: WizardEnvValues,
+  envExampleContent?: string | null,
+): string {
+  if (!envExampleContent) {
+    return buildFlatEnvFileContent(existingContent, values);
+  }
+
+  const templateLines = normalizeEnvLineEndings(envExampleContent);
+  if (templateLines.length === 0) {
+    return buildFlatEnvFileContent(existingContent, values);
+  }
+
+  const templateKeys = buildTemplateKeySet(envExampleContent);
+  const existingAssignments = collectActiveEnvAssignments(existingContent);
+  const wizardOverrides = new Map<string, string | undefined>(
+    WIZARD_ENV_KEYS.map((key) => [key, values[key]]),
+  );
+
+  const renderedLines = templateLines.map((line) => {
+    const parsedLine = parseEnvAssignmentLine(line);
+    if (parsedLine === null) {
+      return line;
+    }
+
+    if (wizardOverrides.has(parsedLine.key)) {
+      const overrideValue = wizardOverrides.get(parsedLine.key);
+      if (overrideValue && overrideValue.trim().length > 0) {
+        return renderEnvAssignment(parsedLine.key, overrideValue);
+      }
+
+      return line;
+    }
+
+    const existingAssignment = existingAssignments.get(parsedLine.key);
+    if (existingAssignment !== undefined) {
+      return renderEnvAssignment(parsedLine.key, existingAssignment.rawValue);
+    }
+
+    return line;
+  });
+
+  const customAssignments = collectCustomEnvAssignments(existingContent, templateKeys);
+  if (customAssignments.length > 0) {
+    if (renderedLines.length > 0 && renderedLines[renderedLines.length - 1] !== "") {
+      renderedLines.push("");
+    }
+
+    renderedLines.push(...customAssignments);
+  }
+
+  return finalizeEnvContent(renderedLines);
 }
 
 async function readEnvFileIfExists(filePath: string): Promise<string | null> {
@@ -174,15 +315,26 @@ function getEnvExamplePath(): string {
   return path.resolve(path.dirname(currentFilePath), "..", "..", ".env.example");
 }
 
-async function loadModelDefaultsFromEnvExample(): Promise<ModelDefaults> {
+async function loadEnvExampleContent(): Promise<string | null> {
+  try {
+    return await fs.readFile(getEnvExamplePath(), "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+function loadModelDefaultsFromEnvExample(envExampleContent: string | null): ModelDefaults {
   const fallbackDefaults: ModelDefaults = {
     provider: FALLBACK_MODEL_PROVIDER,
     modelId: FALLBACK_MODEL_ID,
   };
 
   try {
-    const content = await fs.readFile(getEnvExamplePath(), "utf-8");
-    const parsed = dotenv.parse(content);
+    if (!envExampleContent) {
+      return fallbackDefaults;
+    }
+
+    const parsed = dotenv.parse(envExampleContent);
 
     const provider = parsed.OPENCODE_MODEL_PROVIDER?.trim();
     const modelId = parsed.OPENCODE_MODEL_ID?.trim();
@@ -422,12 +574,13 @@ async function validateExistingEnv(envFilePath: string): Promise<EnvValidationRe
 async function runWizardAndPersist(runtimePaths: RuntimePaths): Promise<void> {
   ensureInteractiveTty();
 
-  const [existingContent, modelDefaults, wizardValues] = await Promise.all([
+  const [existingContent, envExampleContent, wizardValues] = await Promise.all([
     readEnvFileIfExists(runtimePaths.envFilePath),
-    loadModelDefaultsFromEnvExample(),
+    loadEnvExampleContent(),
     collectWizardValues(),
   ]);
 
+  const modelDefaults = loadModelDefaultsFromEnvExample(envExampleContent);
   const existingParsed = existingContent ? dotenv.parse(existingContent) : {};
   const provider = existingParsed.OPENCODE_MODEL_PROVIDER || modelDefaults.provider;
   const modelId = existingParsed.OPENCODE_MODEL_ID || modelDefaults.modelId;
@@ -443,7 +596,7 @@ async function runWizardAndPersist(runtimePaths: RuntimePaths): Promise<void> {
     OPENCODE_MODEL_ID: modelId,
   };
 
-  const envContent = buildEnvFileContent(existingContent ?? "", envValues);
+  const envContent = buildEnvFileContent(existingContent ?? "", envValues, envExampleContent);
   await writeFileAtomically(runtimePaths.envFilePath, envContent);
   await ensureSettingsFile(runtimePaths.settingsFilePath);
 
