@@ -7,7 +7,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - Permanent git remote: `upstream` -> `https://github.com/grinev/opencode-telegram-bot.git`
 - Upstream repo: `https://github.com/grinev/opencode-telegram-bot`
 - Upstream branch: `main`
-- Last reviewed upstream head: `7a8e542` (`chore(release): v0.16.0`, 2026-04-12)
+- Last reviewed upstream head: `c266e91` (`chore(release): v0.19.0`, 2026-04-26)
 - Original fork point for this threaded fork: `21da71b` (`chore(release): v0.11.0`)
 
 ## Fork Rules
@@ -43,6 +43,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - `13a8948` adapted port: scoped agent selection now falls back to an available project agent before prompts, commands, topic creation, and scheduled tasks
 - `a25af98` ported: bot UI now labels the selector as `agent` instead of `mode`
 - `2f22851` adapted port: `/open` now adds projects by browsing configurable allowed roots while still respecting this fork's group/topic project-lock rules and scoped state reset flow
+- `bcd52bf` + `d10da74` adapted port: local OpenCode server start/stop now resolve the process by configured local port instead of persisted PID state, and optional auto-restart health checks were wired into the fork runtime without changing topic-scoped delivery
 
 ## Upstream Changes Intentionally Adapted
 
@@ -82,6 +83,10 @@ This repository is a product fork of the original single-chat project at `grinev
 - `1ad75a5` reviewed; file logging was already present in this fork, so no additional port was needed
 - `e85380f` + `0580a73` + `5222bae` + `ed512ff` reviewed for `v0.16.0`; skipped for now because this fork's topic-scoped live-stream/final-delivery pipeline diverges heavily and needs a dedicated manual adaptation pass
 - Release-only/docs-only changes in `v0.16.0` skipped after review (`57a0c56`, `a75f055`, `8940e35`, `7a8e542`)
+- `3b7d42f` + `56d65b2` reviewed for `v0.18.0`; skipped for now because this fork's topic-scoped session binding model diverges from upstream's single active attach flow and default attached-session behavior
+- `52fc925` reviewed for `v0.19.0`; skipped for now because this fork has not yet adopted upstream's multi-provider TTS configuration surface
+- `f82fab6` reviewed for `v0.19.0`; skipped for now pending a fork-specific UX pass for control-lane versus topic-lane MCP management
+- `66403c0` + `18909f5` + `fb8e44d` + `36503c6` reviewed for `v0.19.0`; skipped for now because the fork's Markdown/subagent/pinned-message pipeline has already diverged and needs a dedicated manual adaptation pass
 
 ## Sync Workflow
 

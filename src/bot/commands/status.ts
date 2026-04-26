@@ -6,7 +6,6 @@ import { fetchCurrentAgent } from "../../agent/manager.js";
 import { getAgentDisplayName } from "../../agent/types.js";
 import { fetchCurrentModel } from "../../model/manager.js";
 import { formatModelForDisplay } from "../../model/types.js";
-import { processManager } from "../../process/manager.js";
 import { keyboardManager } from "../../keyboard/manager.js";
 import { pinnedMessageManager } from "../../pinned/manager.js";
 import { logger } from "../../utils/logger.js";
@@ -43,16 +42,6 @@ export async function statusCommand(ctx: CommandContext<Context>) {
       }
       dmMessage += `${t("status.line.tts", { tts: isTtsEnabled() ? t("status.tts.on") : t("status.tts.off") })}\n`;
 
-      if (processManager.isRunning()) {
-        const uptime = processManager.getUptime();
-        const uptimeStr = uptime ? Math.floor(uptime / 1000) : 0;
-        dmMessage += `${t("status.line.managed_yes")}\n`;
-        dmMessage += `${t("status.line.pid", { pid: processManager.getPID() ?? "-" })}\n`;
-        dmMessage += `${t("status.line.uptime_sec", { seconds: uptimeStr })}\n`;
-      } else {
-        dmMessage += `${t("status.line.managed_no")}\n`;
-      }
-
       dmMessage += `\n${t("status.global_overview")}\n`;
       dmMessage += `${t("status.global_projects", { count: projectCount })}\n`;
       dmMessage += `${t("status.global_sessions", { count: sessionCount })}\n\n`;
@@ -69,17 +58,6 @@ export async function statusCommand(ctx: CommandContext<Context>) {
       message += `${t("status.line.version", { version: data.version })}\n`;
     }
     message += `${t("status.line.tts", { tts: isTtsEnabled() ? t("status.tts.on") : t("status.tts.off") })}\n`;
-
-    // Add process management information
-    if (processManager.isRunning()) {
-      const uptime = processManager.getUptime();
-      const uptimeStr = uptime ? Math.floor(uptime / 1000) : 0;
-      message += `${t("status.line.managed_yes")}\n`;
-      message += `${t("status.line.pid", { pid: processManager.getPID() ?? "-" })}\n`;
-      message += `${t("status.line.uptime_sec", { seconds: uptimeStr })}\n`;
-    } else {
-      message += `${t("status.line.managed_no")}\n`;
-    }
 
     // Add agent information
     const currentAgent = await fetchCurrentAgent(scopeKey);
