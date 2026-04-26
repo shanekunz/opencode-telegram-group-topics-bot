@@ -162,7 +162,7 @@ Open tasks for upcoming iterations:
 - [ ] Display MCP servers, formatters, and plugins in bot status/details
 - [x] Configure visibility level for thinking and intermediate steps
 - [ ] Add server crash notifications in Telegram
-- [ ] Add periodic health checks and optional auto-restart for OpenCode server
+- [x] Add periodic health checks and optional auto-restart for OpenCode server
 - [x] Improve Telegram-compatible message formatting for richer outputs
 - [x] Support sending photos from Telegram to OpenCode (screenshots, images)
 - [x] Support sending PDF documents from Telegram to OpenCode

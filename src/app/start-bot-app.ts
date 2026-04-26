@@ -4,8 +4,8 @@ import { readFile } from "node:fs/promises";
 import { cleanupBotRuntime, createBot } from "../bot/index.js";
 import { config } from "../config.js";
 import { reconcileStoredModelSelection } from "../model/manager.js";
+import { opencodeAutoRestartService } from "../opencode/auto-restart.js";
 import { loadSettings } from "../settings/manager.js";
-import { processManager } from "../process/manager.js";
 import { warmupSessionDirectoryCache } from "../session/cache-manager.js";
 import { createScheduledTaskRuntime } from "../scheduled-task/runtime.js";
 import { getRuntimeMode } from "../runtime/mode.js";
@@ -40,8 +40,8 @@ export async function startBotApp(): Promise<void> {
   logger.debug(`[Runtime] Application start mode: ${mode}`);
 
   await loadSettings();
-  await processManager.initialize();
   await reconcileStoredModelSelection();
+  await opencodeAutoRestartService.start();
   await warmupSessionDirectoryCache();
 
   const bot = createBot();
@@ -85,6 +85,7 @@ export async function startBotApp(): Promise<void> {
     shutdownStarted = true;
     logger.info(`[App] Received ${signal}, shutting down...`);
     cleanupBotRuntime(`app_shutdown_${signal.toLowerCase()}`);
+    opencodeAutoRestartService.stop();
     scheduledTaskRuntime.stop();
 
     shutdownTimeout = setTimeout(() => {
@@ -130,6 +131,7 @@ export async function startBotApp(): Promise<void> {
       shutdownTimeout = null;
     }
     cleanupBotRuntime("app_shutdown_complete");
+    opencodeAutoRestartService.stop();
     scheduledTaskRuntime.stop();
     await clearManagedServiceState().catch((error) => {
       logger.warn("[App] Failed to clear managed service state", error);

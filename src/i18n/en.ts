@@ -314,6 +314,8 @@ export const en = {
     "⚠️ OpenCode Server is already running\n\nPID: {pid}\nUptime: {seconds} seconds",
   "opencode_start.already_running_external":
     "✅ OpenCode Server is already running as an external process\n\nVersion: {version}\n\nThis server was not started by bot, so /opencode-stop cannot stop it.",
+  "opencode_start.already_running": "✅ OpenCode Server is already running\n\nVersion: {version}",
+  "opencode_start.remote_configured": "⚠️ /opencode_start works only with a local OpenCode Server.",
   "opencode_start.starting": "🔄 Starting OpenCode Server...",
   "opencode_start.start_error":
     "🔴 Failed to start OpenCode Server\n\nError: {error}\n\nCheck that OpenCode CLI is installed and available in PATH:\nopencode --version\nnpm install -g @opencode-ai/cli",
@@ -325,9 +327,13 @@ export const en = {
     "🔴 An error occurred while starting server.\n\nCheck application logs for details.",
   "opencode_stop.external_running":
     "⚠️ OpenCode Server is running as an external process\n\nThis server was not started via /opencode-start.\nStop it manually or use /status to check state.",
+  "opencode_stop.remote_configured": "⚠️ /opencode_stop works only with a local OpenCode Server.",
   "opencode_stop.not_running": "⚠️ OpenCode Server is not running",
+  "opencode_stop.pid_not_found":
+    "⚠️ OpenCode Server responds on port {port}, but no local process was found to stop.",
   "opencode_stop.stopping": "🛑 Stopping OpenCode Server...\n\nPID: {pid}",
   "opencode_stop.stop_error": "🔴 Failed to stop OpenCode Server\n\nError: {error}",
+  "opencode_stop.still_running": "Server is still responding after the stop request.",
   "opencode_stop.success": "✅ OpenCode Server stopped successfully",
   "opencode_stop.error":
     "🔴 An error occurred while stopping server.\n\nCheck application logs for details.",
