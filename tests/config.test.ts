@@ -166,6 +166,26 @@ describe("config boolean env parsing", () => {
     expect(config.bot.openBrowserRoots).toBe("~/projects,/srv/repos");
   });
 
+  it("keeps OpenCode auto-restart disabled by default", async () => {
+    vi.stubEnv("OPENCODE_AUTO_RESTART_ENABLED", "");
+    vi.stubEnv("OPENCODE_MONITOR_INTERVAL_SEC", "");
+
+    const config = await loadConfig();
+
+    expect(config.opencode.autoRestartEnabled).toBe(false);
+    expect(config.opencode.monitorIntervalSec).toBe(300);
+  });
+
+  it("parses OpenCode auto-restart settings", async () => {
+    vi.stubEnv("OPENCODE_AUTO_RESTART_ENABLED", "true");
+    vi.stubEnv("OPENCODE_MONITOR_INTERVAL_SEC", "45");
+
+    const config = await loadConfig();
+
+    expect(config.opencode.autoRestartEnabled).toBe(true);
+    expect(config.opencode.monitorIntervalSec).toBe(45);
+  });
+
   it("parses response stream throttle", async () => {
     vi.stubEnv("RESPONSE_STREAM_THROTTLE_MS", "750");
 

@@ -1,7 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setRuntimeMode } from "../../src/runtime/mode.js";
 import { loadSettings } from "../../src/settings/manager.js";
 import {
@@ -67,6 +67,7 @@ describe("session/cache-manager", () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     delete process.env.OPENCODE_TELEGRAM_HOME;
     await rm(tempHome, { recursive: true, force: true });
   });
@@ -110,6 +111,8 @@ describe("session/cache-manager", () => {
   });
 
   it("runs incremental sync using start watermark", async () => {
+    vi.useFakeTimers();
+
     sessionListMock
       .mockResolvedValueOnce({
         data: [createSession("D:/repo-a", 1_700_000_000_500)],
@@ -121,7 +124,8 @@ describe("session/cache-manager", () => {
       });
 
     await warmupSessionDirectoryCache();
-    await syncSessionDirectoryCache({ force: true });
+    await vi.advanceTimersByTimeAsync(60_001);
+    await syncSessionDirectoryCache();
 
     expect(sessionListMock).toHaveBeenNthCalledWith(1, { limit: 1000 });
     expect(sessionListMock).toHaveBeenNthCalledWith(2, {
@@ -153,5 +157,32 @@ describe("session/cache-manager", () => {
 
     const directories = await getCachedSessionDirectories();
     expect(directories).toEqual([{ worktree: "D:/repo-a", lastUpdated: 1_700_000_000_900 }]);
+  });
+
+  it("prunes stale directories on a full sync when the response is complete", async () => {
+    sessionListMock.mockResolvedValueOnce({
+      data: [
+        createSession("D:/repo-a", 1_700_000_000_200),
+        createSession("D:/repo-b", 1_700_000_000_100),
+      ],
+      error: null,
+    });
+
+    await warmupSessionDirectoryCache();
+    await upsertSessionDirectory("D:/repo-stale", 1_700_000_000_050);
+
+    sessionListMock.mockResolvedValueOnce({
+      data: [createSession("D:/repo-b", 1_700_000_000_300)],
+      error: null,
+    });
+
+    await syncSessionDirectoryCache({ force: true });
+
+    await expect(getCachedSessionDirectories()).resolves.toEqual([
+      { worktree: "D:/repo-b", lastUpdated: 1_700_000_000_300 },
+    ]);
+    expect(loggerInfoMock).toHaveBeenCalledWith(
+      "[SessionCache] Pruned 2 stale directories from cache",
+    );
   });
 });

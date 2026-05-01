@@ -16,6 +16,7 @@ const mocked = vi.hoisted(() => ({
 
 vi.mock("../../src/scheduled-task/executor.js", () => ({
   executeScheduledTask: mocked.executeScheduledTaskMock,
+  SCHEDULED_TASK_AGENT: "build",
 }));
 
 vi.mock("../../src/bot/utils/telegram-text.js", () => ({
@@ -78,6 +79,13 @@ describe("scheduled-task/runtime", () => {
       expect.objectContaining({
         chatId: -100123,
         text: expect.stringContaining("Scheduled task completed"),
+        options: { message_thread_id: 555, disable_notification: true },
+      }),
+    );
+    expect(mocked.sendBotTextMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        chatId: -100123,
+        text: expect.stringContaining("openai/gpt-5"),
         options: { message_thread_id: 555 },
       }),
     );

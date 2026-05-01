@@ -110,8 +110,41 @@ describe("bot/commands/tasklist", () => {
 
     const [text, options] = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(text).toContain("weekdays 09:00");
+    expect(text).toContain("Model: openai/gpt-5");
     expect(text).not.toContain("Other chat");
     expect(options.reply_markup.inline_keyboard[0][0].callback_data).toBe("tasklist:delete:task-a");
+  });
+
+  it("shows the scheduled task variant in the model line", async () => {
+    mocked.listScheduledTasksMock.mockReturnValue([
+      {
+        id: "task-a",
+        kind: "cron",
+        projectId: "project-1",
+        projectWorktree: "/repo/app",
+        createdFromScopeKey: "-100123:77",
+        agent: "review",
+        model: { providerID: "openai", modelID: "gpt-5", variant: "fast" },
+        delivery: { chatId: -100123, threadId: 555 },
+        scheduleText: "every weekday at 09:00",
+        scheduleSummary: "weekdays 09:00",
+        timezone: "UTC",
+        prompt: "Review PRs",
+        createdAt: "2026-03-25T00:00:00.000Z",
+        nextRunAt: "2026-03-26T09:00:00.000Z",
+        lastRunAt: null,
+        runCount: 0,
+        lastStatus: "idle",
+        lastError: null,
+        cron: "0 9 * * 1-5",
+      },
+    ]);
+
+    const ctx = createCommandContext();
+    await taskListCommand(ctx as never);
+
+    const [text] = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(text).toContain("Model: openai/gpt-5 (fast)");
   });
 
   it("truncates long prompts so the task list stays within Telegram limits", async () => {

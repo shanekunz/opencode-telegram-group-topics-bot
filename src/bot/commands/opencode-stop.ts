@@ -1,8 +1,14 @@
 import { CommandContext, Context } from "grammy";
+import { config } from "../../config.js";
 import { opencodeClient } from "../../opencode/client.js";
-import { processManager } from "../../process/manager.js";
+import {
+  findServerPid,
+  killServerProcess,
+  resolveLocalOpencodeTarget,
+} from "../../opencode/process.js";
 import { logger } from "../../utils/logger.js";
 import { t } from "../../i18n/index.js";
+import { editBotText } from "../utils/telegram-text.js";
 
 /**
  * Command handler for /opencode-stop
@@ -10,48 +16,65 @@ import { t } from "../../i18n/index.js";
  */
 export async function opencodeStopCommand(ctx: CommandContext<Context>) {
   try {
-    // 1. Check if process is running under our management
-    if (!processManager.isRunning()) {
-      // Check if there's an external server running
-      try {
-        const { data, error } = await opencodeClient.global.health();
+    const localTarget = resolveLocalOpencodeTarget(config.opencode.apiUrl);
+    if (!localTarget) {
+      await ctx.reply(t("opencode_stop.remote_configured"));
+      return;
+    }
 
-        if (!error && data?.healthy) {
-          await ctx.reply(t("opencode_stop.external_running"));
-          return;
-        }
-      } catch {
-        // Server not accessible
+    try {
+      const { data, error } = await opencodeClient.global.health();
+      if (error || !data?.healthy) {
+        await ctx.reply(t("opencode_stop.not_running"));
+        return;
       }
-
+    } catch {
       await ctx.reply(t("opencode_stop.not_running"));
       return;
     }
 
-    // 2. Notify user that we're stopping the server
-    const pid = processManager.getPID();
-    const statusMessage = await ctx.reply(t("opencode_stop.stopping", { pid: pid ?? "-" }));
-
-    // 3. Stop the process
-    const { success, error } = await processManager.stop(5000);
-
-    if (!success) {
-      await ctx.api.editMessageText(
-        ctx.chat.id,
-        statusMessage.message_id,
-        t("opencode_stop.stop_error", { error: error || t("common.unknown_error") }),
-      );
+    const pid = await findServerPid(localTarget.port);
+    if (!pid) {
+      await ctx.reply(t("opencode_stop.pid_not_found", { port: localTarget.port }));
       return;
     }
 
-    // 4. Success - process has been stopped
-    await ctx.api.editMessageText(
-      ctx.chat.id,
-      statusMessage.message_id,
-      t("opencode_stop.success"),
-    );
+    const statusMessage = await ctx.reply(t("opencode_stop.stopping", { pid }));
 
-    logger.info("[Bot] OpenCode server stopped successfully");
+    const stopped = await killServerProcess(pid, 5000);
+    if (!stopped) {
+      await editBotText({
+        api: ctx.api,
+        chatId: ctx.chat.id,
+        messageId: statusMessage.message_id,
+        text: t("opencode_stop.stop_error", { error: t("common.unknown_error") }),
+      });
+      return;
+    }
+
+    try {
+      const { data, error } = await opencodeClient.global.health();
+      if (!error && data?.healthy) {
+        await editBotText({
+          api: ctx.api,
+          chatId: ctx.chat.id,
+          messageId: statusMessage.message_id,
+          text: t("opencode_stop.stop_error", { error: t("opencode_stop.still_running") }),
+        });
+        return;
+      }
+    } catch {
+      // Health check failure after stop is expected.
+    }
+
+    await editBotText({
+      api: ctx.api,
+      chatId: ctx.chat.id,
+      messageId: statusMessage.message_id,
+      text: t("opencode_stop.success"),
+    });
+
+    logger.info(`[Bot] OpenCode server stopped successfully, PID=${pid}, port=${localTarget.port}`);
   } catch (err) {
     logger.error("[Bot] Error in /opencode-stop command:", err);
     await ctx.reply(t("opencode_stop.error"));

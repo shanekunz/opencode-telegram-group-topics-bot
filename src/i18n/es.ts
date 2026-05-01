@@ -247,12 +247,17 @@ export const es: I18nDictionary = {
   "task.list.empty": "📭 No hay tareas programadas para este proyecto en este chat.",
   "task.list.none": "sin programación",
   "task.list.next_run": "Próxima ejecución: {value}",
+  "task.list.model": "Modelo: {value}",
   "task.list.status": "Estado: {value}",
   "task.list.prompt": "Prompt: {value}",
   "task.list.delete_button": "Eliminar #{index}",
   "task.list.deleted": "Tarea programada eliminada",
   "task.list.delete_missing": "No se encontró la tarea programada",
   "task.list.delete_error": "No se pudo eliminar la tarea programada",
+  "task.run.error.interactive_question":
+    "La tarea programada no puede continuar porque requiere responder una pregunta de forma interactiva.",
+  "task.run.error.interactive_permission":
+    "La tarea programada no puede continuar porque requiere una aprobación interactiva de permisos.",
 
   "cleanup.topic_use_general": "⚠️ Ejecuta /cleanup desde el tema General.",
   "cleanup.requires_forum_general":
@@ -286,6 +291,9 @@ export const es: I18nDictionary = {
     "⚠️ OpenCode Server ya está en ejecución\n\nPID: {pid}\nTiempo activo: {seconds} segundos",
   "opencode_start.already_running_external":
     "✅ OpenCode Server ya está en ejecución como un proceso externo\n\nVersión: {version}\n\nEste servidor no fue iniciado por el bot, por lo que /opencode-stop no puede detenerlo.",
+  "opencode_start.already_running": "✅ OpenCode Server ya está en ejecución\n\nVersión: {version}",
+  "opencode_start.remote_configured":
+    "⚠️ /opencode_start solo funciona con un servidor OpenCode local.",
   "opencode_start.starting": "🔄 Iniciando OpenCode Server...",
   "opencode_start.start_error":
     "🔴 No se pudo iniciar OpenCode Server\n\nError: {error}\n\nRevisa que OpenCode CLI esté instalado y disponible en PATH:\nopencode --version\nnpm install -g @opencode-ai/cli",
@@ -297,9 +305,14 @@ export const es: I18nDictionary = {
     "🔴 Ocurrió un error al iniciar el servidor.\n\nRevisa los logs de la aplicación para más detalles.",
   "opencode_stop.external_running":
     "⚠️ OpenCode Server está en ejecución como un proceso externo\n\nEste servidor no fue iniciado con /opencode-start.\nDeténlo manualmente o usa /status para revisar el estado.",
+  "opencode_stop.remote_configured":
+    "⚠️ /opencode_stop solo funciona con un servidor OpenCode local.",
   "opencode_stop.not_running": "⚠️ OpenCode Server no está en ejecución",
+  "opencode_stop.pid_not_found":
+    "⚠️ OpenCode Server responde en el puerto {port}, pero no se encontró ningún proceso local para detener.",
   "opencode_stop.stopping": "🛑 Deteniendo OpenCode Server...\n\nPID: {pid}",
   "opencode_stop.stop_error": "🔴 No se pudo detener OpenCode Server\n\nError: {error}",
+  "opencode_stop.still_running": "El servidor sigue respondiendo después de la solicitud de detención.",
   "opencode_stop.success": "✅ OpenCode Server detenido correctamente",
   "opencode_stop.error":
     "🔴 Ocurrió un error al detener el servidor.\n\nRevisa los logs de la aplicación para más detalles.",

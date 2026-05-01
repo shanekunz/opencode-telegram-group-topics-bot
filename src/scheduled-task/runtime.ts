@@ -1,9 +1,10 @@
 import type { Bot, Context } from "grammy";
+import { formatAssistantRunFooter } from "../bot/utils/assistant-run-footer.js";
 import { config } from "../config.js";
 import { getThreadSendOptions } from "../bot/scope.js";
 import { sendBotText } from "../bot/utils/telegram-text.js";
 import { logger } from "../utils/logger.js";
-import { executeScheduledTask } from "./executor.js";
+import { executeScheduledTask, SCHEDULED_TASK_AGENT } from "./executor.js";
 import {
   getScheduledTask,
   listScheduledTasks,
@@ -25,6 +26,11 @@ interface ZonedDateParts {
   dayOfMonth: number;
   month: number;
   dayOfWeek: number;
+}
+
+interface ScheduledTaskDeliveryMessage {
+  bodyText: string;
+  footerText?: string;
 }
 
 const zonedPartsFormatterCache = new Map<string, Intl.DateTimeFormat>();
@@ -283,34 +289,62 @@ function splitMessage(text: string): string[] {
   return parts;
 }
 
-function buildSuccessMessage(task: ScheduledTask, finishedAt: string, resultText: string): string {
-  return [
-    "Scheduled task completed",
-    `Project: ${task.projectWorktree}`,
-    `Schedule: ${task.scheduleSummary}`,
-    `Finished: ${finishedAt}`,
-    "",
-    `Prompt:\n${task.prompt}`,
-    "",
-    `Result:\n${resultText}`,
-  ].join("\n");
+function buildSuccessMessage(
+  task: ScheduledTask,
+  startedAt: string,
+  finishedAt: string,
+  resultText: string,
+): ScheduledTaskDeliveryMessage {
+  return {
+    bodyText: [
+      "Scheduled task completed",
+      `Project: ${task.projectWorktree}`,
+      `Schedule: ${task.scheduleSummary}`,
+      `Finished: ${finishedAt}`,
+      "",
+      `Prompt:\n${task.prompt}`,
+      "",
+      `Result:\n${resultText}`,
+    ].join("\n"),
+    footerText: formatAssistantRunFooter(
+      {
+        sessionId: task.id,
+        startedAt: Date.parse(startedAt),
+        configuredAgent: task.agent ?? SCHEDULED_TASK_AGENT,
+        configuredProviderID: task.model.providerID,
+        configuredModelID: task.model.modelID,
+      },
+      Date.parse(finishedAt),
+    ),
+  };
 }
 
-function buildErrorMessage(task: ScheduledTask, finishedAt: string, errorMessage: string): string {
-  return [
-    "Scheduled task failed",
-    `Project: ${task.projectWorktree}`,
-    `Schedule: ${task.scheduleSummary}`,
-    `Finished: ${finishedAt}`,
-    "",
-    `Prompt:\n${task.prompt}`,
-    "",
-    `Error:\n${errorMessage}`,
-  ].join("\n");
+function buildErrorMessage(
+  task: ScheduledTask,
+  finishedAt: string,
+  errorMessage: string,
+): ScheduledTaskDeliveryMessage {
+  return {
+    bodyText: [
+      "Scheduled task failed",
+      `Project: ${task.projectWorktree}`,
+      `Schedule: ${task.scheduleSummary}`,
+      `Finished: ${finishedAt}`,
+      "",
+      `Prompt:\n${task.prompt}`,
+      "",
+      `Error:\n${errorMessage}`,
+    ].join("\n"),
+  };
 }
 
-async function deliverResult(bot: Bot<Context>, task: ScheduledTask, text: string): Promise<void> {
-  const parts = splitMessage(text);
+async function deliverResult(
+  bot: Bot<Context>,
+  task: ScheduledTask,
+  message: ScheduledTaskDeliveryMessage,
+): Promise<void> {
+  const parts = splitMessage(message.bodyText);
+  const suppressBodyNotification = Boolean(message.footerText);
 
   logger.info(
     `[ScheduledTaskRuntime] Delivering scheduled task result: taskId=${task.id}, chatId=${task.delivery.chatId}, threadId=${task.delivery.threadId ?? "none"}, parts=${parts.length}`,
@@ -321,6 +355,19 @@ async function deliverResult(bot: Bot<Context>, task: ScheduledTask, text: strin
       api: bot.api,
       chatId: task.delivery.chatId,
       text: part,
+      options: {
+        ...getThreadSendOptions(task.delivery.threadId),
+        ...(suppressBodyNotification ? { disable_notification: true } : {}),
+      },
+      format: "raw",
+    });
+  }
+
+  if (message.footerText) {
+    await sendBotText({
+      api: bot.api,
+      chatId: task.delivery.chatId,
+      text: message.footerText,
       options: getThreadSendOptions(task.delivery.threadId),
       format: "raw",
     });
@@ -361,7 +408,12 @@ async function finalizeTaskRun(bot: Bot<Context>, task: ScheduledTask): Promise<
 
     const message =
       execution.status === "success"
-        ? buildSuccessMessage(updatedTask, execution.finishedAt, execution.resultText ?? "")
+        ? buildSuccessMessage(
+            updatedTask,
+            execution.startedAt,
+            execution.finishedAt,
+            execution.resultText ?? "",
+          )
         : buildErrorMessage(
             updatedTask,
             execution.finishedAt,

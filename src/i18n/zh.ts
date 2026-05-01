@@ -215,12 +215,15 @@ export const zh: I18nDictionary = {
   "task.list.empty": "📭 这个聊天中的当前项目还没有定时任务。",
   "task.list.none": "未计划",
   "task.list.next_run": "下次运行：{value}",
+  "task.list.model": "模型：{value}",
   "task.list.status": "状态：{value}",
   "task.list.prompt": "提示词：{value}",
   "task.list.delete_button": "删除 #{index}",
   "task.list.deleted": "定时任务已删除",
   "task.list.delete_missing": "未找到定时任务",
   "task.list.delete_error": "删除定时任务失败",
+  "task.run.error.interactive_question": "定时任务无法继续，因为它需要交互式回答问题。",
+  "task.run.error.interactive_permission": "定时任务无法继续，因为它需要交互式权限批准。",
 
   "cleanup.topic_use_general": "⚠️ 请在 General 话题中运行 /cleanup。",
   "cleanup.requires_forum_general": "⚠️ /cleanup 仅在启用论坛的超级群 General 话题中可用。",
@@ -244,6 +247,8 @@ export const zh: I18nDictionary = {
     "⚠️ OpenCode 服务器已在运行\n\nPID：{pid}\n运行时间：{seconds} 秒",
   "opencode_start.already_running_external":
     "✅ OpenCode 服务器正作为外部进程运行\n\n版本：{version}\n\n该服务器不是由机器人启动，因此 /opencode-stop 无法停止它。",
+  "opencode_start.already_running": "✅ OpenCode 服务器已在运行\n\n版本：{version}",
+  "opencode_start.remote_configured": "⚠️ /opencode_start 仅适用于本地 OpenCode 服务器。",
   "opencode_start.starting": "🔄 正在启动 OpenCode 服务器...",
   "opencode_start.start_error":
     "🔴 启动 OpenCode 服务器失败\n\n错误：{error}\n\n请检查 OpenCode CLI 已安装且在 PATH 中可用：\nopencode --version\nnpm install -g @opencode-ai/cli",
@@ -253,9 +258,13 @@ export const zh: I18nDictionary = {
   "opencode_start.error": "🔴 启动服务器时发生错误。\n\n请查看应用日志了解详情。",
   "opencode_stop.external_running":
     "⚠️ OpenCode 服务器正作为外部进程运行\n\n该服务器不是通过 /opencode-start 启动的。\n请手动停止它，或使用 /status 检查状态。",
+  "opencode_stop.remote_configured": "⚠️ /opencode_stop 仅适用于本地 OpenCode 服务器。",
   "opencode_stop.not_running": "⚠️ OpenCode 服务器未运行",
+  "opencode_stop.pid_not_found":
+    "⚠️ OpenCode 服务器正在端口 {port} 上响应，但未找到可停止的本地进程。",
   "opencode_stop.stopping": "🛑 正在停止 OpenCode 服务器...\n\nPID：{pid}",
   "opencode_stop.stop_error": "🔴 停止 OpenCode 服务器失败\n\n错误：{error}",
+  "opencode_stop.still_running": "停止请求后服务器仍在响应。",
   "opencode_stop.success": "✅ OpenCode 服务器已成功停止",
   "opencode_stop.error": "🔴 停止服务器时发生错误。\n\n请查看应用日志了解详情。",
 
