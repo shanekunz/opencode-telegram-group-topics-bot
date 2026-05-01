@@ -239,12 +239,17 @@ export const ru: I18nDictionary = {
   "task.list.empty": "📭 Для этого проекта в этом чате нет отложенных задач.",
   "task.list.none": "не запланировано",
   "task.list.next_run": "Следующий запуск: {value}",
+  "task.list.model": "Модель: {value}",
   "task.list.status": "Статус: {value}",
   "task.list.prompt": "Промпт: {value}",
   "task.list.delete_button": "Удалить #{index}",
   "task.list.deleted": "Отложенная задача удалена",
   "task.list.delete_missing": "Отложенная задача не найдена",
   "task.list.delete_error": "Не удалось удалить отложенную задачу",
+  "task.run.error.interactive_question":
+    "Отложенная задача не может продолжить работу, потому что требуется интерактивный ответ на вопрос.",
+  "task.run.error.interactive_permission":
+    "Отложенная задача не может продолжить работу, потому что требуется интерактивное подтверждение разрешения.",
 
   "cleanup.topic_use_general": "⚠️ Выполните /cleanup из темы General.",
   "cleanup.requires_forum_general":

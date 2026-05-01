@@ -248,12 +248,17 @@ export const de: I18nDictionary = {
   "task.list.empty": "📭 Keine geplanten Aufgaben für dieses Projekt in diesem Chat.",
   "task.list.none": "nicht geplant",
   "task.list.next_run": "Nächster Lauf: {value}",
+  "task.list.model": "Modell: {value}",
   "task.list.status": "Status: {value}",
   "task.list.prompt": "Prompt: {value}",
   "task.list.delete_button": "Löschen #{index}",
   "task.list.deleted": "Geplante Aufgabe gelöscht",
   "task.list.delete_missing": "Geplante Aufgabe nicht gefunden",
   "task.list.delete_error": "Geplante Aufgabe konnte nicht gelöscht werden",
+  "task.run.error.interactive_question":
+    "Die geplante Aufgabe kann nicht fortgesetzt werden, weil eine Frage interaktiv beantwortet werden muss.",
+  "task.run.error.interactive_permission":
+    "Die geplante Aufgabe kann nicht fortgesetzt werden, weil eine interaktive Berechtigungsfreigabe erforderlich ist.",
 
   "cleanup.topic_use_general": "⚠️ Führe /cleanup im General-Thema aus.",
   "cleanup.requires_forum_general":

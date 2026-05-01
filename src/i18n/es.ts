@@ -247,12 +247,17 @@ export const es: I18nDictionary = {
   "task.list.empty": "📭 No hay tareas programadas para este proyecto en este chat.",
   "task.list.none": "sin programación",
   "task.list.next_run": "Próxima ejecución: {value}",
+  "task.list.model": "Modelo: {value}",
   "task.list.status": "Estado: {value}",
   "task.list.prompt": "Prompt: {value}",
   "task.list.delete_button": "Eliminar #{index}",
   "task.list.deleted": "Tarea programada eliminada",
   "task.list.delete_missing": "No se encontró la tarea programada",
   "task.list.delete_error": "No se pudo eliminar la tarea programada",
+  "task.run.error.interactive_question":
+    "La tarea programada no puede continuar porque requiere responder una pregunta de forma interactiva.",
+  "task.run.error.interactive_permission":
+    "La tarea programada no puede continuar porque requiere una aprobación interactiva de permisos.",
 
   "cleanup.topic_use_general": "⚠️ Ejecuta /cleanup desde el tema General.",
   "cleanup.requires_forum_general":

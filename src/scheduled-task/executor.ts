@@ -1,29 +1,71 @@
 import { config } from "../config.js";
+import { t } from "../i18n/index.js";
 import { opencodeClient } from "../opencode/client.js";
 import { logger } from "../utils/logger.js";
 import type { ScheduledTask, ScheduledTaskExecutionResult } from "./types.js";
 
-const SCHEDULED_TASK_AGENT = "build";
+export const SCHEDULED_TASK_AGENT = "build";
 const SCHEDULED_TASK_SESSION_TITLE = "Scheduled task run";
 const EXECUTION_POLL_INTERVAL_MS = 2000;
 const MAX_IDLE_POLLS_WITHOUT_RESULT = 3;
 const MODELS_DOCS_URL = "https://opencode.ai/docs/config/#models";
 const EXECUTION_TIMEOUT_ERROR_PREFIX = "Scheduled task exceeded bot execution timeout";
+const INTERACTIVE_PERMISSION_REJECT_MESSAGE =
+  "Scheduled task cannot continue because it requires interactive permission.";
 const SCHEDULED_TASK_PERMISSION_RULESET = [
   { permission: "*", pattern: "*", action: "allow" as const },
   { permission: "question", pattern: "*", action: "deny" as const },
 ];
 
-type TextLikePart = { type?: string; text?: string; ignored?: boolean };
+type InteractiveRequestKind = "question" | "permission";
+
+type PendingQuestionRequest = {
+  id: string;
+  sessionID: string;
+  questions?: unknown[];
+};
+
+type PendingPermissionRequest = {
+  id: string;
+  sessionID: string;
+  permission?: string;
+  patterns?: string[];
+};
+
+type PendingInteractiveRequest =
+  | { kind: "question"; request: PendingQuestionRequest }
+  | { kind: "permission"; request: PendingPermissionRequest };
+
+type MessagePartSnapshot = {
+  type?: string;
+  text?: string;
+  ignored?: boolean;
+};
+
+type TextLikePart = Pick<MessagePartSnapshot, "type" | "text" | "ignored">;
 
 type AssistantMessageSnapshot = {
   info: {
     role: string;
+    summary?: unknown;
     time?: { completed?: number };
     error?: unknown;
   };
-  parts: TextLikePart[];
+  parts: MessagePartSnapshot[];
 };
+
+class ScheduledTaskInteractiveRequestError extends Error {
+  constructor(kind: InteractiveRequestKind) {
+    super(
+      t(
+        kind === "question"
+          ? "task.run.error.interactive_question"
+          : "task.run.error.interactive_permission",
+      ),
+    );
+    this.name = "ScheduledTaskInteractiveRequestError";
+  }
+}
 
 function collectResponseText(parts: TextLikePart[]): string {
   return parts
@@ -108,12 +150,62 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function getQuestionApi():
+  | {
+      list?: (params: { directory: string }) => Promise<{
+        data?: PendingQuestionRequest[];
+        error?: unknown;
+      }>;
+      reject?: (params: { requestID: string; directory: string }) => Promise<{ error?: unknown }>;
+    }
+  | undefined {
+  return opencodeClient.question as
+    | {
+        list?: (params: { directory: string }) => Promise<{
+          data?: PendingQuestionRequest[];
+          error?: unknown;
+        }>;
+        reject?: (params: { requestID: string; directory: string }) => Promise<{ error?: unknown }>;
+      }
+    | undefined;
+}
+
+function getPermissionApi():
+  | {
+      list?: (params: { directory: string }) => Promise<{
+        data?: PendingPermissionRequest[];
+        error?: unknown;
+      }>;
+      reply?: (params: {
+        requestID: string;
+        directory: string;
+        reply: "reject";
+        message: string;
+      }) => Promise<{ error?: unknown }>;
+    }
+  | undefined {
+  return opencodeClient.permission as
+    | {
+        list?: (params: { directory: string }) => Promise<{
+          data?: PendingPermissionRequest[];
+          error?: unknown;
+        }>;
+        reply?: (params: {
+          requestID: string;
+          directory: string;
+          reply: "reject";
+          message: string;
+        }) => Promise<{ error?: unknown }>;
+      }
+    | undefined;
+}
+
 function findLatestAssistantMessage(
-  messages: Array<{ info: { role: string }; parts: TextLikePart[] }>,
+  messages: Array<{ info: { role: string; summary?: unknown }; parts: MessagePartSnapshot[] }>,
 ): AssistantMessageSnapshot | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
-    if (message?.info.role === "assistant") {
+    if (message?.info.role === "assistant" && !message.info.summary) {
       return message;
     }
   }
@@ -147,6 +239,141 @@ function extractAssistantResult(message: AssistantMessageSnapshot | null): {
   };
 }
 
+async function loadPendingInteractiveRequest(
+  sessionId: string,
+  directory: string,
+): Promise<PendingInteractiveRequest | null> {
+  const questionApi = getQuestionApi();
+  const permissionApi = getPermissionApi();
+
+  const [questionsResult, permissionsResult] = await Promise.all([
+    questionApi?.list
+      ? questionApi.list({ directory })
+      : Promise.resolve({ data: [], error: undefined }),
+    permissionApi?.list
+      ? permissionApi.list({ directory })
+      : Promise.resolve({ data: [], error: undefined }),
+  ]);
+
+  if (questionsResult.error) {
+    logger.warn(
+      `[ScheduledTaskExecutor] Failed to list pending questions: sessionId=${sessionId}`,
+      questionsResult.error,
+    );
+  }
+
+  const question = questionsResult.data?.find((request) => request.sessionID === sessionId);
+  if (question) {
+    return { kind: "question", request: question };
+  }
+
+  if (permissionsResult.error) {
+    logger.warn(
+      `[ScheduledTaskExecutor] Failed to list pending permissions: sessionId=${sessionId}`,
+      permissionsResult.error,
+    );
+  }
+
+  const permission = permissionsResult.data?.find((request) => request.sessionID === sessionId);
+  if (permission) {
+    return { kind: "permission", request: permission };
+  }
+
+  return null;
+}
+
+async function rejectInteractiveRequest(
+  request: PendingInteractiveRequest,
+  directory: string,
+): Promise<void> {
+  try {
+    if (request.kind === "question") {
+      const questionApi = getQuestionApi();
+      if (!questionApi?.reject) {
+        return;
+      }
+
+      const { error } = await questionApi.reject({
+        requestID: request.request.id,
+        directory,
+      });
+
+      if (error) {
+        logger.warn(
+          `[ScheduledTaskExecutor] Failed to reject pending question: requestId=${request.request.id}`,
+          error,
+        );
+      }
+
+      return;
+    }
+
+    const permissionApi = getPermissionApi();
+    if (!permissionApi?.reply) {
+      return;
+    }
+
+    const { error } = await permissionApi.reply({
+      requestID: request.request.id,
+      directory,
+      reply: "reject",
+      message: INTERACTIVE_PERMISSION_REJECT_MESSAGE,
+    });
+
+    if (error) {
+      logger.warn(
+        `[ScheduledTaskExecutor] Failed to reject pending permission: requestId=${request.request.id}`,
+        error,
+      );
+    }
+  } catch (error) {
+    logger.warn(
+      `[ScheduledTaskExecutor] Failed to reject pending interactive request: requestId=${request.request.id}`,
+      error,
+    );
+  }
+}
+
+async function abortScheduledTaskSession(sessionId: string, directory: string): Promise<void> {
+  try {
+    const { error } = await opencodeClient.session.abort({ sessionID: sessionId, directory });
+    if (error) {
+      logger.warn(
+        `[ScheduledTaskExecutor] Failed to abort interactive scheduled task session: sessionId=${sessionId}`,
+        error,
+      );
+    }
+  } catch (error) {
+    logger.warn(
+      `[ScheduledTaskExecutor] Failed to abort interactive scheduled task session: sessionId=${sessionId}`,
+      error,
+    );
+  }
+}
+
+async function failIfInteractiveRequest(
+  taskId: string,
+  sessionId: string,
+  directory: string,
+): Promise<void> {
+  const interactiveRequest = await loadPendingInteractiveRequest(sessionId, directory);
+  if (!interactiveRequest) {
+    return;
+  }
+
+  logger.warn("[ScheduledTaskExecutor] Scheduled task requested interactive action", {
+    taskId,
+    sessionId,
+    directory,
+    kind: interactiveRequest.kind,
+    requestId: interactiveRequest.request.id,
+  });
+
+  await rejectInteractiveRequest(interactiveRequest, directory);
+  await abortScheduledTaskSession(sessionId, directory);
+  throw new ScheduledTaskInteractiveRequestError(interactiveRequest.kind);
+}
+
 async function loadAssistantResult(
   sessionId: string,
   directory: string,
@@ -163,7 +390,11 @@ async function loadAssistantResult(
   return extractAssistantResult(findLatestAssistantMessage(messages));
 }
 
-async function waitForScheduledTaskResult(sessionId: string, directory: string): Promise<string> {
+async function waitForScheduledTaskResult(
+  taskId: string,
+  sessionId: string,
+  directory: string,
+): Promise<string> {
   const startedAtMs = Date.now();
   const executionTimeoutMs = getExecutionTimeoutMs();
   let idlePollsWithoutResult = 0;
@@ -172,6 +403,8 @@ async function waitForScheduledTaskResult(sessionId: string, directory: string):
     if (Date.now() - startedAtMs >= executionTimeoutMs) {
       throw new Error(createExecutionTimeoutMessage());
     }
+
+    await failIfInteractiveRequest(taskId, sessionId, directory);
 
     const assistantResult = await loadAssistantResult(sessionId, directory);
     if (assistantResult.errorMessage) {
@@ -303,7 +536,7 @@ export async function executeScheduledTask(
       throw promptError || new Error("Scheduled task prompt execution failed");
     }
 
-    const resultText = await waitForScheduledTaskResult(session.id, session.directory);
+    const resultText = await waitForScheduledTaskResult(task.id, session.id, session.directory);
 
     logger.info(
       `[ScheduledTaskExecutor] Prompt execution completed: taskId=${task.id}, sessionId=${sessionId}`,

@@ -102,4 +102,9 @@ export const fr: I18nDictionary = {
   "skills.button.next_page": "Next ➡️",
   "skills.page_empty_callback": "No skills on this page",
   "skills.page_load_error_callback": "Cannot load this page. Please try again.",
+  "task.list.model": "Modèle : {value}",
+  "task.run.error.interactive_question":
+    "La tâche planifiée ne peut pas continuer car elle nécessite une réponse interactive à une question.",
+  "task.run.error.interactive_permission":
+    "La tâche planifiée ne peut pas continuer car elle nécessite une approbation interactive de permission.",
 };

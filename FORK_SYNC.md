@@ -7,7 +7,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - Permanent git remote: `upstream` -> `https://github.com/grinev/opencode-telegram-bot.git`
 - Upstream repo: `https://github.com/grinev/opencode-telegram-bot`
 - Upstream branch: `main`
-- Last reviewed upstream head: `380a038` (`fix(projects): ignore unrelated callbacks before busy check`, 2026-04-28)
+- Last reviewed upstream head: `be7f192` (`chore(release): v0.19.1`, 2026-05-01)
 - Original fork point for this threaded fork: `21da71b` (`chore(release): v0.11.0`)
 
 ## Fork Rules
@@ -45,6 +45,10 @@ This repository is a product fork of the original single-chat project at `grinev
 - `2f22851` adapted port: `/open` now adds projects by browsing configurable allowed roots while still respecting this fork's group/topic project-lock rules and scoped state reset flow
 - `bcd52bf` + `d10da74` adapted port: local OpenCode server start/stop now resolve the process by configured local port instead of persisted PID state, and optional auto-restart health checks were wired into the fork runtime without changing topic-scoped delivery
 - `fdb0d55` reviewed after `v0.19.0`; no additional port needed because this fork's current prompt handler already starts runs via `session.promptAsync`
+- `644fadd` ported: full scheduled-session cache refreshes now prune stale worktrees when the upstream response is complete
+- `73796d5` ported: `/tasklist` now shows the model used by each scheduled task, including variants
+- `6554591` adapted port: scheduled task success deliveries now append an assistant run footer while preserving thread-scoped Telegram delivery ordering
+- `407e205` + `ae62bbb` adapted port: scheduled tasks now fail fast when they trigger interactive question/permission flows, reject the pending request, abort the temporary run, and surface a clear localized error
 
 ## Upstream Changes Intentionally Adapted
 
@@ -89,6 +93,8 @@ This repository is a product fork of the original single-chat project at `grinev
 - `f82fab6` reviewed for `v0.19.0`; skipped for now pending a fork-specific UX pass for control-lane versus topic-lane MCP management
 - `66403c0` + `18909f5` + `fb8e44d` + `36503c6` reviewed for `v0.19.0`; skipped for now because the fork's Markdown/subagent/pinned-message pipeline has already diverged and needs a dedicated manual adaptation pass
 - `380a038` reviewed after `v0.19.0`; no port needed because this fork's `handleProjectSelect()` already ignores unrelated callback payloads before any project-specific handling
+- `05a65d3` reviewed for `v0.19.1`; skipped because the upstream daily-file rotation fix does not apply to this fork's separate size-based rotating logger implementation
+- `be7f192` release-only bump (`v0.19.1`)
 
 ## Sync Workflow
 

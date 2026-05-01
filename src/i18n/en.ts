@@ -279,12 +279,17 @@ export const en = {
   "task.list.empty": "📭 No scheduled tasks for this project in this chat.",
   "task.list.none": "not scheduled",
   "task.list.next_run": "Next run: {value}",
+  "task.list.model": "Model: {value}",
   "task.list.status": "Status: {value}",
   "task.list.prompt": "Prompt: {value}",
   "task.list.delete_button": "Delete #{index}",
   "task.list.deleted": "Scheduled task deleted",
   "task.list.delete_missing": "Scheduled task not found",
   "task.list.delete_error": "Failed to delete scheduled task",
+  "task.run.error.interactive_question":
+    "Scheduled task cannot continue because it requires answering a question interactively.",
+  "task.run.error.interactive_permission":
+    "Scheduled task cannot continue because it requires interactive permission approval.",
 
   "cleanup.topic_use_general": "⚠️ Run /cleanup from the General topic.",
   "cleanup.requires_forum_general":

@@ -43,6 +43,11 @@ function formatTaskStatus(task: ScheduledTask): string {
   return task.lastStatus;
 }
 
+function formatTaskModel(task: ScheduledTask): string {
+  const variant = task.model.variant ? ` (${task.model.variant})` : "";
+  return `${task.model.providerID}/${task.model.modelID}${variant}`;
+}
+
 function formatTaskPromptPreview(prompt: string): string {
   const singleLinePrompt = prompt.replace(/\s+/g, " ").trim();
   if (singleLinePrompt.length <= MAX_PROMPT_PREVIEW_LENGTH) {
@@ -58,6 +63,7 @@ function buildTaskListText(tasks: ScheduledTask[]): string {
     return [
       `${index + 1}. ${formatTaskListBadge(task)} - ${task.scheduleSummary}`,
       `   ${t("task.list.next_run", { value: nextRunAt })}`,
+      `   ${t("task.list.model", { value: formatTaskModel(task) })}`,
       `   ${t("task.list.status", { value: formatTaskStatus(task) })}`,
       `   ${t("task.list.prompt", { value: formatTaskPromptPreview(task.prompt) })}`,
     ].join("\n");
