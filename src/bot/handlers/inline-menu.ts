@@ -17,6 +17,7 @@ const INLINE_MENU_KINDS = [
   "context",
   "tasklist",
   "open",
+  "ls",
 ] as const;
 
 export type InlineMenuKind = (typeof INLINE_MENU_KINDS)[number];

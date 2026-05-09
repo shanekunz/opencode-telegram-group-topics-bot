@@ -7,7 +7,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - Permanent git remote: `upstream` -> `https://github.com/grinev/opencode-telegram-bot.git`
 - Upstream repo: `https://github.com/grinev/opencode-telegram-bot`
 - Upstream branch: `main`
-- Last reviewed upstream head: `be7f192` (`chore(release): v0.19.1`, 2026-05-01)
+- Last reviewed upstream head: `894d041` (`fix(tests): fix tests for linux 2`, 2026-05-07)
 - Original fork point for this threaded fork: `21da71b` (`chore(release): v0.11.0`)
 
 ## Fork Rules
@@ -49,6 +49,8 @@ This repository is a product fork of the original single-chat project at `grinev
 - `73796d5` ported: `/tasklist` now shows the model used by each scheduled task, including variants
 - `6554591` adapted port: scheduled task success deliveries now append an assistant run footer while preserving thread-scoped Telegram delivery ordering
 - `407e205` + `ae62bbb` adapted port: scheduled tasks now fail fast when they trigger interactive question/permission flows, reject the pending request, abort the temporary run, and surface a clear localized error
+- `5a055df` adapted port: `/ls` now browses and downloads files only within the currently selected scoped project, preserving topic-thread delivery and project isolation
+- `a10e7c6` adapted port: heartbeat-based busy-state reconciliation now clears stale assistant run state after reconnects and resumes queued prompts for the affected scoped session
 
 ## Upstream Changes Intentionally Adapted
 
@@ -95,6 +97,15 @@ This repository is a product fork of the original single-chat project at `grinev
 - `380a038` reviewed after `v0.19.0`; no port needed because this fork's `handleProjectSelect()` already ignores unrelated callback payloads before any project-specific handling
 - `05a65d3` reviewed for `v0.19.1`; skipped because the upstream daily-file rotation fix does not apply to this fork's separate size-based rotating logger implementation
 - `be7f192` release-only bump (`v0.19.1`)
+- `20dee16` reviewed for `v0.19.2`; no additional port needed because this fork's Telegram send pipeline already uses raw-text fallbacks that avoid the upstream localhost/broken-link issue
+- `4e305ff` + `7463ff9` reviewed for `v0.19.2`; skipped for now because upstream's ready-lifecycle and attached-session restore flow diverge from this fork's scoped topic/session bootstrap path
+- `5a5778e` docs-only upstream change skipped
+- `cc21748` reviewed for `v0.19.3`; no additional port needed because this fork does not expose the upstream external-user-input notification path
+- `7cefc8c` skipped: upstream Windows-specific `/ls` test fix does not affect this fork's separate `/ls` implementation and local test coverage
+- `00fbc62` + `4251ea5` + `ad2c35a` + `674fc0a` + `1024855` + `25000db` reviewed for `v0.20.0`; skipped for now because upstream detach/background-session notifications assume a single attached session lane, while this fork routes work through control-lane selection and topic-bound session threads
+- `caf3240` release-only bump (`v0.20.0`)
+- `daba56c` + `894d041` skipped: upstream Linux-only test fixes do not affect fork runtime behavior
+- `e28e298` release-only bump (`v0.20.1`)
 
 ## Sync Workflow
 

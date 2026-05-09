@@ -7,6 +7,7 @@ export const ru: I18nDictionary = {
   "cmd.description.stop": "Прервать текущее действие",
   "cmd.description.sessions": "Список сессий",
   "cmd.description.last": "Показать последнее сообщение сессии",
+  "cmd.description.ls": "Показать файлы проекта",
   "cmd.description.tts": "Переключить аудиоответы",
   "cmd.description.projects": "Список проектов",
   "cmd.description.task": "Создать отложенную задачу",
@@ -157,6 +158,14 @@ export const ru: I18nDictionary = {
   "open.no_subfolders": "📭 Нет подпапок",
   "open.subfolder_count": "{count} подпапка",
   "open.subfolders_count": "{count} подпапок",
+  "ls.open_error": "🔴 Не удалось открыть браузер файлов проекта.",
+  "ls.access_denied": "⛔ Доступ запрещён: путь находится вне текущего проекта",
+  "ls.scan_error": "🔴 Не удалось показать содержимое каталога",
+  "ls.header": "Содержимое каталога",
+  "ls.total": "Всего: {count} элементов",
+  "ls.file.header": "Сведения о файле",
+  "ls.file.download": "📥 Скачать",
+  "ls.file.back": "⬅️ Назад",
 
   "sessions.project_not_selected":
     "🏗 Проект не выбран.\n\nСначала выберите проект командой /projects.",
@@ -187,6 +196,13 @@ export const ru: I18nDictionary = {
   "sessions.preview.agent": "Агент:",
   "sessions.resume.assistant_title": "Последнее сообщение агента:",
   "sessions.resume.last_turn_title": "Последнее видимое сообщение:",
+
+  "commands.download.downloading": "Загрузка файла...",
+  "commands.download.not_file": "Путь не является файлом",
+  "commands.download.file_too_large": "Файл слишком большой для Telegram.",
+  "commands.download.size": "Размер",
+  "commands.download.modified": "Изменён",
+  "commands.download.error": "Не удалось скачать файл.",
 
   "last.title": "Последнее сообщение:",
   "last.session_not_selected": "📋 Сессия не выбрана. Сначала используйте /sessions или /new.",

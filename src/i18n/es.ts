@@ -7,6 +7,7 @@ export const es: I18nDictionary = {
   "cmd.description.stop": "Detener la acción actual",
   "cmd.description.sessions": "Listar sesiones",
   "cmd.description.last": "Mostrar el último mensaje de la sesión",
+  "cmd.description.ls": "Listar archivos del proyecto",
   "cmd.description.tts": "Alternar respuestas de audio",
   "cmd.description.projects": "Listar proyectos",
   "cmd.description.task": "Crear una tarea programada",
@@ -164,6 +165,14 @@ export const es: I18nDictionary = {
   "open.no_subfolders": "📭 Sin subcarpetas",
   "open.subfolder_count": "{count} subcarpeta",
   "open.subfolders_count": "{count} subcarpetas",
+  "ls.open_error": "🔴 No se pudo abrir el explorador de archivos del proyecto.",
+  "ls.access_denied": "⛔ Acceso denegado: la ruta está fuera del proyecto actual",
+  "ls.scan_error": "🔴 No se puede listar el directorio",
+  "ls.header": "Listado del directorio",
+  "ls.total": "Total: {count} elementos",
+  "ls.file.header": "Detalles del archivo",
+  "ls.file.download": "📥 Descargar",
+  "ls.file.back": "⬅️ Volver",
 
   "sessions.project_not_selected":
     "🏗 No hay un proyecto seleccionado.\n\nPrimero selecciona un proyecto con /projects.",
@@ -193,6 +202,13 @@ export const es: I18nDictionary = {
   "sessions.preview.agent": "Agente:",
   "sessions.resume.assistant_title": "Último mensaje del agente:",
   "sessions.resume.last_turn_title": "Último mensaje visible:",
+
+  "commands.download.downloading": "Descargando archivo...",
+  "commands.download.not_file": "La ruta no es un archivo",
+  "commands.download.file_too_large": "El archivo es demasiado grande para Telegram.",
+  "commands.download.size": "Tamaño",
+  "commands.download.modified": "Modificado",
+  "commands.download.error": "No se pudo descargar el archivo.",
 
   "last.title": "Último mensaje:",
   "last.session_not_selected": "📋 No hay una sesión seleccionada. Usa /sessions o /new primero.",

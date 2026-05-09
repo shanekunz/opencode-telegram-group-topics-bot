@@ -310,6 +310,7 @@ function buildSuccessMessage(
       {
         sessionId: task.id,
         startedAt: Date.parse(startedAt),
+        directory: task.projectWorktree,
         configuredAgent: task.agent ?? SCHEDULED_TASK_AGENT,
         configuredProviderID: task.model.providerID,
         configuredModelID: task.model.modelID,
