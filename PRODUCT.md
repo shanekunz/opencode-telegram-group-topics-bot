@@ -103,6 +103,7 @@ Current command set:
 - [x] `/sessions` - show and switch recent sessions
 - [x] `/projects` - show and switch projects
 - [x] `/open` - add and select a project by browsing allowed directories
+- [x] `/ls` - browse and download files from the current project
 - [x] `/rename` - rename current session
 - [x] `/commands` - browse and run custom commands (plus built-ins like `init` and `review`)
 - [x] `/task` - create a scheduled task for the current project
@@ -134,6 +135,7 @@ Model picker behavior:
 
 - [x] OpenCode server control and health checks via bot commands
 - [x] Project management (list/switch) with inline menus
+- [x] Project file browsing and download within the selected worktree
 - [x] Session management (list/switch/create) with inline menus
 - [x] Group-threaded workflow with General control topic plus per-session forum topics
 - [x] Prompt execution through OpenCode with SSE-based event handling
@@ -176,5 +178,5 @@ Open tasks for upcoming iterations:
 Optional or longer-term enhancements:
 
 - [ ] Create new OpenCode projects directly from Telegram
-- [ ] Add project file browsing helpers (for example, `ls` and `open` flows)
+- [x] Add project file browsing helpers (for example, `ls` and `open` flows)
 - [ ] Improve support for git worktree-based workflows

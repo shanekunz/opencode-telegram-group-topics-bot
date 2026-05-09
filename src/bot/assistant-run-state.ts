@@ -2,6 +2,7 @@ import { logger } from "../utils/logger.js";
 
 export interface AssistantRunStartInfo {
   startedAt: number;
+  directory: string;
   configuredAgent?: string;
   configuredProviderID?: string;
   configuredModelID?: string;
@@ -22,6 +23,7 @@ class AssistantRunState {
     this.runs.set(sessionId, {
       sessionId,
       startedAt: info.startedAt,
+      directory: info.directory,
       configuredAgent: info.configuredAgent,
       configuredProviderID: info.configuredProviderID,
       configuredModelID: info.configuredModelID,
@@ -29,6 +31,7 @@ class AssistantRunState {
 
     logger.debug("[AssistantRunState] Started run", {
       sessionId,
+      directory: info.directory,
       agent: info.configuredAgent,
       providerID: info.configuredProviderID,
       modelID: info.configuredModelID,
@@ -38,6 +41,10 @@ class AssistantRunState {
   getRun(sessionId: string): AssistantRunInfo | null {
     const run = this.runs.get(sessionId);
     return run ? { ...run } : null;
+  }
+
+  listRuns(): AssistantRunInfo[] {
+    return Array.from(this.runs.values(), (run) => ({ ...run }));
   }
 
   finishRun(sessionId: string, reason: string): AssistantRunInfo | null {

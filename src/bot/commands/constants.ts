@@ -6,6 +6,7 @@ export const BOT_COMMAND = {
   ABORT: "abort",
   SESSIONS: "sessions",
   LAST: "last",
+  LS: "ls",
   TTS: "tts",
   PROJECTS: "projects",
   OPEN: "open",

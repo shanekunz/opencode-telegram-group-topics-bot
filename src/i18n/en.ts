@@ -5,6 +5,7 @@ export const en = {
   "cmd.description.stop": "Stop current action",
   "cmd.description.sessions": "List sessions",
   "cmd.description.last": "Show latest session message",
+  "cmd.description.ls": "List project files",
   "cmd.description.tts": "Toggle audio replies",
   "cmd.description.projects": "List projects",
   "cmd.description.task": "Create a scheduled task",
@@ -198,6 +199,14 @@ export const en = {
   "open.no_subfolders": "📭 No subfolders",
   "open.subfolder_count": "{count} subfolder",
   "open.subfolders_count": "{count} subfolders",
+  "ls.open_error": "🔴 Failed to open project file browser.",
+  "ls.access_denied": "⛔ Access denied: path is outside the current project",
+  "ls.scan_error": "🔴 Cannot list directory",
+  "ls.header": "Directory listing",
+  "ls.total": "Total: {count} items",
+  "ls.file.header": "File details",
+  "ls.file.download": "📥 Download",
+  "ls.file.back": "⬅️ Back",
 
   "sessions.project_not_selected":
     "🏗 Project is not selected.\n\nFirst select a project with /projects.",
@@ -227,6 +236,13 @@ export const en = {
   "sessions.preview.agent": "Agent:",
   "sessions.resume.assistant_title": "Last agent message:",
   "sessions.resume.last_turn_title": "Last visible message:",
+
+  "commands.download.downloading": "Downloading file...",
+  "commands.download.not_file": "Path is not a file",
+  "commands.download.file_too_large": "File is too large for Telegram delivery.",
+  "commands.download.size": "Size",
+  "commands.download.modified": "Modified",
+  "commands.download.error": "Failed to download file.",
 
   "last.title": "Latest message:",
   "last.session_not_selected": "📋 No session selected. Use /sessions or /new first.",

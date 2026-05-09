@@ -246,6 +246,7 @@ function submitPromptRequest(bot: Bot<Context>, request: QueuedPromptRequest): v
   setActivePromptResponseMode(request.sessionId, request.responseMode);
   assistantRunState.startRun(request.sessionId, {
     startedAt: Date.now(),
+    directory: request.promptOptions.directory,
     configuredAgent: request.promptOptions.agent,
     configuredProviderID: request.promptOptions.model?.providerID,
     configuredModelID: request.promptOptions.model?.modelID,

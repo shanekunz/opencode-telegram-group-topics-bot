@@ -20,6 +20,7 @@ import { sessionsCommand, handleSessionSelect } from "./commands/sessions.js";
 import { createNewCommand } from "./commands/new.js";
 import { projectsCommand, handleProjectSelect } from "./commands/projects.js";
 import { openCommand, handleOpenCallback } from "./commands/open.js";
+import { handleLsCallback, lsCommand } from "./commands/ls.js";
 import { taskCommand, handleTaskTextAnswer } from "./commands/task.js";
 import { handleTaskListCallback, taskListCommand } from "./commands/tasklist.js";
 import { abortCommand } from "./commands/abort.js";
@@ -112,6 +113,7 @@ import { SessionOutputCoordinator } from "./session-output-coordinator.js";
 import { assistantRunState } from "./assistant-run-state.js";
 import { formatAssistantRunFooter } from "./utils/assistant-run-footer.js";
 import { renderAssistantFinalPartsSafe } from "./utils/assistant-rendering.js";
+import { reconcileBusyState } from "./utils/busy-reconciliation.js";
 
 let botInstance: Bot<Context> | null = null;
 const initializedCommandChats = new Set<number>();
@@ -1140,6 +1142,13 @@ async function ensureEventSubscription(directory: string): Promise<void> {
 
   if (!eventCallback) {
     eventCallback = (event: OpenCodeEvent): void => {
+      if ((event as { type: string }).type === "server.heartbeat") {
+        safeBackgroundTask({
+          taskName: `busy.reconcile.${directory}`,
+          task: () => reconcileBusyState(directory),
+        });
+      }
+
       if (event.type === "session.created" || event.type === "session.updated") {
         const info = (
           event.properties as { info?: { directory?: string; time?: { updated?: number } } }
@@ -1338,6 +1347,7 @@ export function createBot(): Bot<Context> {
   bot.command(BOT_COMMAND.HELP, helpCommand);
   bot.command(BOT_COMMAND.STATUS, statusCommand);
   bot.command(BOT_COMMAND.LAST, lastCommand);
+  bot.command(BOT_COMMAND.LS, lsCommand);
   bot.command(BOT_COMMAND.TTS, ttsCommand);
   bot.command(BOT_COMMAND.OPENCODE_START, opencodeStartCommand);
   bot.command(BOT_COMMAND.OPENCODE_STOP, opencodeStopCommand);
@@ -1368,6 +1378,7 @@ export function createBot(): Bot<Context> {
       const handledSession = await handleSessionSelect(ctx);
       const handledProject = await handleProjectSelect(ctx);
       const handledOpen = await handleOpenCallback(ctx);
+      const handledLs = await handleLsCallback(ctx);
       const handledTaskList = await handleTaskListCallback(ctx);
       const handledQuestion = await handleQuestionCallback(ctx);
       const handledPermission = await handlePermissionCallback(ctx);
@@ -1384,7 +1395,7 @@ export function createBot(): Bot<Context> {
       });
 
       logger.debug(
-        `[Bot] Callback handled: inlineCancel=${handledInlineCancel}, session=${handledSession}, project=${handledProject}, open=${handledOpen}, taskList=${handledTaskList}, question=${handledQuestion}, permission=${handledPermission}, agent=${handledAgent}, model=${handledModel}, variant=${handledVariant}, compactConfirm=${handledCompactConfirm}, rename=${handledRenameCancel}, commands=${handledCommands}, skills=${handledSkills}`,
+        `[Bot] Callback handled: inlineCancel=${handledInlineCancel}, session=${handledSession}, project=${handledProject}, open=${handledOpen}, ls=${handledLs}, taskList=${handledTaskList}, question=${handledQuestion}, permission=${handledPermission}, agent=${handledAgent}, model=${handledModel}, variant=${handledVariant}, compactConfirm=${handledCompactConfirm}, rename=${handledRenameCancel}, commands=${handledCommands}, skills=${handledSkills}`,
       );
 
       if (
@@ -1392,6 +1403,7 @@ export function createBot(): Bot<Context> {
         !handledSession &&
         !handledProject &&
         !handledOpen &&
+        !handledLs &&
         !handledTaskList &&
         !handledQuestion &&
         !handledPermission &&
