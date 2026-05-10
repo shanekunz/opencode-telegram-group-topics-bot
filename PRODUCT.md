@@ -90,6 +90,7 @@ No public inbound ports are required for normal usage.
 - Configurable max code file size in KB (default: 100)
 - Optional STT settings for voice transcription (`STT_API_URL`, `STT_API_KEY`, `STT_MODEL`, `STT_LANGUAGE`)
 - Optional TTS credentials for global audio replies (`TTS_API_URL`, `TTS_API_KEY`, `TTS_MODEL`, `TTS_VOICE`); reply behavior is toggled with `/tts`
+- Optional Telegram connectivity overrides (`TELEGRAM_API_ROOT`, `TELEGRAM_PROXY_SECRET`, `TELEGRAM_FORCE_IPV4`)
 
 ## Current Product Scope
 

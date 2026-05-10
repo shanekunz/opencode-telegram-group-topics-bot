@@ -1,9 +1,18 @@
+// @ts-expect-error node-fetch v2 ships no TS types in this setup
+import nodeFetch from "node-fetch";
+import { Agent as HttpsAgent } from "node:https";
 import type { Api } from "grammy";
 import { config } from "../../config.js";
 import { logger } from "../../utils/logger.js";
 
-const TELEGRAM_FILE_URL_BASE = "https://api.telegram.org/file/bot";
+const DEFAULT_TELEGRAM_FILE_URL_BASE = "https://api.telegram.org/file/bot";
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB Telegram limit
+
+function fileUrlBase(): string {
+  return config.telegram.apiRoot
+    ? `${config.telegram.apiRoot.replace(/\/+$/, "")}/file/bot`
+    : DEFAULT_TELEGRAM_FILE_URL_BASE;
+}
 
 export interface DownloadedFile {
   buffer: Buffer;
@@ -31,7 +40,7 @@ export async function downloadTelegramFile(api: Api, fileId: string): Promise<Do
     throw new Error(`File too large: ${sizeMb}MB (max 20MB)`);
   }
 
-  const fileUrl = `${TELEGRAM_FILE_URL_BASE}${config.telegram.token}/${file.file_path}`;
+  const fileUrl = `${fileUrlBase()}${config.telegram.token}/${file.file_path}`;
   logger.debug(`[FileDownload] Downloading from ${fileUrl.replace(config.telegram.token, "***")}`);
 
   const fetchOptions: RequestInit & { agent?: unknown } = {};
@@ -40,9 +49,18 @@ export async function downloadTelegramFile(api: Api, fileId: string): Promise<Do
   if (config.telegram.proxyUrl) {
     const { HttpsProxyAgent } = await import("https-proxy-agent");
     fetchOptions.agent = new HttpsProxyAgent(config.telegram.proxyUrl);
+  } else if (config.telegram.forceIpv4) {
+    fetchOptions.agent = new HttpsAgent({ family: 4, keepAlive: true });
   }
 
-  const response = await fetch(fileUrl, fetchOptions);
+  if (config.telegram.proxySecret) {
+    fetchOptions.headers = {
+      ...(fetchOptions.headers as Record<string, string> | undefined),
+      "X-Proxy-Secret": config.telegram.proxySecret,
+    };
+  }
+
+  const response = await nodeFetch(fileUrl, fetchOptions);
 
   if (!response.ok) {
     throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);

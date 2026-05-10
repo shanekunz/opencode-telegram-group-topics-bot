@@ -7,7 +7,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - Permanent git remote: `upstream` -> `https://github.com/grinev/opencode-telegram-bot.git`
 - Upstream repo: `https://github.com/grinev/opencode-telegram-bot`
 - Upstream branch: `main`
-- Last reviewed upstream head: `894d041` (`fix(tests): fix tests for linux 2`, 2026-05-07)
+- Last reviewed upstream head: `1eb43cf` (`chore(release): v0.20.3`, 2026-05-10)
 - Original fork point for this threaded fork: `21da71b` (`chore(release): v0.11.0`)
 
 ## Fork Rules
@@ -51,6 +51,8 @@ This repository is a product fork of the original single-chat project at `grinev
 - `407e205` + `ae62bbb` adapted port: scheduled tasks now fail fast when they trigger interactive question/permission flows, reject the pending request, abort the temporary run, and surface a clear localized error
 - `5a055df` adapted port: `/ls` now browses and downloads files only within the currently selected scoped project, preserving topic-thread delivery and project isolation
 - `a10e7c6` adapted port: heartbeat-based busy-state reconciliation now clears stale assistant run state after reconnects and resumes queued prompts for the affected scoped session
+- `eeb77b8` adapted port: OpenCode 1.14 event subscriptions now prefer the global event stream, filter by scoped project directory, and fall back to legacy per-project streams when needed
+- `b220abb` + `5da739f` adapted port: Telegram connectivity now supports reverse-proxy API roots with optional shared-secret headers plus IPv4-only direct requests for bot API and file downloads, including the fork's separate voice-download path
 
 ## Upstream Changes Intentionally Adapted
 
@@ -106,6 +108,9 @@ This repository is a product fork of the original single-chat project at `grinev
 - `caf3240` release-only bump (`v0.20.0`)
 - `daba56c` + `894d041` skipped: upstream Linux-only test fixes do not affect fork runtime behavior
 - `e28e298` release-only bump (`v0.20.1`)
+- `8a74759` docs-only upstream README clarification covered by the fork docs/config updates above
+- `66e5d4f` release-only bump (`v0.20.2`)
+- `1eb43cf` release-only bump (`v0.20.3`)
 
 ## Sync Workflow
 
