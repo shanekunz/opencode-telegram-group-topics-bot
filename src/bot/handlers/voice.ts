@@ -1,5 +1,5 @@
 import http from "node:http";
-import https from "node:https";
+import https, { Agent as HttpsAgent } from "node:https";
 import { URL } from "node:url";
 import type { Context } from "grammy";
 import { HttpsProxyAgent } from "https-proxy-agent";
@@ -23,6 +23,12 @@ function getTelegramDownloadAgent(): https.RequestOptions["agent"] | undefined {
 
   const proxyUrl = config.telegram.proxyUrl.trim();
   if (!proxyUrl) {
+    if (config.telegram.forceIpv4) {
+      telegramDownloadAgent = new HttpsAgent({ family: 4, keepAlive: true });
+      logger.info("[Voice] Forcing IPv4 for Telegram file downloads");
+      return telegramDownloadAgent;
+    }
+
     telegramDownloadAgent = null;
     return undefined;
   }
@@ -39,10 +45,14 @@ async function downloadTelegramFileByUrl(url: string, redirectDepth: number = 0)
   return new Promise((resolve, reject) => {
     const targetUrl = new URL(url);
     const requestModule = targetUrl.protocol === "http:" ? http : https;
+    const proxySecret = config.telegram.proxySecret;
 
     const request = requestModule.get(
       targetUrl,
-      { agent: getTelegramDownloadAgent() },
+      {
+        agent: getTelegramDownloadAgent(),
+        ...(proxySecret ? { headers: { "X-Proxy-Secret": proxySecret } } : {}),
+      },
       (response) => {
         const statusCode = response.statusCode ?? 0;
 
@@ -123,7 +133,8 @@ async function downloadTelegramFile(
       return null;
     }
 
-    const fileUrl = `https://api.telegram.org/file/bot${ctx.api.token}/${file.file_path}`;
+    const apiRoot = (config.telegram.apiRoot || "https://api.telegram.org").replace(/\/+$/, "");
+    const fileUrl = `${apiRoot}/file/bot${ctx.api.token}/${file.file_path}`;
 
     logger.debug(`[Voice] Downloading file: ${file.file_path} (${file.file_size ?? "?"} bytes)`);
 

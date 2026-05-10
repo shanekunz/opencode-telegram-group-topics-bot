@@ -257,3 +257,76 @@ describe("config boolean env parsing", () => {
     expect(config.stt.notePrompt).toBe("Infer intended meaning from context.");
   });
 });
+
+describe("config telegram connectivity", () => {
+  beforeEach(() => {
+    vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-telegram-token");
+    vi.stubEnv("TELEGRAM_ALLOWED_USER_ID", "123456789");
+    vi.stubEnv("OPENCODE_MODEL_PROVIDER", "test-provider");
+    vi.stubEnv("OPENCODE_MODEL_ID", "test-model");
+    delete process.env.TELEGRAM_PROXY_URL;
+    delete process.env.TELEGRAM_API_ROOT;
+    delete process.env.TELEGRAM_PROXY_SECRET;
+    delete process.env.TELEGRAM_FORCE_IPV4;
+  });
+
+  async function loadBuilder() {
+    vi.resetModules();
+    const module = await import("../src/config.js");
+    return module.buildTelegramConfig;
+  }
+
+  it("leaves reverse-proxy settings empty by default", async () => {
+    const buildTelegramConfig = await loadBuilder();
+    const telegram = buildTelegramConfig();
+
+    expect(telegram.apiRoot).toBe("");
+    expect(telegram.proxySecret).toBe("");
+    expect(telegram.forceIpv4).toBe(false);
+  });
+
+  it("strips trailing slashes from TELEGRAM_API_ROOT", async () => {
+    vi.stubEnv("TELEGRAM_API_ROOT", "https://tg-proxy.example.com///");
+    const buildTelegramConfig = await loadBuilder();
+
+    expect(buildTelegramConfig().apiRoot).toBe("https://tg-proxy.example.com");
+  });
+
+  it("accepts TELEGRAM_API_ROOT with TELEGRAM_PROXY_SECRET", async () => {
+    vi.stubEnv("TELEGRAM_API_ROOT", "https://tg-proxy.example.com");
+    vi.stubEnv("TELEGRAM_PROXY_SECRET", "shared-secret");
+    vi.stubEnv("TELEGRAM_FORCE_IPV4", "true");
+    const buildTelegramConfig = await loadBuilder();
+
+    const telegram = buildTelegramConfig();
+    expect(telegram.apiRoot).toBe("https://tg-proxy.example.com");
+    expect(telegram.proxySecret).toBe("shared-secret");
+    expect(telegram.forceIpv4).toBe(true);
+  });
+
+  it("allows TELEGRAM_PROXY_URL alone", async () => {
+    vi.stubEnv("TELEGRAM_PROXY_URL", "socks5://forward.example.com:1080");
+    const buildTelegramConfig = await loadBuilder();
+
+    const telegram = buildTelegramConfig();
+    expect(telegram.proxyUrl).toBe("socks5://forward.example.com:1080");
+    expect(telegram.apiRoot).toBe("");
+  });
+
+  it("rejects TELEGRAM_PROXY_URL combined with TELEGRAM_API_ROOT", async () => {
+    const buildTelegramConfig = await loadBuilder();
+
+    vi.stubEnv("TELEGRAM_PROXY_URL", "socks5://forward.example.com:1080");
+    vi.stubEnv("TELEGRAM_API_ROOT", "https://tg-proxy.example.com");
+
+    expect(() => buildTelegramConfig()).toThrow(/cannot be used together/i);
+  });
+
+  it("rejects TELEGRAM_PROXY_SECRET without TELEGRAM_API_ROOT", async () => {
+    const buildTelegramConfig = await loadBuilder();
+
+    vi.stubEnv("TELEGRAM_PROXY_SECRET", "shared-secret");
+
+    expect(() => buildTelegramConfig()).toThrow(/TELEGRAM_PROXY_SECRET requires TELEGRAM_API_ROOT/i);
+  });
+});

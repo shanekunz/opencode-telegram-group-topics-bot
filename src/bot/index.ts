@@ -1,6 +1,4 @@
 import { Bot, Context, InputFile, NextFunction } from "grammy";
-import { SocksProxyAgent } from "socks-proxy-agent";
-import { HttpsProxyAgent } from "https-proxy-agent";
 import { config } from "../config.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { interactionGuardMiddleware } from "./middleware/interaction-guard.js";
@@ -114,6 +112,7 @@ import { assistantRunState } from "./assistant-run-state.js";
 import { formatAssistantRunFooter } from "./utils/assistant-run-footer.js";
 import { renderAssistantFinalPartsSafe } from "./utils/assistant-rendering.js";
 import { reconcileBusyState } from "./utils/busy-reconciliation.js";
+import { createTelegramBotOptions } from "./telegram-client-options.js";
 
 let botInstance: Bot<Context> | null = null;
 const initializedCommandChats = new Set<number>();
@@ -1202,27 +1201,7 @@ async function prepareSessionForPrompt(sessionId: string): Promise<void> {
 export function createBot(): Bot<Context> {
   clearAllInteractionState(INTERACTION_CLEAR_REASON.BOT_STARTUP);
 
-  const botOptions: ConstructorParameters<typeof Bot<Context>>[1] = {};
-
-  if (config.telegram.proxyUrl) {
-    const proxyUrl = config.telegram.proxyUrl;
-    let agent;
-
-    if (proxyUrl.startsWith("socks")) {
-      agent = new SocksProxyAgent(proxyUrl);
-      logger.info(`[Bot] Using SOCKS proxy: ${proxyUrl.replace(/\/\/.*@/, "//***@")}`);
-    } else {
-      agent = new HttpsProxyAgent(proxyUrl);
-      logger.info(`[Bot] Using HTTP/HTTPS proxy: ${proxyUrl.replace(/\/\/.*@/, "//***@")}`);
-    }
-
-    botOptions.client = {
-      baseFetchConfig: {
-        agent,
-        compress: true,
-      },
-    };
-  }
+  const botOptions = createTelegramBotOptions(config.telegram);
 
   const bot = new Bot(config.telegram.token, botOptions);
   bindBotInstance(bot);
