@@ -9,9 +9,15 @@ import { DEFAULT_ALLOWED_INTERACTION_COMMANDS } from "../../interaction/manager.
 import { logger } from "../../utils/logger.js";
 import { safeBackgroundTask } from "../../utils/safe-background-task.js";
 import { t } from "../../i18n/index.js";
+import { editBotRenderedPart, sendBotRenderedPart } from "../utils/telegram-text.js";
 import { getScopeKeyFromContext, getThreadIdFromScopeKey, getThreadSendOptions } from "../scope.js";
+import type { TelegramRenderedPart } from "../../telegram/render/types.js";
+import type { MessageEntity } from "grammy/types";
 
 const MAX_BUTTON_LENGTH = 60;
+const TELEGRAM_MESSAGE_LIMIT = 4096;
+const TRUNCATION_SUFFIX = "…";
+const QUESTION_EMOJI = "❓";
 const QUESTION_ALLOWED_COMMANDS = [...DEFAULT_ALLOWED_INTERACTION_COMMANDS, "/last"];
 
 function getCallbackMessageId(ctx: Context): number | null {
@@ -179,15 +185,34 @@ async function updateQuestionMessage(ctx: Context, scopeKey: string): Promise<vo
     return;
   }
 
-  await ctx
-    .editMessageText(formatQuestionText(question, scopeKey), {
-      reply_markup: buildQuestionKeyboard(
-        question,
-        questionManager.getSelectedOptions(questionManager.getCurrentIndex(scopeKey), scopeKey),
-        scopeKey,
-      ),
-    })
-    .catch(() => {});
+  const part = formatQuestionDetailsPart(question, scopeKey);
+  const keyboard = buildQuestionKeyboard(
+    question,
+    questionManager.getSelectedOptions(questionManager.getCurrentIndex(scopeKey), scopeKey),
+    scopeKey,
+  );
+
+  const chatId = ctx.chat?.id;
+  const messageId = getCallbackMessageId(ctx);
+
+  if (!chatId || messageId === null) {
+    await ctx
+      .editMessageText(part.fallbackText, {
+        reply_markup: keyboard,
+      })
+      .catch(() => {});
+    return;
+  }
+
+  await editBotRenderedPart({
+    api: ctx.api,
+    chatId,
+    messageId,
+    part,
+    options: {
+      reply_markup: keyboard,
+    },
+  }).catch(() => {});
 }
 
 export async function showCurrentQuestion(
@@ -202,13 +227,18 @@ export async function showCurrentQuestion(
     return;
   }
 
-  const message = await bot.sendMessage(chatId, formatQuestionText(question, scopeKey), {
-    reply_markup: buildQuestionKeyboard(
-      question,
-      questionManager.getSelectedOptions(questionManager.getCurrentIndex(scopeKey), scopeKey),
-      scopeKey,
-    ),
-    ...getThreadSendOptions(threadId),
+  const message = await sendBotRenderedPart({
+    api: bot,
+    chatId,
+    part: formatQuestionDetailsPart(question, scopeKey),
+    options: {
+      reply_markup: buildQuestionKeyboard(
+        question,
+        questionManager.getSelectedOptions(questionManager.getCurrentIndex(scopeKey), scopeKey),
+        scopeKey,
+      ),
+      ...getThreadSendOptions(threadId),
+    },
   });
 
   questionManager.addMessageId(message.message_id, scopeKey);
@@ -336,22 +366,91 @@ async function sendAllAnswersToAgent(
   });
 }
 
-function formatQuestionText(
+function formatQuestionDetailsPart(
   question: {
     header: string;
     question: string;
+    options: Array<{ label: string; description: string }>;
     multiple?: boolean;
   },
   scopeKey: string,
-): string {
+): TelegramRenderedPart {
   const currentIndex = questionManager.getCurrentIndex(scopeKey);
   const totalQuestions = questionManager.getTotalQuestions(scopeKey);
   const progressText = totalQuestions > 0 ? `${currentIndex + 1}/${totalQuestions}` : "";
 
-  const headerTitle = [progressText, question.header].filter(Boolean).join(" ");
-  const header = headerTitle ? `${headerTitle}\n\n` : "";
+  const headerTitle = [QUESTION_EMOJI, progressText, question.header].filter(Boolean).join(" ");
+  const textParts: string[] = [];
+  const entities: MessageEntity[] = [];
+
+  if (headerTitle) {
+    textParts.push(headerTitle);
+    entities.push({ type: "bold", offset: 0, length: headerTitle.length });
+  }
+
   const multiple = question.multiple ? t("question.multi_hint") : "";
-  return `${header}${question.question}${multiple}`;
+  const questionText = `${question.question}${multiple}`;
+
+  if (questionText) {
+    textParts.push(questionText);
+  }
+
+  for (const option of question.options) {
+    const optionText = formatOptionDetails(option);
+    const offset = textParts.join("\n\n").length + (textParts.length > 0 ? 2 : 0);
+
+    if (option.label) {
+      entities.push({ type: "bold", offset, length: option.label.length });
+    }
+
+    textParts.push(optionText);
+  }
+
+  const truncated = truncateQuestionPart(textParts.filter(Boolean).join("\n\n"), entities);
+
+  return {
+    text: truncated.text,
+    entities: truncated.entities.length > 0 ? truncated.entities : undefined,
+    fallbackText: truncated.text,
+    source: truncated.entities.length > 0 ? "entities" : "plain",
+  };
+}
+
+function truncateQuestionPart(
+  text: string,
+  entities: MessageEntity[],
+): { text: string; entities: MessageEntity[] } {
+  if (text.length <= TELEGRAM_MESSAGE_LIMIT) {
+    return { text, entities };
+  }
+
+  let endIndex = TELEGRAM_MESSAGE_LIMIT - TRUNCATION_SUFFIX.length;
+  if (endIndex > 0 && isHighSurrogate(text.charCodeAt(endIndex - 1))) {
+    endIndex -= 1;
+  }
+
+  const truncatedText = `${text.slice(0, endIndex)}${TRUNCATION_SUFFIX}`;
+  const truncatedEntities = entities
+    .filter((entity) => entity.offset < endIndex)
+    .map((entity) => ({
+      ...entity,
+      length: Math.min(entity.length, endIndex - entity.offset),
+    }))
+    .filter((entity) => entity.length > 0);
+
+  return { text: truncatedText, entities: truncatedEntities };
+}
+
+function isHighSurrogate(codeUnit: number): boolean {
+  return codeUnit >= 0xd800 && codeUnit <= 0xdbff;
+}
+
+function formatOptionDetails(option: { label: string; description: string }): string {
+  if (!option.description) {
+    return option.label;
+  }
+
+  return `${option.label} — ${option.description}`;
 }
 
 function buildQuestionKeyboard(
@@ -365,7 +464,7 @@ function buildQuestionKeyboard(
   question.options.forEach((option, index) => {
     const isSelected = selectedOptions.has(index);
     const icon = isSelected ? "✅ " : "";
-    const buttonText = formatButtonText(option.label, option.description, icon);
+    const buttonText = formatButtonText(option.label, icon);
     keyboard.text(buttonText, `question:select:${questionIndex}:${index}`).row();
   });
 
@@ -378,11 +477,8 @@ function buildQuestionKeyboard(
   return keyboard;
 }
 
-function formatButtonText(label: string, description: string, icon: string): string {
+function formatButtonText(label: string, icon: string): string {
   let text = `${icon}${label}`;
-  if (description && icon === "") {
-    text += ` - ${description}`;
-  }
 
   if (text.length > MAX_BUTTON_LENGTH) {
     text = text.substring(0, MAX_BUTTON_LENGTH - 3) + "...";

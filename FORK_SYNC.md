@@ -7,7 +7,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - Permanent git remote: `upstream` -> `https://github.com/grinev/opencode-telegram-bot.git`
 - Upstream repo: `https://github.com/grinev/opencode-telegram-bot`
 - Upstream branch: `main`
-- Last reviewed upstream head: `1eb43cf` (`chore(release): v0.20.3`, 2026-05-10)
+- Last reviewed upstream head: `82c34c1` (`feat(question): show full question options details`, 2026-05-12)
 - Original fork point for this threaded fork: `21da71b` (`chore(release): v0.11.0`)
 
 ## Fork Rules
@@ -53,6 +53,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - `a10e7c6` adapted port: heartbeat-based busy-state reconciliation now clears stale assistant run state after reconnects and resumes queued prompts for the affected scoped session
 - `eeb77b8` adapted port: OpenCode 1.14 event subscriptions now prefer the global event stream, filter by scoped project directory, and fall back to legacy per-project streams when needed
 - `b220abb` + `5da739f` adapted port: Telegram connectivity now supports reverse-proxy API roots with optional shared-secret headers plus IPv4-only direct requests for bot API and file downloads, including the fork's separate voice-download path
+- `82c34c1` adapted port: question prompts now include full option descriptions with bold entity formatting and Telegram-length truncation while preserving thread-scoped delivery and callback updates
 
 ## Upstream Changes Intentionally Adapted
 
