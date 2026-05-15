@@ -7,7 +7,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - Permanent git remote: `upstream` -> `https://github.com/grinev/opencode-telegram-bot.git`
 - Upstream repo: `https://github.com/grinev/opencode-telegram-bot`
 - Upstream branch: `main`
-- Last reviewed upstream head: `82c34c1` (`feat(question): show full question options details`, 2026-05-12)
+- Last reviewed upstream head: `ae492e9` (`chore(release): v0.20.4`, 2026-05-13)
 - Original fork point for this threaded fork: `21da71b` (`chore(release): v0.11.0`)
 
 ## Fork Rules
@@ -54,6 +54,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - `eeb77b8` adapted port: OpenCode 1.14 event subscriptions now prefer the global event stream, filter by scoped project directory, and fall back to legacy per-project streams when needed
 - `b220abb` + `5da739f` adapted port: Telegram connectivity now supports reverse-proxy API roots with optional shared-secret headers plus IPv4-only direct requests for bot API and file downloads, including the fork's separate voice-download path
 - `82c34c1` adapted port: question prompts now include full option descriptions with bold entity formatting and Telegram-length truncation while preserving thread-scoped delivery and callback updates
+- `987d868` adapted port: OpenCode auto-restart startup checks now run in the background and health probes time out after 3 seconds so bot polling and later monitor intervals are not blocked by a stuck local server check
 
 ## Upstream Changes Intentionally Adapted
 
@@ -112,6 +113,8 @@ This repository is a product fork of the original single-chat project at `grinev
 - `8a74759` docs-only upstream README clarification covered by the fork docs/config updates above
 - `66e5d4f` release-only bump (`v0.20.2`)
 - `1eb43cf` release-only bump (`v0.20.3`)
+- `ddcfaee` reviewed for `v0.20.4`; no additional port needed because this fork already falls back to the default Telegram API host when `TELEGRAM_API_ROOT` is unset for both voice and general file downloads
+- `ae492e9` release-only bump (`v0.20.4`)
 
 ## Sync Workflow
 

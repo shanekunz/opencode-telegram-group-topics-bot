@@ -9,14 +9,42 @@ import {
 
 const SERVER_READY_TIMEOUT_MS = 10000;
 const SERVER_READY_POLL_INTERVAL_MS = 500;
+const HEALTH_CHECK_TIMEOUT_MS = 3000;
+const HEALTH_CHECK_TIMED_OUT = Symbol("health-check-timed-out");
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T | typeof HEALTH_CHECK_TIMED_OUT> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<typeof HEALTH_CHECK_TIMED_OUT>((resolve) => {
+        timeout = setTimeout(() => resolve(HEALTH_CHECK_TIMED_OUT), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
+}
+
 async function isOpencodeServerHealthy(): Promise<boolean> {
   try {
-    const { data, error } = await opencodeClient.global.health();
+    const result = await withTimeout(opencodeClient.global.health(), HEALTH_CHECK_TIMEOUT_MS);
+    if (result === HEALTH_CHECK_TIMED_OUT) {
+      logger.warn(`[OpenCodeAutoRestart] Health-check timed out after ${HEALTH_CHECK_TIMEOUT_MS}ms`);
+      return false;
+    }
+
+    const { data, error } = result;
     return !error && data?.healthy === true;
   } catch {
     return false;
