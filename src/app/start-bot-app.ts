@@ -13,6 +13,7 @@ import { getRuntimePaths } from "../runtime/paths.js";
 import { clearServiceStateFile } from "../service/manager.js";
 import { getServiceStateFilePathFromEnv, isServiceChildProcess } from "../service/runtime.js";
 import { logger } from "../utils/logger.js";
+import { safeBackgroundTask } from "../utils/safe-background-task.js";
 
 const SHUTDOWN_TIMEOUT_MS = 5000;
 
@@ -41,12 +42,18 @@ export async function startBotApp(): Promise<void> {
 
   await loadSettings();
   await reconcileStoredModelSelection();
-  await opencodeAutoRestartService.start();
   await warmupSessionDirectoryCache();
 
   const bot = createBot();
   const scheduledTaskRuntime = createScheduledTaskRuntime(bot);
   scheduledTaskRuntime.start();
+
+  safeBackgroundTask({
+    taskName: "app.opencodeStartup",
+    task: async () => {
+      await opencodeAutoRestartService.start();
+    },
+  });
 
   let shutdownStarted = false;
   let serviceStateCleared = false;

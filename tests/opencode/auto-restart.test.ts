@@ -161,6 +161,7 @@ describe("opencode/auto-restart", () => {
 
   it("does not run overlapping checks", async () => {
     mocked.config.opencode.autoRestartEnabled = true;
+    mocked.config.opencode.monitorIntervalSec = 1;
     mocked.healthMock.mockResolvedValueOnce(healthyResponse());
     const service = new OpencodeAutoRestartService();
     await service.start();
@@ -171,15 +172,38 @@ describe("opencode/auto-restart", () => {
     });
     mocked.healthMock.mockImplementationOnce(() => pendingHealth);
 
-    await vi.advanceTimersByTimeAsync(300_000);
-    await vi.advanceTimersByTimeAsync(300_000);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.advanceTimersByTimeAsync(1_000);
 
-    mocked.healthMock.mockResolvedValueOnce(healthyResponse());
+    expect(mocked.healthMock).toHaveBeenCalledTimes(2);
+
     resolveHealth(unhealthyResponse());
     await Promise.resolve();
     await Promise.resolve();
-    await Promise.resolve();
 
+    service.stop();
+  });
+
+  it("treats timed out health checks as unhealthy and continues recovery", async () => {
+    mocked.config.opencode.autoRestartEnabled = true;
+    mocked.healthMock
+      .mockImplementationOnce(
+        () =>
+          new Promise(() => {
+            // Never resolves to simulate a stuck OpenCode health endpoint.
+          }),
+      )
+      .mockResolvedValueOnce(healthyResponse());
+
+    const service = new OpencodeAutoRestartService();
+    const startPromise = service.start();
+
+    await vi.advanceTimersByTimeAsync(3000);
+    await startPromise;
+
+    expect(mocked.loggerWarnMock).toHaveBeenCalledWith(
+      "[OpenCodeAutoRestart] Health-check timed out after 3000ms",
+    );
     expect(mocked.startLocalOpencodeServerMock).toHaveBeenCalledTimes(1);
 
     service.stop();
