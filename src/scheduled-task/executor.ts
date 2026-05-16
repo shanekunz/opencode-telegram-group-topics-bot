@@ -7,6 +7,8 @@ const SCHEDULED_TASK_AGENT = "build";
 const SCHEDULED_TASK_SESSION_TITLE = "Scheduled task run";
 const EXECUTION_POLL_INTERVAL_MS = 2000;
 const MAX_IDLE_POLLS_WITHOUT_RESULT = 3;
+const COMPLETED_EMPTY_RESULT_RECHECK_INTERVAL_MS = 500;
+const MAX_COMPLETED_EMPTY_RESULT_RECHECKS = 3;
 const MODELS_DOCS_URL = "https://opencode.ai/docs/config/#models";
 const EXECUTION_TIMEOUT_ERROR_PREFIX = "Scheduled task exceeded bot execution timeout";
 const SCHEDULED_TASK_PERMISSION_RULESET = [
@@ -163,10 +165,11 @@ async function loadAssistantResult(
   return extractAssistantResult(findLatestAssistantMessage(messages));
 }
 
-async function waitForScheduledTaskResult(sessionId: string, directory: string): Promise<string> {
+async function waitForScheduledTaskResult(taskId: string, sessionId: string, directory: string): Promise<string> {
   const startedAtMs = Date.now();
   const executionTimeoutMs = getExecutionTimeoutMs();
   let idlePollsWithoutResult = 0;
+  let completedEmptyResultReadCount = 0;
 
   while (true) {
     if (Date.now() - startedAtMs >= executionTimeoutMs) {
@@ -183,8 +186,20 @@ async function waitForScheduledTaskResult(sessionId: string, directory: string):
         return assistantResult.resultText;
       }
 
-      throw new Error("Scheduled task returned an empty assistant response");
+      completedEmptyResultReadCount += 1;
+      if (completedEmptyResultReadCount > MAX_COMPLETED_EMPTY_RESULT_RECHECKS) {
+        logger.warn(
+          "[ScheduledTaskExecutor] Completed assistant message stayed empty after retries",
+          { taskId, sessionId, directory, completedEmptyResultReadCount },
+        );
+        throw new Error("Scheduled task returned an empty assistant response");
+      }
+
+      await sleep(COMPLETED_EMPTY_RESULT_RECHECK_INTERVAL_MS);
+      continue;
     }
+
+    completedEmptyResultReadCount = 0;
 
     const { data: statuses, error: statusError } = await opencodeClient.session.status({
       directory,
@@ -205,7 +220,17 @@ async function waitForScheduledTaskResult(sessionId: string, directory: string):
           return confirmedAssistantResult.resultText;
         }
 
-        throw new Error("Scheduled task returned an empty assistant response");
+        completedEmptyResultReadCount += 1;
+        if (completedEmptyResultReadCount > MAX_COMPLETED_EMPTY_RESULT_RECHECKS) {
+          logger.warn(
+            "[ScheduledTaskExecutor] Confirmed completed assistant message stayed empty after retries",
+            { taskId, sessionId, directory, completedEmptyResultReadCount },
+          );
+          throw new Error("Scheduled task returned an empty assistant response");
+        }
+
+        await sleep(COMPLETED_EMPTY_RESULT_RECHECK_INTERVAL_MS);
+        continue;
       }
 
       idlePollsWithoutResult += 1;
@@ -303,7 +328,7 @@ export async function executeScheduledTask(
       throw promptError || new Error("Scheduled task prompt execution failed");
     }
 
-    const resultText = await waitForScheduledTaskResult(session.id, session.directory);
+    const resultText = await waitForScheduledTaskResult(task.id, session.id, session.directory);
 
     logger.info(
       `[ScheduledTaskExecutor] Prompt execution completed: taskId=${task.id}, sessionId=${sessionId}`,

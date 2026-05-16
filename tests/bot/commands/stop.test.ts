@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Context } from "grammy";
+import { assistantRunState } from "../../../src/bot/assistant-run-state.js";
+import {
+  __resetQueuedPromptsForTests,
+  activatePromptResponseMode,
+  consumePromptResponseMode,
+} from "../../../src/bot/handlers/prompt.js";
 import { abortCommand } from "../../../src/bot/commands/abort.js";
 import { clearAllInteractionState } from "../../../src/interaction/cleanup.js";
 import { questionManager } from "../../../src/question/manager.js";
@@ -62,6 +68,8 @@ function activateInteractionState(): void {
 describe("bot/commands/abort", () => {
   beforeEach(() => {
     clearAllInteractionState("test_setup");
+    assistantRunState.__resetForTests();
+    __resetQueuedPromptsForTests();
     taskCreationManager.clearAll();
     mocked.currentSession = null;
     mocked.abortMock.mockReset();
@@ -156,5 +164,40 @@ describe("bot/commands/abort", () => {
     expect(permissionManager.isActive()).toBe(false);
     expect(renameManager.isWaitingForName()).toBe(false);
     expect(interactionManager.getSnapshot()).toBeNull();
+  });
+
+  it("clears local busy state after a confirmed abort", async () => {
+    mocked.currentSession = {
+      id: "session-1",
+      title: "Session",
+      directory: "D:/repo",
+    };
+
+    assistantRunState.startRun("session-1", {
+      startedAt: Date.now(),
+      directory: "D:/repo",
+    });
+    activatePromptResponseMode("session-1", "text_only");
+
+    mocked.abortMock.mockResolvedValue({ data: true, error: null });
+    mocked.statusMock.mockResolvedValue({
+      data: {
+        "session-1": { type: "idle" },
+      },
+      error: null,
+    });
+
+    const ctx = {
+      chat: { id: 777 },
+      reply: vi.fn().mockResolvedValue({ message_id: 88 }),
+      api: {
+        editMessageText: vi.fn().mockResolvedValue(undefined),
+      },
+    } as unknown as Context;
+
+    await abortCommand(ctx as never);
+
+    expect(assistantRunState.getRun("session-1")).toBeNull();
+    expect(consumePromptResponseMode("session-1")).toBeNull();
   });
 });

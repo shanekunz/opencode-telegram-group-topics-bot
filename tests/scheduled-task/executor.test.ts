@@ -246,15 +246,64 @@ describe("scheduled-task/executor", () => {
       error: null,
     });
     mocked.promptAsyncMock.mockResolvedValueOnce({ data: undefined, error: null });
-    mocked.messagesMock.mockResolvedValueOnce({
-      data: [createAssistantMessage("", { completed: true })],
-      error: null,
-    });
+    mocked.messagesMock
+      .mockResolvedValueOnce({
+        data: [createAssistantMessage("", { completed: true })],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [createAssistantMessage("", { completed: true })],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [createAssistantMessage("", { completed: true })],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [createAssistantMessage("", { completed: true })],
+        error: null,
+      });
 
-    await expect(executeScheduledTask(createTask())).resolves.toMatchObject({
+    vi.useFakeTimers();
+
+    const resultPromise = executeScheduledTask(createTask());
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await expect(resultPromise).resolves.toMatchObject({
       status: "error",
       resultText: null,
       errorMessage: "Scheduled task returned an empty assistant response",
     });
+  });
+
+  it("retries a transient empty completed assistant reply before succeeding", async () => {
+    const { executeScheduledTask } = await import("../../src/scheduled-task/executor.js");
+
+    mocked.createMock.mockResolvedValueOnce({
+      data: { id: "session-1", directory: "/repo/app", title: "Scheduled task run" },
+      error: null,
+    });
+    mocked.promptAsyncMock.mockResolvedValueOnce({ data: undefined, error: null });
+    mocked.messagesMock
+      .mockResolvedValueOnce({
+        data: [createAssistantMessage("", { completed: true })],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [createAssistantMessage("Recovered output", { completed: true })],
+        error: null,
+      });
+
+    vi.useFakeTimers();
+
+    const resultPromise = executeScheduledTask(createTask());
+    await vi.advanceTimersByTimeAsync(500);
+
+    await expect(resultPromise).resolves.toMatchObject({
+      status: "success",
+      resultText: "Recovered output",
+      errorMessage: null,
+    });
+    expect(mocked.messagesMock).toHaveBeenCalledTimes(2);
   });
 });

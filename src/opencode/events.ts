@@ -3,6 +3,20 @@ import { opencodeClient } from "./client.js";
 import { logger } from "../utils/logger.js";
 
 type EventCallback = (event: Event) => void | Promise<void>;
+type EventStreamSource = "global" | "legacy";
+type EventStreamSubscription = {
+  source: EventStreamSource;
+  stream: AsyncGenerator<unknown, unknown, unknown>;
+};
+type EventSubscriptionResult = {
+  stream?: AsyncGenerator<unknown, unknown, unknown> | null;
+};
+type OptionalGlobalEventApi = {
+  event?: (options?: { signal?: AbortSignal }) => Promise<EventSubscriptionResult>;
+};
+type OptionalGlobalEventClient = {
+  global?: OptionalGlobalEventApi;
+};
 
 interface DirectoryStreamWorker {
   directory: string;
@@ -11,9 +25,18 @@ interface DirectoryStreamWorker {
   loopPromise: Promise<void> | null;
 }
 
+type StreamReadResult =
+  | { type: "next"; result: IteratorResult<unknown, unknown> }
+  | { type: "error"; error: unknown }
+  | { type: "aborted" }
+  | { type: "timeout" };
+
 const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 15000;
 const FATAL_NO_STREAM_ERROR = "No stream returned from event subscription";
+const SSE_IDLE_TIMEOUT_ERROR = "SSE stream idle timeout";
+
+let sseIdleTimeoutMs = 30_000;
 
 const workersByDirectory = new Map<string, DirectoryStreamWorker>();
 
@@ -44,6 +67,65 @@ function waitWithAbort(ms: number, signal: AbortSignal): Promise<boolean> {
   });
 }
 
+function createAttemptAbortController(parentSignal: AbortSignal): {
+  controller: AbortController;
+  cleanup: () => void;
+} {
+  const controller = new AbortController();
+
+  if (parentSignal.aborted) {
+    controller.abort();
+    return { controller, cleanup: () => {} };
+  }
+
+  const onAbort = () => controller.abort();
+  parentSignal.addEventListener("abort", onAbort, { once: true });
+
+  return {
+    controller,
+    cleanup: () => parentSignal.removeEventListener("abort", onAbort),
+  };
+}
+
+function readStreamWithIdleTimeout(
+  stream: AsyncGenerator<unknown, unknown, unknown>,
+  signal: AbortSignal,
+): Promise<StreamReadResult> {
+  return new Promise((resolve) => {
+    let settled = false;
+
+    const finish = (result: StreamReadResult) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeoutId);
+      signal.removeEventListener("abort", onAbort);
+      resolve(result);
+    };
+
+    const onAbort = () => finish({ type: "aborted" });
+    const timeoutId = setTimeout(() => finish({ type: "timeout" }), sseIdleTimeoutMs);
+
+    if (signal.aborted) {
+      finish({ type: "aborted" });
+      return;
+    }
+
+    signal.addEventListener("abort", onAbort, { once: true });
+
+    stream.next().then(
+      (result) => finish({ type: "next", result }),
+      (error) => finish({ type: "error", error }),
+    );
+  });
+}
+
+function isEventStreamIdleTimeoutError(error: unknown): boolean {
+  return error instanceof Error && error.message === SSE_IDLE_TIMEOUT_ERROR;
+}
+
 function getOrCreateWorker(directory: string): DirectoryStreamWorker {
   const existingWorker = workersByDirectory.get(directory);
   if (existingWorker) {
@@ -59,6 +141,103 @@ function getOrCreateWorker(directory: string): DirectoryStreamWorker {
 
   workersByDirectory.set(directory, nextWorker);
   return nextWorker;
+}
+
+function isExpectedOpencodeUnavailableError(error: unknown): boolean {
+  if (!error) {
+    return false;
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+
+  return (
+    normalized.includes("fetch failed") ||
+    normalized.includes("failed to fetch") ||
+    normalized.includes("econnrefused") ||
+    normalized.includes("econnreset") ||
+    normalized.includes("enotfound") ||
+    normalized.includes("connectex")
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isEventLike(value: unknown): value is Event {
+  return isRecord(value) && typeof value.type === "string" && isRecord(value.properties);
+}
+
+function normalizeDirectoryForComparison(directory: string): string {
+  const normalized = directory.replace(/\\/g, "/").replace(/\/+$/, "");
+  return /^[a-z]:/i.test(normalized) ? normalized.toLowerCase() : normalized;
+}
+
+function isSameDirectory(left: string, right: string): boolean {
+  return normalizeDirectoryForComparison(left) === normalizeDirectoryForComparison(right);
+}
+
+function normalizeGlobalEvent(rawEvent: unknown, directory: string): Event | null {
+  if (isEventLike(rawEvent)) {
+    return rawEvent;
+  }
+
+  if (!isRecord(rawEvent) || !("payload" in rawEvent)) {
+    logger.debug("[Events] Ignoring global event with unknown shape");
+    return null;
+  }
+
+  const eventDirectory = typeof rawEvent.directory === "string" ? rawEvent.directory : null;
+  if (eventDirectory && !isSameDirectory(eventDirectory, directory)) {
+    return null;
+  }
+
+  if (!isEventLike(rawEvent.payload)) {
+    logger.debug("[Events] Ignoring global event with unknown payload shape");
+    return null;
+  }
+
+  return rawEvent.payload;
+}
+
+function normalizeEvent(rawEvent: unknown, source: EventStreamSource, directory: string): Event | null {
+  if (source === "global") {
+    return normalizeGlobalEvent(rawEvent, directory);
+  }
+
+  if (!isEventLike(rawEvent)) {
+    logger.debug("[Events] Ignoring legacy event with unknown shape");
+    return null;
+  }
+
+  return rawEvent;
+}
+
+async function subscribeToGlobalEventStream(signal: AbortSignal): Promise<EventStreamSubscription> {
+  const globalEvents = (opencodeClient as OptionalGlobalEventClient).global;
+  if (!globalEvents?.event) {
+    throw new Error("Global event subscription is not available");
+  }
+
+  const result = await globalEvents.event({ signal });
+  if (!result.stream) {
+    throw new Error(FATAL_NO_STREAM_ERROR);
+  }
+
+  return { source: "global", stream: result.stream };
+}
+
+async function subscribeToLegacyEventStream(
+  directory: string,
+  signal: AbortSignal,
+): Promise<EventStreamSubscription> {
+  const result = await opencodeClient.event.subscribe({ directory }, { signal });
+  if (!result.stream) {
+    throw new Error(FATAL_NO_STREAM_ERROR);
+  }
+
+  return { source: "legacy", stream: result.stream };
 }
 
 async function dispatchEvent(worker: DirectoryStreamWorker, event: Event): Promise<void> {
@@ -78,32 +257,97 @@ async function dispatchEvent(worker: DirectoryStreamWorker, event: Event): Promi
 
 async function runWorkerLoop(worker: DirectoryStreamWorker): Promise<void> {
   let reconnectAttempt = 0;
+  let useLegacyEventsOnce = false;
   const { directory, abortController } = worker;
 
   while (!abortController.signal.aborted && worker.callbacks.size > 0) {
-    try {
-      const result = await opencodeClient.event.subscribe(
-        { directory },
-        { signal: abortController.signal },
-      );
+    let attemptAbort: ReturnType<typeof createAttemptAbortController> | null = null;
 
-      if (!result.stream) {
-        throw new Error(FATAL_NO_STREAM_ERROR);
+    try {
+      let subscription: EventStreamSubscription;
+      attemptAbort = createAttemptAbortController(abortController.signal);
+
+      if (useLegacyEventsOnce) {
+        useLegacyEventsOnce = false;
+        subscription = await subscribeToLegacyEventStream(directory, attemptAbort.controller.signal);
+      } else {
+        try {
+          subscription = await subscribeToGlobalEventStream(attemptAbort.controller.signal);
+          logger.debug(`[Events] Using global OpenCode event stream for ${directory}`);
+        } catch (error) {
+          if (abortController.signal.aborted || worker.callbacks.size === 0) {
+            throw error;
+          }
+
+          if (isExpectedOpencodeUnavailableError(error)) {
+            throw error;
+          }
+
+          logger.warn(
+            `[Events] Global event stream unavailable for ${directory}, falling back to project event stream`,
+            error,
+          );
+          subscription = await subscribeToLegacyEventStream(directory, attemptAbort.controller.signal);
+        }
       }
 
       reconnectAttempt = 0;
+      let usefulEventCount = 0;
 
-      for await (const event of result.stream) {
-        if (abortController.signal.aborted || worker.callbacks.size === 0) {
-          break;
+      try {
+        while (!abortController.signal.aborted && worker.callbacks.size > 0) {
+          const readResult = await readStreamWithIdleTimeout(
+            subscription.stream,
+            attemptAbort.controller.signal,
+          );
+
+          if (readResult.type === "aborted") {
+            break;
+          }
+
+          if (readResult.type === "timeout") {
+            attemptAbort.controller.abort();
+            const closeStream = subscription.stream.return?.(undefined);
+            void closeStream?.catch(() => undefined);
+            throw new Error(SSE_IDLE_TIMEOUT_ERROR);
+          }
+
+          if (readResult.type === "error") {
+            throw readResult.error;
+          }
+
+          if (readResult.result.done) {
+            break;
+          }
+
+          await new Promise<void>((resolve) => setImmediate(resolve));
+
+          const normalizedEvent = normalizeEvent(readResult.result.value, subscription.source, directory);
+          if (!normalizedEvent) {
+            continue;
+          }
+
+          if (normalizedEvent.type !== "server.connected") {
+            usefulEventCount++;
+          }
+
+          await dispatchEvent(worker, normalizedEvent);
         }
-
-        await new Promise<void>((resolve) => setImmediate(resolve));
-        await dispatchEvent(worker, event);
+      } finally {
+        attemptAbort.cleanup();
+        attemptAbort = null;
       }
 
       if (abortController.signal.aborted || worker.callbacks.size === 0) {
         break;
+      }
+
+      if (subscription.source === "global" && usefulEventCount === 0) {
+        useLegacyEventsOnce = true;
+        logger.warn(
+          `[Events] Global event stream ended without project events for ${directory}, falling back to project event stream`,
+        );
+        continue;
       }
 
       reconnectAttempt++;
@@ -123,6 +367,8 @@ async function runWorkerLoop(worker: DirectoryStreamWorker): Promise<void> {
         break;
       }
 
+      attemptAbort?.cleanup();
+
       if (error instanceof Error && error.message === FATAL_NO_STREAM_ERROR) {
         logger.error("[Events] Fatal event stream error", { directory }, error);
         break;
@@ -130,11 +376,20 @@ async function runWorkerLoop(worker: DirectoryStreamWorker): Promise<void> {
 
       reconnectAttempt++;
       const reconnectDelay = getReconnectDelayMs(reconnectAttempt);
-      logger.error(
-        `[Events] Stream failed, reconnecting`,
-        { directory, reconnectAttempt, reconnectDelay },
-        error,
-      );
+
+      if (isEventStreamIdleTimeoutError(error)) {
+        logger.warn(`[Events] Stream idle timeout, reconnecting`, {
+          directory,
+          reconnectAttempt,
+          reconnectDelay,
+        });
+      } else {
+        logger.error(
+          `[Events] Stream failed, reconnecting`,
+          { directory, reconnectAttempt, reconnectDelay },
+          error,
+        );
+      }
 
       const shouldContinue = await waitWithAbort(reconnectDelay, abortController.signal);
       if (!shouldContinue) {
@@ -205,4 +460,8 @@ export function stopEventListening(directory?: string): void {
   }
 
   logger.info("[Events] Stopped all event listeners");
+}
+
+export function __setSseIdleTimeoutForTests(timeoutMs: number): void {
+  sseIdleTimeoutMs = timeoutMs;
 }
