@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Event } from "@opencode-ai/sdk/v2";
 
-const { subscribeMock } = vi.hoisted(() => ({
+const { globalEventMock, subscribeMock } = vi.hoisted(() => ({
+  globalEventMock: vi.fn(),
   subscribeMock: vi.fn(),
 }));
 
 vi.mock("../../src/opencode/client.js", () => ({
   opencodeClient: {
+    global: {
+      event: globalEventMock,
+    },
     event: {
       subscribe: subscribeMock,
     },
@@ -14,6 +18,7 @@ vi.mock("../../src/opencode/client.js", () => ({
 }));
 
 import {
+  __setSseIdleTimeoutForTests,
   stopEventListening,
   subscribeToEvents,
   unsubscribeFromEvents,
@@ -37,11 +42,15 @@ function createAbortableStream(signal: AbortSignal): AsyncGenerator<Event, void,
 
 describe("opencode/events", () => {
   afterEach(() => {
+    __setSseIdleTimeoutForTests(30_000);
     stopEventListening();
+    globalEventMock.mockReset();
     subscribeMock.mockReset();
   });
 
   it("subscribes once per directory and forwards events", async () => {
+    globalEventMock.mockRejectedValue(new Error("global events unavailable"));
+
     const eventA = {
       type: "session.status",
       properties: { sessionID: "s1", status: { type: "busy" } },
@@ -67,6 +76,8 @@ describe("opencode/events", () => {
   });
 
   it("does not start duplicate stream for same directory", async () => {
+    globalEventMock.mockRejectedValue(new Error("global events unavailable"));
+
     subscribeMock.mockImplementation(async (_params, options: { signal: AbortSignal }) => ({
       stream: createAbortableStream(options.signal),
     }));
@@ -84,6 +95,8 @@ describe("opencode/events", () => {
   });
 
   it("keeps existing stream when subscribing to another directory", async () => {
+    globalEventMock.mockRejectedValue(new Error("global events unavailable"));
+
     let signalA: { aborted: boolean } | null = null;
     let signalB: { aborted: boolean } | null = null;
 
@@ -109,6 +122,8 @@ describe("opencode/events", () => {
   });
 
   it("can unsubscribe a callback without stopping other listeners", async () => {
+    globalEventMock.mockRejectedValue(new Error("global events unavailable"));
+
     subscribeMock.mockImplementation(async (_params, options: { signal: AbortSignal }) => ({
       stream: createAbortableStream(options.signal),
     }));
@@ -124,6 +139,8 @@ describe("opencode/events", () => {
   });
 
   it("stops only requested directory listener", async () => {
+    globalEventMock.mockRejectedValue(new Error("global events unavailable"));
+
     let signalA: { aborted: boolean } | null = null;
     let signalB: { aborted: boolean } | null = null;
 
@@ -140,6 +157,10 @@ describe("opencode/events", () => {
     await subscribeToEvents("/repo/a", vi.fn());
     await subscribeToEvents("/repo/b", vi.fn());
 
+    await vi.waitFor(() => {
+      expect(subscribeMock).toHaveBeenCalledTimes(2);
+    });
+
     stopEventListening("/repo/a");
 
     expect((signalA as { aborted: boolean } | null)?.aborted ?? null).toBe(true);
@@ -147,6 +168,8 @@ describe("opencode/events", () => {
   });
 
   it("reconnects after stream end", async () => {
+    globalEventMock.mockRejectedValue(new Error("global events unavailable"));
+
     subscribeMock
       .mockResolvedValueOnce({ stream: createStream([]) })
       .mockImplementationOnce(async (_params, options: { signal: AbortSignal }) => ({
@@ -164,6 +187,8 @@ describe("opencode/events", () => {
   });
 
   it("reconnects after non-fatal stream error", async () => {
+    globalEventMock.mockRejectedValue(new Error("global events unavailable"));
+
     subscribeMock
       .mockRejectedValueOnce(new Error("transient error"))
       .mockImplementationOnce(async (_params, options: { signal: AbortSignal }) => ({
@@ -175,6 +200,32 @@ describe("opencode/events", () => {
     await vi.waitFor(
       () => {
         expect(subscribeMock).toHaveBeenCalledTimes(2);
+      },
+      { timeout: 3000 },
+    );
+  });
+
+  it("reconnects after stream idle timeout", async () => {
+    globalEventMock.mockRejectedValue(new Error("global events unavailable"));
+    __setSseIdleTimeoutForTests(20);
+
+    subscribeMock
+      .mockImplementationOnce(async (_params, options: { signal: AbortSignal }) => ({
+        stream: createAbortableStream(options.signal),
+      }))
+      .mockResolvedValueOnce({
+        stream: createStream([
+          { type: "session.idle", properties: { sessionID: "s1" } } as unknown as Event,
+        ]),
+      });
+
+    const callback = vi.fn();
+    await subscribeToEvents("/repo/a", callback);
+
+    await vi.waitFor(
+      () => {
+        expect(subscribeMock).toHaveBeenCalledTimes(2);
+        expect(callback).toHaveBeenCalledTimes(1);
       },
       { timeout: 3000 },
     );

@@ -9,6 +9,8 @@ import { summaryAggregator } from "../../summary/aggregator.js";
 import { updateTopicBindingStatusBySessionId } from "../../topic/manager.js";
 import { t } from "../../i18n/index.js";
 import { logger } from "../../utils/logger.js";
+import { assistantRunState } from "../assistant-run-state.js";
+import { clearPromptResponseMode, dispatchNextQueuedPrompt } from "../handlers/prompt.js";
 import { getScopeKeyFromContext } from "../scope.js";
 
 type SessionState = "idle" | "busy" | "not-found";
@@ -28,6 +30,12 @@ function stopLocalStreaming(scopeKey: string, sessionId?: string): void {
 
   summaryAggregator.clearSession(sessionId);
   updateTopicBindingStatusBySessionId(sessionId, TOPIC_SESSION_STATUS.ABANDONED);
+}
+
+async function releaseAbortBusyState(sessionId: string, reason: string): Promise<void> {
+  clearPromptResponseMode(sessionId);
+  assistantRunState.clearRun(sessionId, reason);
+  await dispatchNextQueuedPrompt(sessionId);
 }
 
 async function pollSessionStatus(
@@ -109,12 +117,14 @@ export async function abortCurrentOperation(
     if (options.notifyUser === false) {
       if (abortError) {
         logger.warn("[Abort] Abort request failed during silent abort:", abortError);
+        await releaseAbortBusyState(currentSession.id, "abort_silent_unconfirmed");
       }
       return;
     }
 
     if (abortError) {
       logger.warn("[Abort] Abort request failed:", abortError);
+      await releaseAbortBusyState(currentSession.id, "abort_unconfirmed");
       await ctx.api.editMessageText(
         ctx.chat!.id,
         waitingMessage!.message_id,
@@ -124,6 +134,7 @@ export async function abortCurrentOperation(
     }
 
     if (abortResult !== true) {
+      await releaseAbortBusyState(currentSession.id, "abort_maybe_finished");
       await ctx.api.editMessageText(
         ctx.chat!.id,
         waitingMessage!.message_id,
@@ -135,6 +146,7 @@ export async function abortCurrentOperation(
     const finalStatus = await pollSessionStatus(currentSession.id, currentSession.directory, 5000);
 
     if (finalStatus === "idle" || finalStatus === "not-found") {
+      await releaseAbortBusyState(currentSession.id, "abort_confirmed");
       await ctx.api.editMessageText(ctx.chat!.id, waitingMessage!.message_id, t("stop.success"));
     } else {
       await ctx.api.editMessageText(
@@ -150,8 +162,11 @@ export async function abortCurrentOperation(
       if (!(error instanceof Error && error.name === "AbortError")) {
         logger.error("[Abort] Error while aborting session during silent abort:", error);
       }
+      await releaseAbortBusyState(currentSession.id, "abort_silent_error");
       return;
     }
+
+    await releaseAbortBusyState(currentSession.id, "abort_error");
 
     if (error instanceof Error && error.name === "AbortError") {
       await ctx.api.editMessageText(
