@@ -987,10 +987,10 @@ async function ensureEventSubscription(directory: string): Promise<void> {
     clearAllInteractionState(INTERACTION_CLEAR_REASON.QUESTION_ERROR, GLOBAL_SCOPE_KEY);
   });
 
-  summaryAggregator.setOnPermission((request) => {
+  summaryAggregator.setOnPermission((sessionId, request) => {
     sessionOutputCoordinator.dispatch({
       kind: "permission",
-      sessionId: request.sessionID,
+      sessionId,
       request,
     });
   });
