@@ -93,7 +93,7 @@ export interface SubagentInfo {
 
 type SubagentCallback = (sessionId: string, subagents: SubagentInfo[]) => void;
 
-type PermissionCallback = (request: PermissionRequest) => void;
+type PermissionCallback = (sessionId: string, request: PermissionRequest) => void;
 
 type SessionDiffCallback = (sessionId: string, diffs: FileChange[]) => void;
 
@@ -295,6 +295,14 @@ class SummaryAggregator {
   private isTrackedChildSession(sessionId: string): boolean {
     const parentSessionId = this.trackedSessionParents.get(sessionId);
     return typeof parentSessionId === "string" && parentSessionId.length > 0;
+  }
+
+  private getPermissionRouteSessionId(sessionId: string): string | null {
+    if (this.isTrackedSession(sessionId)) {
+      return sessionId;
+    }
+
+    return this.getParentSessionId(sessionId);
   }
 
   private getQueue(map: Map<string, string[]>, parentSessionId: string): string[] {
@@ -1565,22 +1573,25 @@ class SummaryAggregator {
     },
   ): void {
     const request = event.properties;
+    const routeSessionId = this.getPermissionRouteSessionId(request.sessionID);
 
-    if (!this.isTrackedSession(request.sessionID)) {
+    if (!routeSessionId) {
       logger.debug(
         `[Aggregator] Ignoring permission.asked for untracked session: ${request.sessionID}`,
       );
       return;
     }
 
+    const isTrackedChildSession = routeSessionId !== request.sessionID;
+
     logger.info(
-      `[Aggregator] Permission asked: requestID=${request.id}, type=${request.permission}, patterns=${request.patterns.length}`,
+      `[Aggregator] Permission asked: requestID=${request.id}, type=${request.permission}, patterns=${request.patterns.length}, subagent=${isTrackedChildSession}`,
     );
 
     if (this.onPermissionCallback) {
       const callback = this.onPermissionCallback;
       invokeCallback(
-        async () => await callback(request as PermissionRequest),
+        async () => await callback(routeSessionId, request as PermissionRequest),
         "[Aggregator] Error in permission callback:",
       );
     }

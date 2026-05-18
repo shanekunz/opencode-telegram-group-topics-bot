@@ -30,6 +30,7 @@ describe("summary/aggregator", () => {
     summaryAggregator.setOnSessionIdle(() => {});
     summaryAggregator.setOnSessionError(() => {});
     summaryAggregator.setOnSessionRetry(() => {});
+    summaryAggregator.setOnPermission(() => {});
   });
 
   it("invokes onCleared callback when aggregator is cleared", () => {
@@ -379,6 +380,39 @@ describe("summary/aggregator", () => {
         description: "Task B",
       }),
     ]);
+  });
+
+  it("routes child-session permission requests through the parent tracked session", async () => {
+    const onPermission = vi.fn();
+    summaryAggregator.setOnPermission(onPermission);
+    summaryAggregator.setSession("root-session");
+
+    summaryAggregator.processEvent({
+      type: "session.created",
+      properties: {
+        info: {
+          id: "child-session",
+          parentID: "root-session",
+          title: "Investigate (@explore subagent)",
+        },
+      },
+    } as unknown as Event);
+
+    const request = {
+      id: "permission-1",
+      sessionID: "child-session",
+      permission: "bash",
+      patterns: ["npm test"],
+    };
+
+    summaryAggregator.processEvent({
+      type: "permission.asked",
+      properties: request,
+    } as unknown as Event);
+
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(onPermission).toHaveBeenCalledWith("root-session", request);
   });
 
   it("marks write tool without file attachment when payload is oversized", () => {
