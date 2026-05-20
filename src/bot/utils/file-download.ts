@@ -1,8 +1,9 @@
 import type { Api } from "grammy";
 import { config } from "../../config.js";
 import { logger } from "../../utils/logger.js";
+import { createTelegramIpv4Agent } from "../telegram-client-options.js";
+import { buildTelegramFileUrl } from "./telegram-file-url.js";
 
-const TELEGRAM_FILE_URL_BASE = "https://api.telegram.org/file/bot";
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB Telegram limit
 
 export interface DownloadedFile {
@@ -31,15 +32,22 @@ export async function downloadTelegramFile(api: Api, fileId: string): Promise<Do
     throw new Error(`File too large: ${sizeMb}MB (max 20MB)`);
   }
 
-  const fileUrl = `${TELEGRAM_FILE_URL_BASE}${config.telegram.token}/${file.file_path}`;
+  const fileUrl = buildTelegramFileUrl(file.file_path);
   logger.debug(`[FileDownload] Downloading from ${fileUrl.replace(config.telegram.token, "***")}`);
 
   const fetchOptions: RequestInit & { agent?: unknown } = {};
 
-  // Use proxy if configured
+  if (config.telegram.proxySecret) {
+    fetchOptions.headers = {
+      "X-Proxy-Secret": config.telegram.proxySecret,
+    };
+  }
+
   if (config.telegram.proxyUrl) {
     const { HttpsProxyAgent } = await import("https-proxy-agent");
     fetchOptions.agent = new HttpsProxyAgent(config.telegram.proxyUrl);
+  } else if (config.telegram.forceIpv4) {
+    fetchOptions.agent = createTelegramIpv4Agent();
   }
 
   const response = await fetch(fileUrl, fetchOptions);

@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { Agent as HttpsAgent } from "node:https";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Api } from "grammy";
 import {
+  downloadTelegramFile,
   toDataUri,
   formatFileSize,
   isFileSizeAllowed,
@@ -105,6 +108,94 @@ describe("bot/utils/file-download", () => {
 
     it("returns false for empty string", () => {
       expect(isTextMimeType("")).toBe(false);
+    });
+  });
+
+  describe("downloadTelegramFile reverse-proxy wiring", () => {
+    beforeEach(() => {
+      vi.stubEnv("TELEGRAM_BOT_TOKEN", "bot-token-xyz");
+      vi.stubEnv("TELEGRAM_ALLOWED_USER_ID", "123456789");
+      vi.stubEnv("OPENCODE_MODEL_PROVIDER", "test-provider");
+      vi.stubEnv("OPENCODE_MODEL_ID", "test-model");
+      vi.stubEnv("TELEGRAM_PROXY_URL", "");
+      vi.stubEnv("TELEGRAM_API_ROOT", "");
+      vi.stubEnv("TELEGRAM_PROXY_SECRET", "");
+      vi.stubEnv("TELEGRAM_FORCE_IPV4", "");
+      vi.restoreAllMocks();
+    });
+
+    function makeApiStub(): Api {
+      return {
+        getFile: vi.fn().mockResolvedValue({
+          file_path: "voice/sample.ogg",
+          file_size: 100,
+        }),
+      } as unknown as Api;
+    }
+
+    function makeFetchStub() {
+      return vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+      });
+    }
+
+    async function loadDownloadModule() {
+      vi.resetModules();
+      return await import("../../../src/bot/utils/file-download.js");
+    }
+
+    it("uses api.telegram.org as the file URL base when TELEGRAM_API_ROOT is unset", async () => {
+      const fetchMock = makeFetchStub();
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { downloadTelegramFile } = await loadDownloadModule();
+      await downloadTelegramFile(makeApiStub(), "fid");
+
+      const [url] = fetchMock.mock.calls[0] ?? [];
+      expect(url).toBe("https://api.telegram.org/file/botbot-token-xyz/voice/sample.ogg");
+    });
+
+    it("uses TELEGRAM_API_ROOT as the file URL base when set", async () => {
+      vi.stubEnv("TELEGRAM_API_ROOT", "https://tg-proxy.example.com");
+      const fetchMock = makeFetchStub();
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { downloadTelegramFile } = await loadDownloadModule();
+      await downloadTelegramFile(makeApiStub(), "fid");
+
+      const [url] = fetchMock.mock.calls[0] ?? [];
+      expect(url).toBe("https://tg-proxy.example.com/file/botbot-token-xyz/voice/sample.ogg");
+    });
+
+    it("sends X-Proxy-Secret on the file fetch when TELEGRAM_PROXY_SECRET is set", async () => {
+      vi.stubEnv("TELEGRAM_API_ROOT", "https://tg-proxy.example.com");
+      vi.stubEnv("TELEGRAM_PROXY_SECRET", "secret-abc");
+      const fetchMock = makeFetchStub();
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { downloadTelegramFile } = await loadDownloadModule();
+      await downloadTelegramFile(makeApiStub(), "fid");
+
+      const [, init] = fetchMock.mock.calls[0] ?? [];
+      const headers = (init as { headers?: Record<string, string> } | undefined)?.headers;
+      expect(headers?.["X-Proxy-Secret"]).toBe("secret-abc");
+    });
+
+    it("uses an IPv4 HTTPS agent for direct downloads when TELEGRAM_FORCE_IPV4 is enabled", async () => {
+      vi.stubEnv("TELEGRAM_FORCE_IPV4", "true");
+      const fetchMock = makeFetchStub();
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { downloadTelegramFile } = await loadDownloadModule();
+      await downloadTelegramFile(makeApiStub(), "fid");
+
+      const [, init] = fetchMock.mock.calls[0] ?? [];
+      const agent = (init as { agent?: unknown } | undefined)?.agent;
+      expect(agent).toBeInstanceOf(HttpsAgent);
+      expect((agent as HttpsAgent).options.family).toBe(4);
     });
   });
 });
