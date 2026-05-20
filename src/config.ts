@@ -7,6 +7,39 @@ dotenv.config({ path: runtimePaths.envFilePath, quiet: true });
 
 export type MessageFormatMode = "raw" | "markdown";
 
+export function buildTelegramConfig(): {
+  token: string;
+  allowedUserId: number;
+  proxyUrl: string;
+  apiRoot: string;
+  proxySecret: string;
+  forceIpv4: boolean;
+} {
+  const proxyUrl = getEnvVar("TELEGRAM_PROXY_URL", false);
+  const apiRoot = getEnvVar("TELEGRAM_API_ROOT", false).replace(/\/+$/, "");
+  const proxySecret = getEnvVar("TELEGRAM_PROXY_SECRET", false);
+  const forceIpv4 = getOptionalBooleanEnvVar("TELEGRAM_FORCE_IPV4", false);
+
+  if (proxyUrl && apiRoot) {
+    throw new Error(
+      "TELEGRAM_PROXY_URL and TELEGRAM_API_ROOT are alternative connectivity modes and cannot be used together.",
+    );
+  }
+
+  if (proxySecret && !apiRoot) {
+    throw new Error("TELEGRAM_PROXY_SECRET requires TELEGRAM_API_ROOT to be set.");
+  }
+
+  return {
+    token: getEnvVar("TELEGRAM_BOT_TOKEN"),
+    allowedUserId: parseInt(getEnvVar("TELEGRAM_ALLOWED_USER_ID"), 10),
+    proxyUrl,
+    apiRoot,
+    proxySecret,
+    forceIpv4,
+  };
+}
+
 function getEnvVar(key: string, required: boolean = true): string {
   const value = process.env[key];
   if (required && !value) {
@@ -94,11 +127,7 @@ function getOptionalMessageFormatModeEnvVar(
 }
 
 export const config = {
-  telegram: {
-    token: getEnvVar("TELEGRAM_BOT_TOKEN"),
-    allowedUserId: parseInt(getEnvVar("TELEGRAM_ALLOWED_USER_ID"), 10),
-    proxyUrl: getEnvVar("TELEGRAM_PROXY_URL", false),
-  },
+  telegram: buildTelegramConfig(),
   opencode: {
     apiUrl: getEnvVar("OPENCODE_API_URL", false) || "http://localhost:4096",
     username: getEnvVar("OPENCODE_SERVER_USERNAME", false) || "opencode",

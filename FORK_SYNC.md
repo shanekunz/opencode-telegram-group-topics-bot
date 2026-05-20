@@ -7,7 +7,7 @@ This repository is a product fork of the original single-chat project at `grinev
 - Permanent git remote: `upstream` -> `https://github.com/grinev/opencode-telegram-bot.git`
 - Upstream repo: `https://github.com/grinev/opencode-telegram-bot`
 - Upstream branch: `main`
-- Last reviewed upstream head: `7a8e542` (`chore(release): v0.16.0`, 2026-04-12)
+- Last reviewed upstream head: `634b650` (`chore(release): v0.20.6`, 2026-05-19)
 - Original fork point for this threaded fork: `21da71b` (`chore(release): v0.11.0`)
 
 ## Fork Rules
@@ -43,6 +43,8 @@ This repository is a product fork of the original single-chat project at `grinev
 - `13a8948` adapted port: scoped agent selection now falls back to an available project agent before prompts, commands, topic creation, and scheduled tasks
 - `a25af98` ported: bot UI now labels the selector as `agent` instead of `mode`
 - `2f22851` adapted port: `/open` now adds projects by browsing configurable allowed roots while still respecting this fork's group/topic project-lock rules and scoped state reset flow
+- `b220abb` + `ddcfaee` + `5da739f` adapted port: Telegram API transport now supports custom reverse-proxy roots, optional shared secret headers, and direct IPv4 fallback for both bot requests and Telegram file downloads
+- `82c34c1` adapted port: question prompts now include full option details in the message body with safe entity fallback and truncation, while keeping topic-scoped delivery intact
 
 ## Upstream Changes Intentionally Adapted
 
@@ -82,6 +84,9 @@ This repository is a product fork of the original single-chat project at `grinev
 - `1ad75a5` reviewed; file logging was already present in this fork, so no additional port was needed
 - `e85380f` + `0580a73` + `5222bae` + `ed512ff` reviewed for `v0.16.0`; skipped for now because this fork's topic-scoped live-stream/final-delivery pipeline diverges heavily and needs a dedicated manual adaptation pass
 - Release-only/docs-only changes in `v0.16.0` skipped after review (`57a0c56`, `a75f055`, `8940e35`, `7a8e542`)
+- `a84ce68` + `6009873` + `6ba05f0` reviewed for `v0.16.1`; daemon-mode/runtime packaging diverges in this fork, so only already-compatible docs/config ideas were considered
+- `c820b93` + `0ded31d` + `3b7d42f` + `56d65b2` reviewed for `v0.17.0`; skipped for now because worktree/attach flows assume a single active chat lane and need a topic-aware redesign
+- `52fc925` + `f82fab6` + `d10da74` + `674fc0a` + `00fbc62` + `5a055df` + `1024855` + `cf6eac8` reviewed across `v0.18.0`-`v0.20.6`; these are still pending dedicated adaptation because they introduce new lane-management, background-notification, MCP, file-browser, detach, or multi-attachment behavior that touches this fork's scoped routing model
 
 ## Sync Workflow
 

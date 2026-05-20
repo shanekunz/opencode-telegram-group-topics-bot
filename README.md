@@ -184,6 +184,9 @@ Installed-mode config paths:
 | `TELEGRAM_BOT_TOKEN`               | Bot token from @BotFather                                                            |   Yes    | -                        |
 | `TELEGRAM_ALLOWED_USER_ID`         | Your numeric Telegram user ID                                                        |   Yes    | -                        |
 | `TELEGRAM_PROXY_URL`               | Proxy URL for Telegram API (SOCKS5/HTTP)                                             |    No    | -                        |
+| `TELEGRAM_API_ROOT`                | Custom Telegram Bot API root URL for reverse-proxy setups                            |    No    | `https://api.telegram.org` |
+| `TELEGRAM_PROXY_SECRET`            | Shared secret sent as `X-Proxy-Secret` when `TELEGRAM_API_ROOT` is used              |    No    | -                        |
+| `TELEGRAM_FORCE_IPV4`              | Force IPv4 for direct Telegram API and file requests                                 |    No    | `false`                  |
 | `OPENCODE_API_URL`                 | OpenCode server URL                                                                  |    No    | `http://localhost:4096`  |
 | `OPENCODE_SERVER_USERNAME`         | Server auth username                                                                 |    No    | `opencode`               |
 | `OPENCODE_SERVER_PASSWORD`         | Server auth password                                                                 |    No    | -                        |
@@ -212,6 +215,16 @@ Installed-mode config paths:
 | `LOG_LEVEL`                        | Log level (`debug`, `info`, `warn`, `error`)                                         |    No    | `info`                   |
 
 Keep your `.env` private. It contains your bot token.
+
+### Optional: Telegram Reverse Proxy
+
+If Telegram is only reachable through an HTTPS endpoint you control, set `TELEGRAM_API_ROOT` to that reverse-proxy URL. If your proxy requires a shared header, also set `TELEGRAM_PROXY_SECRET` and the bot will send `X-Proxy-Secret` on Bot API requests and Telegram file downloads.
+
+`TELEGRAM_PROXY_URL` and `TELEGRAM_API_ROOT` are alternative connectivity modes. Configure only one of them.
+
+### Optional: Force IPv4 for Telegram
+
+If the machine resolves Telegram over IPv6 but outbound IPv6 is unreliable, set `TELEGRAM_FORCE_IPV4=true` to force direct Telegram API and file downloads over IPv4.
 
 ### Optional: Voice and Audio Transcription
 

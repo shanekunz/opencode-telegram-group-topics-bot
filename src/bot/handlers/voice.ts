@@ -10,6 +10,8 @@ import { processUserPrompt, type ProcessPromptDeps } from "./prompt.js";
 import type { FilePartInput } from "@opencode-ai/sdk/v2";
 import { logger } from "../../utils/logger.js";
 import { t } from "../../i18n/index.js";
+import { createTelegramIpv4Agent } from "../telegram-client-options.js";
+import { buildTelegramFileUrl } from "../utils/telegram-file-url.js";
 
 const TELEGRAM_DOWNLOAD_TIMEOUT_MS = 30_000;
 const TELEGRAM_DOWNLOAD_MAX_REDIRECTS = 3;
@@ -23,6 +25,12 @@ function getTelegramDownloadAgent(): https.RequestOptions["agent"] | undefined {
 
   const proxyUrl = config.telegram.proxyUrl.trim();
   if (!proxyUrl) {
+    if (config.telegram.forceIpv4) {
+      telegramDownloadAgent = createTelegramIpv4Agent();
+      logger.info("[Voice] Forcing IPv4 for Telegram downloads");
+      return telegramDownloadAgent;
+    }
+
     telegramDownloadAgent = null;
     return undefined;
   }
@@ -40,10 +48,15 @@ async function downloadTelegramFileByUrl(url: string, redirectDepth: number = 0)
     const targetUrl = new URL(url);
     const requestModule = targetUrl.protocol === "http:" ? http : https;
 
-    const request = requestModule.get(
-      targetUrl,
-      { agent: getTelegramDownloadAgent() },
-      (response) => {
+      const request = requestModule.get(
+        targetUrl,
+        {
+          agent: getTelegramDownloadAgent(),
+          headers: config.telegram.proxySecret
+            ? { "X-Proxy-Secret": config.telegram.proxySecret }
+            : undefined,
+        },
+        (response) => {
         const statusCode = response.statusCode ?? 0;
 
         if (statusCode >= 300 && statusCode < 400 && response.headers.location) {
@@ -123,7 +136,7 @@ async function downloadTelegramFile(
       return null;
     }
 
-    const fileUrl = `https://api.telegram.org/file/bot${ctx.api.token}/${file.file_path}`;
+    const fileUrl = buildTelegramFileUrl(file.file_path, ctx.api.token);
 
     logger.debug(`[Voice] Downloading file: ${file.file_path} (${file.file_size ?? "?"} bytes)`);
 

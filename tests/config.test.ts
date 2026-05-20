@@ -6,12 +6,22 @@ async function loadConfig() {
   return module.config;
 }
 
+async function loadBuildTelegramConfig() {
+  vi.resetModules();
+  const module = await import("../src/config.js");
+  return module.buildTelegramConfig;
+}
+
 describe("config boolean env parsing", () => {
   beforeEach(() => {
     vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-telegram-token");
     vi.stubEnv("TELEGRAM_ALLOWED_USER_ID", "123456789");
     vi.stubEnv("OPENCODE_MODEL_PROVIDER", "test-provider");
     vi.stubEnv("OPENCODE_MODEL_ID", "test-model");
+    vi.stubEnv("TELEGRAM_PROXY_URL", "");
+    vi.stubEnv("TELEGRAM_API_ROOT", "");
+    vi.stubEnv("TELEGRAM_PROXY_SECRET", "");
+    vi.stubEnv("TELEGRAM_FORCE_IPV4", "");
   });
 
   it("uses false defaults for hide service message flags", async () => {
@@ -235,5 +245,44 @@ describe("config boolean env parsing", () => {
     const config = await loadConfig();
 
     expect(config.stt.notePrompt).toBe("Infer intended meaning from context.");
+  });
+
+  it("disables forced IPv4 by default", async () => {
+    const config = await loadConfig();
+
+    expect(config.telegram.forceIpv4).toBe(false);
+  });
+
+  it("parses TELEGRAM_FORCE_IPV4 as a boolean", async () => {
+    vi.stubEnv("TELEGRAM_FORCE_IPV4", "true");
+
+    const config = await loadConfig();
+
+    expect(config.telegram.forceIpv4).toBe(true);
+  });
+
+  it("strips a trailing slash from TELEGRAM_API_ROOT", async () => {
+    vi.stubEnv("TELEGRAM_API_ROOT", "https://tg-proxy.example.com/");
+
+    const config = await loadConfig();
+
+    expect(config.telegram.apiRoot).toBe("https://tg-proxy.example.com");
+  });
+
+  it("rejects TELEGRAM_PROXY_URL combined with TELEGRAM_API_ROOT", async () => {
+    const buildTelegramConfig = await loadBuildTelegramConfig();
+
+    vi.stubEnv("TELEGRAM_PROXY_URL", "socks5://forward.example.com:1080");
+    vi.stubEnv("TELEGRAM_API_ROOT", "https://tg-proxy.example.com");
+
+    expect(() => buildTelegramConfig()).toThrow(/cannot be used together/i);
+  });
+
+  it("rejects TELEGRAM_PROXY_SECRET without TELEGRAM_API_ROOT", async () => {
+    const buildTelegramConfig = await loadBuildTelegramConfig();
+
+    vi.stubEnv("TELEGRAM_PROXY_SECRET", "shared-secret");
+
+    expect(() => buildTelegramConfig()).toThrow(/requires TELEGRAM_API_ROOT/i);
   });
 });
